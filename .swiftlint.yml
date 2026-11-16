@@ -1,0 +1,23 @@
+# Never crash: these are errors, not warnings. Tests may opt out per file.
+included: [Sources, App]
+opt_in_rules:
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+force_unwrapping: error
+force_try: error
+force_cast: error
+implicitly_unwrapped_optional: error
+identifier_name:
+  excluded: [to, cc, id]
+custom_rules:
+  no_trap:
+    name: "No traps"
+    regex: '\b(fatalError|preconditionFailure|precondition|assertionFailure|unsafeBitCast|unsafelyUnwrapped)\b'
+    message: "Return an error instead; nothing in product code may trap."
+    severity: error
+  no_web_view:
+    name: "No web view"
+    regex: '\bWKWebView\b'
+    excluded: 'Sources/OutwrightUI/Reading/'
+    message: "A web view is allowed only under Sources/OutwrightUI/Reading/."
+    severity: error

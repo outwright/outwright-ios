@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: Outwright contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# The open build: the app as published, with none of the maintainer's values. No push relay or
+# app group: whoever builds it sets up their own in these settings.
+include: [app.yml]
+options:
+  bundleIdPrefix: org.example
+settings:
+  base:
+    OUTWRIGHT_BUNDLE_ID: org.example.outwright
+    OUTWRIGHT_KEYCHAIN_GROUP: org.example.outwright
+    OUTWRIGHT_RELAY: ""
+    OUTWRIGHT_APP_GROUP: ""
+    OUTWRIGHT_APNS_ENVIRONMENT: production
+targets:
+  Outwright:
+    sources:
+      - Compositions/Open
+  OutwrightNotificationService:
+    sources:
+      - Compositions/OpenExtension

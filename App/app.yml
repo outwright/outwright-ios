@@ -1,0 +1,91 @@
+# The iOS app shell, shared by every build: a build's own spec (App/open.yml for the open build)
+# includes this file and adds its composition and its values. `make build` generates from them.
+# The .xcodeproj is generated, never committed.
+name: Outwright
+options:
+  developmentLanguage: en
+  xcodeVersion: "27.1"
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    # The default for a build of one's own; an upload sets version.txt.
+    MARKETING_VERSION: "0.0.0"
+packages:
+  Outwright:
+    path: ..
+targets:
+  Outwright:
+    type: application
+    platform: iOS
+    sources:
+      - path: .
+        excludes: ["*.yml", E2E, NotificationService, Shared, Compositions]
+      - Shared
+    dependencies:
+      - package: Outwright
+        product: OutwrightUI
+      - target: OutwrightNotificationService
+        embed: true
+    info:
+      path: Info.generated.plist
+      properties:
+        CFBundleDisplayName: Outwright
+        # One number: version.txt, a new patch at least for every upload, set by the upload as
+        # MARKETING_VERSION and used as the build number too.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(MARKETING_VERSION)
+        # Only TLS and the system's own encryption leave the app, so no export compliance
+        # question per upload.
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UIBackgroundModes: [fetch, remote-notification]
+        BGTaskSchedulerPermittedIdentifiers: [com.10boring.outwright.refresh]
+        CFBundleLocalizations: [en, sv]
+        # The build's own values (Sources/OutwrightSync/BuildSettings.swift); empty in the open build.
+        OutwrightRelay: $(OUTWRIGHT_RELAY)
+        OutwrightAppGroup: $(OUTWRIGHT_APP_GROUP)
+        OutwrightAPNsEnvironment: $(OUTWRIGHT_APNS_ENVIRONMENT)
+        NSContactsUsageDescription: >-
+          Outwright saves a copy of an account's contacts in Contacts when you turn that on, so calls
+          show who is calling.
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1" # iPhone only in the alpha
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: $(OUTWRIGHT_BUNDLE_ID)
+        CODE_SIGN_ENTITLEMENTS: Outwright.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    scheme: {}
+  # Puts the sender and subject of new mail into a push's generic notification (it carries
+  # only the subscription id). Shares the keychain group and the app group with the app.
+  OutwrightNotificationService:
+    type: app-extension
+    platform: iOS
+    sources: [NotificationService, Shared]
+    dependencies:
+      - package: Outwright
+        product: OutwrightSync
+    info:
+      path: NotificationService/Info.generated.plist
+      properties:
+        CFBundleDisplayName: Outwright
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(MARKETING_VERSION)
+        CFBundleLocalizations: [en, sv]
+        OutwrightAppGroup: $(OUTWRIGHT_APP_GROUP)
+        OutwrightRelay: $(OUTWRIGHT_RELAY)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: $(OUTWRIGHT_BUNDLE_ID).notifications
+        CODE_SIGN_ENTITLEMENTS: NotificationService/NotificationService.entitlements

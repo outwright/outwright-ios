@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/
+plan/
+/.claude/*
+!/.claude/skills/
+App/Info.generated.plist
+.superpowers/
+App/NotificationService/Info.generated.plist

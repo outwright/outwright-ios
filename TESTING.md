@@ -1,0 +1,27 @@
+# Testing
+
+## What is here
+
+- **Unit tests** in `Tests/`, one target per module, run with `make test`.
+- **Fake servers** in `Sources/OutwrightFakes`: IMAP, SMTP, CalDAV, CardDAV, JMAP and the push
+  relay, in process on loopback. The tests talk to them over real connections, with
+  synthetic mail on `example.org` addresses. No test ever touches a real mailbox.
+- **Property tests:** readers of outside data are fed arbitrary bytes and must never crash.
+- **Lint:** SwiftLint, strict, enforces the rules in [AGENTS.md](AGENTS.md),
+  including no traps and no web view outside the reading pane.
+
+`make test` builds everything, the iOS app included, and runs all of it; run it before you open
+a pull request.
+
+## What runs on a pull request
+
+Nothing runs on GitHub. When the maintainer brings a pull request home, it runs `make test`
+and the integration tests below before it lands.
+
+## What the maintainer runs
+
+Beyond these, the maintainer keeps integration tests that drive the app in the iOS simulator
+against real IMAP, SMTP, CalDAV, CardDAV and JMAP servers (Stalwart and Dovecot) in local
+containers. They are not published. Every change, and every pull request before it lands,
+passes them. When one fails on your pull request, the maintainer tells you what failed and how
+to reproduce it with the fakes, or fixes it on the way in.
