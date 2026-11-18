@@ -12,6 +12,8 @@ struct ContactEditorRequest: Identifiable, Equatable {
     let id = UUID()
     var editing: ContactID?
     var prefill: Address?
+    /// Opened from a card sheet, which opens again once the editor has gone.
+    var returnsToCard = false
 }
 
 enum ContactEditError: Error, Equatable {
@@ -27,6 +29,8 @@ enum ContactEditError: Error, Equatable {
 @Observable @MainActor
 final class ContactEditorModel {
     var details: ContactDetails
+    /// The contact's picture (an inline vCard PHOTO), as `ContactPhotos.prepared` made it; nil for none.
+    var photo: Data?
     var book: AddressBookID?
     /// Where a new contact can go: the books that can be written to, by account.
     private(set) var writableBooks: [(account: Account, books: [AddressBook])] = []
@@ -36,6 +40,7 @@ final class ContactEditorModel {
     @ObservationIgnored private let original: ContactDetails?
     /// The details as the editor opened, to tell what the owner changed.
     @ObservationIgnored private let opened: ContactDetails
+    @ObservationIgnored private let openedPhoto: Data?
 
     init(app: AppModel, editing: ContactID?, prefill: Address?) {
         self.app = app
@@ -44,6 +49,8 @@ final class ContactEditorModel {
         original = stored?.details
         opened = stored?.details ?? Self.details(from: prefill)
         details = opened
+        openedPhoto = stored?.photo
+        photo = openedPhoto
         book = stored?.addressBookID
         writableBooks = app.writableAccounts.compactMap { account in
             let books = ((try? app.store.addressBooks(account.id)) ?? []).filter { !$0.isReadOnly }
@@ -67,8 +74,11 @@ final class ContactEditorModel {
         return (account, found)
     }
 
+    /// A new contact has nowhere to go: no account has an address book that can be written to.
+    var hasNoBook: Bool { editing == nil && writableBooks.isEmpty }
+
     /// What the chosen account's server can hold: Graph has three addresses, one mobile number,
-    /// no `other` phone and one address of each kind.
+    /// no `other` phone and one address of each kind, and takes no removal of a photo.
     var limits: ContactLimits {
         chosen?.account.contactsVia == .graph ? .graph : .none
     }
@@ -101,7 +111,7 @@ final class ContactEditorModel {
     var newAddressLabel: String { addressLabels(for: details.addresses.count).first ?? "home" }
 
     /// Something has been typed, added or removed since the editor opened.
-    var hasChanges: Bool { details != opened }
+    var hasChanges: Bool { details != opened || photo != openedPhoto }
 
     var canSave: Bool { book != nil && !cleaned().isBlank && !isOverLimits }
 
@@ -114,7 +124,8 @@ final class ContactEditorModel {
         if let maxMobile = limits.maxMobile, typed.phones.filter({ mobile.contains($0.label) }).count > maxMobile {
             return true
         }
-        if typed.phones.contains(where: { !limits.phoneLabels.contains($0.label) && !mobile.contains($0.label) }) {
+        if limits.fixedPhoneLabels,
+            typed.phones.contains(where: { !limits.phoneLabels.contains($0.label) && !mobile.contains($0.label) }) {
             return true
         }
         guard limits.onePerAddressLabel else { return false }
@@ -132,13 +143,38 @@ final class ContactEditorModel {
                 // Only what the owner changed goes over what is stored now (sync may have changed the rest).
                 let now = try app.store.contact(editing)?.details ?? opened
                 let merged = ContactDetails.merged(base: cleaned(opened), ours: result, server: now)
-                try app.store.updateContact(editing, merged)
+                if photo != openedPhoto {
+                    try app.store.updateContact(editing, merged, photo: photo)
+                } else {
+                    try app.store.updateContact(editing, merged)
+                }
                 return editing
             }
-            return try app.store.createContact(result, in: book)
+            return try app.store.createContact(result, photo: limits.photoAndTitle ? photo : nil, in: book)
         } catch {
             throw .store
         }
+    }
+
+    /// Queues the contact's deletion; it is hidden at once.
+    func delete() throws(ContactEditError) {
+        guard let editing else { return }
+        do {
+            try app.store.deleteContact(editing)
+        } catch {
+            throw .store
+        }
+    }
+
+    /// An address that doesn't look like one (no `@` with something either side and a dot after
+    /// it): the editor says so, and saves it all the same.
+    static func looksWrong(email: String) -> Bool {
+        let text = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return false }
+        let parts = text.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2, let local = parts.first, let domain = parts.last else { return true }
+        return local.isEmpty || text.contains(where: \.isWhitespace) || !domain.contains(".")
+            || domain.hasPrefix(".") || domain.hasSuffix(".")
     }
 
     /// What is typed, trimmed, with the empty rows left out.
@@ -149,6 +185,7 @@ final class ContactEditorModel {
         result.givenName = trim(details.givenName)
         result.familyName = trim(details.familyName)
         result.organization = trim(details.organization)
+        result.title = limits.photoAndTitle ? trim(details.title) : details.title
         result.note = trim(details.note)
         result.displayName = trim(details.displayName)
         let rows = { (items: [Labeled]) in
@@ -190,7 +227,8 @@ final class ContactEditorModel {
 extension ContactDetails {
     /// Nothing worth keeping is filled in.
     fileprivate var isBlank: Bool {
-        givenName.isEmpty && familyName.isEmpty && displayName.isEmpty && organization.isEmpty && note.isEmpty
+        givenName.isEmpty && familyName.isEmpty && displayName.isEmpty && organization.isEmpty && title.isEmpty
+            && note.isEmpty
             && emails.isEmpty && phones.isEmpty && addresses.isEmpty
     }
 }
@@ -209,13 +247,19 @@ struct ContactLimits: Equatable {
     var phoneLabels: [String]
     var emailLabels: [String]
     var maxMobile: Int?
+    /// A phone holds only a label from `phoneLabels` (Graph); a vCard takes any label, or none.
+    var fixedPhoneLabels: Bool
     var onePerAddressLabel: Bool
+    /// A job title and a photo can be kept (vCard TITLE and PHOTO; Graph's jobTitle and photo).
+    var photoAndTitle: Bool
+    /// A photo can be taken away again.
+    var removesPhoto: Bool
 
     static let none = ContactLimits(
         maxEmails: nil, phoneLabels: ["mobile", "work", "home", "other"], emailLabels: ["work", "home", "other"],
-        maxMobile: nil, onePerAddressLabel: false)
+        maxMobile: nil, fixedPhoneLabels: false, onePerAddressLabel: false, photoAndTitle: true, removesPhoto: true)
     /// Graph.
     static let graph = ContactLimits(
         maxEmails: 3, phoneLabels: ["mobile", "work", "home"], emailLabels: ["other"], maxMobile: 1,
-        onePerAddressLabel: true)
+        fixedPhoneLabels: true, onePerAddressLabel: true, photoAndTitle: true, removesPhoto: false)
 }

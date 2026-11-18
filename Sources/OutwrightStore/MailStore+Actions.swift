@@ -110,6 +110,23 @@ extension MailStore {
         }
     }
 
+    /// Several changes in one transaction (Mark all read), each made and queued as `apply` does it.
+    public func apply(_ actions: [MailAction]) throws(StoreError) {
+        let queuedFor: Set<String> = try write { database in
+            var accounts = Set<String>()
+            for action in actions {
+                let from = try Self.source(database, action.target)
+                guard try Self.perform(database, action, from: from) else { continue }
+                try Self.queue(database, action, from: from)
+                accounts.insert(from.account)
+            }
+            return accounts
+        }
+        for account in queuedFor {
+            if let id = UUID(uuidString: account) { announceQueued(AccountID(raw: id)) }
+        }
+    }
+
     static func queue(_ database: Database, _ action: MailAction, from: Source) throws {
         try database.execute(
             sql: """
@@ -181,9 +198,10 @@ extension MailStore {
     public func settleMove(_ message: MessageID, newUID: UInt32?) throws(StoreError) {
         try write { database in
             if let newUID {
-                try database.execute(
-                    sql: "UPDATE message SET uid = ? WHERE id = ? AND uid = 0",
-                    arguments: [Int64(newUID), message.raw])
+                guard try Int64.fetchOne(
+                    database, sql: "SELECT 1 FROM message WHERE id = ? AND uid = 0", arguments: [message.raw]) != nil
+                else { return }
+                try Self.number(database, message, Int64(newUID))
             } else {
                 try database.execute(
                     sql: "DELETE FROM message_fts WHERE rowid IN (SELECT id FROM message WHERE id = ? AND uid = 0)",
@@ -338,6 +356,26 @@ extension MailStore {
     public func completeAction(_ id: Int64) throws(StoreError) {
         try write { database in
             try database.execute(sql: "DELETE FROM pending_action WHERE id = ?", arguments: [id])
+        }
+    }
+}
+
+extension MailStore {
+    /// The account of each change the owner queues (`apply`), as it is queued: the cue to send it.
+    public func queuedActions() -> AsyncStream<AccountID> {
+        let (stream, continuation) = AsyncStream<AccountID>.makeStream(bufferingPolicy: .bufferingNewest(64))
+        let key = UUID()
+        queueListeners.withLock { $0[key] = continuation }
+        continuation.onTermination = { [weak self] _ in
+            self?.queueListeners.withLock { $0[key] = nil }
+        }
+        return stream
+    }
+
+    func announceQueued(_ account: AccountID) {
+        let listeners = queueListeners.withLock { Array($0.values) }
+        for listener in listeners {
+            listener.yield(account)
         }
     }
 }

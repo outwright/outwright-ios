@@ -32,6 +32,9 @@ public actor SyncCoordinator {
     var locks: [AccountID: AccountLock] = [:]
     /// The last failure of each account, cleared when it next succeeds.
     public internal(set) var lastErrors: [AccountID: SyncError] = [:]
+    /// Accounts whose Inbox has been looked at in this process (whether or not the server answered):
+    /// until then an empty list is mail still on its way.
+    var inboxFetched: Set<AccountID> = []
     /// How many failures to reach each account's servers came in a row.
     var unreachableInARow: [AccountID: Int] = [:]
     /// The latest cue to send each account's queue; an earlier one that wakes finds itself
@@ -56,6 +59,11 @@ public actor SyncCoordinator {
     let protections: [any MailProtection]
     /// The phone's notifications, where local new-mail notices go.
     public nonisolated let newMail: any NewMailNotices
+    /// Where each protocol's sync and each send is noted for the diagnostics (nil: nowhere).
+    public nonisolated let journal: DiagnosticsJournal?
+    /// What each account's protocol last noted, and when: a failure the same as the last one is
+    /// noted again only after `journalRepeat`.
+    var journaled: [JournalKey: (code: String?, at: Date)] = [:]
     /// The latest reschedule of the reminders; each waits for the one before it, so they never interleave.
     var reminderTurn: Task<Void, Never>?
     let resolver: any DoHResolving
@@ -85,8 +93,10 @@ public actor SyncCoordinator {
         davSession: URLSession = .shared, probe: (@Sendable (URL) async -> URL?)? = nil,
         phoneContacts: (any PhoneContacts)? = nil, reminders: any Reminders = SystemReminders(),
         graphBases: [ProviderID: URL] = [:], meetingWording: MeetingWording = .english,
-        newMail: any NewMailNotices = SystemNewMailNotices(), protections: [any MailProtection] = []
+        newMail: any NewMailNotices = SystemNewMailNotices(), protections: [any MailProtection] = [],
+        journal: DiagnosticsJournal? = nil
     ) {
+        self.journal = journal
         self.protections = protections
         self.newMail = newMail
         self.meetingWording = meetingWording
@@ -138,6 +148,8 @@ public actor SyncCoordinator {
             for (id, syncer) in current {
                 group.addTask {
                     let mail = await Self.refresh(syncer)
+                    await self.journalSync(id, .mail, mail)
+                    await self.inboxWasFetched(id)
                     let contacts = await self.refreshContacts(id)
                     let calendars = await self.refreshCalendars(id)
                     // Only the first failure is recorded: the others would be lost from the log.
@@ -163,18 +175,30 @@ public actor SyncCoordinator {
     /// Watches each account's Inbox until `stopForeground`, opening the connection again after
     /// a failure, waiting 2 seconds at first and twice as long each time up to a minute. Beside it
     /// each account's contacts and calendars are synced once (what changed elsewhere while the app
-    /// was away shows without a pull), then the reminders are planned again.
+    /// was away shows without a pull), then the reminders are planned again. Called again while in
+    /// front, it does the same for the accounts that came since (one added or restored).
     public func startForeground() async {
         // What failed to reach a server before says nothing about the network now.
         unreachableInARow = [:]
         let current = await currentSyncers()
-        for (id, syncer) in current where watchers[id] == nil {
+        let fresh = current.filter { watchers[$0.0] == nil }
+        for (id, syncer) in fresh {
             watchers[id] = Task { await self.watch(id, syncer) }
         }
-        guard frontRefresh == nil else {
+        let previous = frontRefresh
+        guard previous == nil || !fresh.isEmpty else {
             return
         }
-        frontRefresh = Task { await self.refreshContactsAndCalendars(current.map(\.0)) }
+        let accounts = (previous == nil ? current : fresh).map(\.0)
+        // One task for `stopForeground` to cancel and wait for, the earlier sync's included.
+        frontRefresh = Task {
+            await withTaskCancellationHandler {
+                await self.refreshContactsAndCalendars(accounts)
+                await previous?.value
+            } onCancel: {
+                previous?.cancel()
+            }
+        }
     }
 
     public func stopForeground() async {
@@ -253,37 +277,6 @@ public actor SyncCoordinator {
         await rescheduleReminders()
     }
 
-    private func watch(_ id: AccountID, _ syncer: AccountSyncer) async {
-        var delay = backoff.lowerBound
-        var needsSync = true
-        while !Task.isCancelled {
-            do {
-                if needsSync {
-                    try await syncer.syncInbox()
-                    needsSync = false
-                    // The server answered: an earlier failure is over now, not when the IDLE ends.
-                    record(id, nil)
-                }
-                if try await syncer.idleInbox() {
-                    try await syncer.syncInbox()
-                } else {
-                    // The IDLE ran its time: what was queued meanwhile goes before the next one.
-                    try await syncer.runActions()
-                }
-                delay = backoff.lowerBound
-                record(id, nil)
-            } catch {
-                guard !Task.isCancelled else {
-                    break
-                }
-                record(id, error)
-                needsSync = true
-                try? await Task.sleep(for: delay)
-                delay = min(delay * 2, backoff.upperBound)
-            }
-        }
-    }
-
     /// A syncer per account in the store. A changed connection gets a new syncer (sharing the
     /// account's lock, so it waits for the old one's operation, which is stopped); a new display
     /// name is handed to the syncer there is; a removed account loses its syncer and watcher.
@@ -297,6 +290,7 @@ public actor SyncCoordinator {
             syncers[id] = nil
             locks[id] = nil
             lastErrors[id] = nil
+            inboxFetched.remove(id)
             credentials.forget(id)
             unreachableInARow[id] = nil
             await entry.syncer.retire()
@@ -316,7 +310,7 @@ public actor SyncCoordinator {
             let syncer = AccountSyncer(
                 account: account, store: store, credentials: credentials, now: now, phoneZone: phoneZone,
                 lock: lock,
-                idleTimeout: idleTimeout, protections: protections)
+                idleTimeout: idleTimeout, protections: protections, journal: journal)
             let old = syncers[account.id]
             syncers[account.id] = (account, syncer)
             if let old {

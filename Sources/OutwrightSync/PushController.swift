@@ -73,9 +73,13 @@ public actor PushController {
         registry.registration(for: account) != nil
     }
 
-    /// Whether a method offers push for the account: push can be switched on only then.
+    /// Whether a method offers push for the account, or an address was issued for it: push can
+    /// be switched on only then.
     public func offersPush(_ account: Account) async -> Bool {
-        await offering(account) != nil
+        if registry.issued(for: account.id) != nil {
+            return true
+        }
+        return await offering(account) != nil
     }
 
     /// Where the account's server side is set up, from the method the last `enable` for it tried;
@@ -109,9 +113,15 @@ public actor PushController {
         }
     }
 
+    /// Switches push on: with the account's issued address when there is one (taking over from
+    /// any other method once its check passes), else with the first method that offers push.
     public func enable(_ account: Account) async throws(PushError) {
         await acquire()
         defer { release() }
+        if let issued = registry.issued(for: account.id) {
+            try await enableIssued(account, issued: issued)
+            return
+        }
         guard registry.registration(for: account.id) == nil else {
             return
         }
@@ -132,23 +142,9 @@ public actor PushController {
         let (sub, device) = try await subscribed(token)
         var handle: String?
         do {
-            let setup = PushSetup(
-                account: account, subscription: sub, deviceClientID: device.deviceID,
-                until: now().addingTimeInterval(Self.lifetime),
-                awaitHeld: { [self] match async throws(PushError) -> String in
-                    try await held(sub, device: device, match: match)
-                },
-                keepSecret: { [registry] secret throws(PushError) in
-                    do {
-                        try registry.setSecret(secret, subscriptionID: sub.id)
-                    } catch {
-                        throw .storage
-                    }
-                },
-                relay: access(sub, device: device))
-            let made = try await method.subscribe(setup)
+            let made = try await method.subscribe(setup(account, sub: sub, device: device))
             handle = made
-            try await startMark(account, subscriptionID: sub.id)
+            try startRenewals(subscriptionID: sub.id)
             try kept { () throws(SyncError) in
                 try registry.save(PushRegistration(account: account, relay: sub, method: method.kind, handle: made))
             }
@@ -174,6 +170,12 @@ public actor PushController {
     public func disable(_ account: AccountID) async throws(PushError) {
         await acquire()
         defer { release() }
+        try await disableHeld(account)
+    }
+
+    /// `disable` with the operation already held. An address issued and not yet checked goes too.
+    func disableHeld(_ account: AccountID) async throws(PushError) {
+        await removeIssuedHeld(account)
         guard let registration = registry.registration(for: account) else {
             return
         }
@@ -254,8 +256,13 @@ public actor PushController {
             if checked.token != nil {
                 lost = await isLost(registration, device: checked.device)
             }
-            if !lost {
-                lost = await renewedIsGone(registration, device: checked.device)
+            if !lost, await renewedIsGone(registration, device: checked.device) {
+                if method(registration.method) is any AddressedPushMethod {
+                    // The owner's sender posts to that address: a new one would reach nobody.
+                    await dropAddressed(registration, device: checked.device)
+                    continue
+                }
+                lost = true
             }
             if lost, let token = checked.token {
                 await reestablish(registration, token: token)
@@ -272,7 +279,7 @@ extension PushController {
     /// A new relay subscription and the device it is on. A stored device the relay refuses
     /// (deleted after a bad APNs token, or an App Attest key it does not know) is registered
     /// again, once.
-    private func subscribed(_ token: Data) async throws(PushError) -> (RelaySubscription, RelayDevice) {
+    func subscribed(_ token: Data) async throws(PushError) -> (RelaySubscription, RelayDevice) {
         let (device, fresh) = try await registeredDevice(token)
         do {
             return (try await subscribe(device), device)
@@ -320,7 +327,7 @@ extension PushController {
 
     /// Asks the relay for the pending body until `match` takes it. A 429 skips that poll;
     /// polling goes on to the deadline.
-    private func held(
+    func held(
         _ sub: RelaySubscription, device: RelayDevice, match: @Sendable (Data) -> String?
     ) async throws(PushError) -> String {
         let deadline = ContinuousClock.now + timing.verifyWithin
@@ -342,12 +349,13 @@ extension PushController {
         throw .timeout
     }
 
-    private func startMark(_ account: Account, subscriptionID: String) async throws(PushError) {
-        let probe = NewMailProbe(account: { _ in account }, credentials: credentials, marks: marks)
+    /// The subscription's renewals from the notification extension start. Where its mail starts
+    /// is the store's business, on the first push: the mailbox is not asked.
+    func startRenewals(subscriptionID: String) throws(PushError) {
         do {
-            try await probe.start(subscriptionID: subscriptionID, account: account)
+            try marks.start(subscriptionID)
         } catch {
-            throw .mailServer
+            throw .storage
         }
     }
 
@@ -370,15 +378,7 @@ extension PushController {
         }
     }
 
-    func kept<T>(_ body: () throws(SyncError) -> T) throws(PushError) -> T {
-        do {
-            return try body()
-        } catch {
-            throw .storage
-        }
-    }
-
-    private func acquire() async {
+    func acquire() async {
         guard busy else {
             busy = true
             return
@@ -386,7 +386,7 @@ extension PushController {
         await withCheckedContinuation { waiting.append($0) }
     }
 
-    private func release() {
+    func release() {
         if waiting.isEmpty {
             busy = false
         } else {

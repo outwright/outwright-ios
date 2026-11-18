@@ -174,7 +174,8 @@ public struct SystemPhoneContacts: PhoneContacts {
     // The note is left out: writing it needs an entitlement Apple grants on request.
     private static var keys: [any CNKeyDescriptor] {
         [
-            CNContactGivenNameKey, CNContactFamilyNameKey, CNContactOrganizationNameKey, CNContactTypeKey,
+            CNContactGivenNameKey, CNContactFamilyNameKey, CNContactOrganizationNameKey, CNContactJobTitleKey,
+            CNContactTypeKey,
             CNContactEmailAddressesKey, CNContactPhoneNumbersKey, CNContactPostalAddressesKey, CNContactImageDataKey
         ].map { $0 as NSString }
     }
@@ -206,6 +207,7 @@ public struct SystemPhoneContacts: PhoneContacts {
         target.givenName = details.givenName
         target.familyName = details.familyName
         target.organizationName = details.organization
+        target.jobTitle = details.title
         target.contactType = .person
         if details.givenName.isEmpty, details.familyName.isEmpty {
             if details.organization.isEmpty {
@@ -234,7 +236,8 @@ public struct SystemPhoneContacts: PhoneContacts {
 
     private static func same(_ first: CNContact, _ second: CNContact) -> Bool {
         first.givenName == second.givenName && first.familyName == second.familyName
-            && first.organizationName == second.organizationName && first.contactType == second.contactType
+            && first.organizationName == second.organizationName && first.jobTitle == second.jobTitle
+            && first.contactType == second.contactType
             && first.emailAddresses.map { [$0.label, $0.value as String] }
                 == second.emailAddresses.map { [$0.label, $0.value as String] }
             && first.phoneNumbers.map { [$0.label, $0.value.stringValue] }

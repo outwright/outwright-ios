@@ -1,14 +1,17 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import OutwrightModel
 import SwiftUI
 
-/// The account's Notifications switch. Renders only: the account's form owns and loads the model.
+/// The account's Notifications switch, and under it the build's alternative while push from the
+/// server is not on or the account uses it. Renders only: the account's form owns and loads the model.
 struct NotificationsSection: View {
+    let account: Account
     let model: NotificationsToggleModel
+    let alternative: (any PushAlternative)?
     /// Where push is not included, what it says under the switch and links to.
     let offering: (any Offering)?
-    @AppStorage(SettingsKeys.backgroundRefresh) private var backgroundRefresh = true
 
     var body: some View {
         Section {
@@ -17,9 +20,12 @@ struct NotificationsSection: View {
             }
             .disabled(model.isWorking)
             .accessibilityIdentifier("settings.notifications")
+            if model.showsAlternative, let alternative {
+                alternative.row(for: account)
+            }
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
-                status
+                NotificationsStatus(model: model)
                 if let offering, !model.pushIncluded {
                     offering.note(for: .push)
                     NavigationLink(destination: offering.page()) { offering.linkTitle() }
@@ -28,8 +34,14 @@ struct NotificationsSection: View {
             }
         }
     }
+}
 
-    @ViewBuilder private var status: some View {
+/// What the Notifications switch says under it: the last thing that went wrong, or what the notices are.
+struct NotificationsStatus: View {
+    let model: NotificationsToggleModel
+    @AppStorage(SettingsKeys.backgroundRefresh) private var backgroundRefresh = true
+
+    @ViewBuilder var body: some View {
         switch model.message {
         case .permissionDenied:
             Text(ui: "Outwright isn't allowed to notify. Allow it in the Settings app.")
@@ -48,6 +60,8 @@ struct NotificationsSection: View {
                     Link(destination: guide) { Text(ui: "How to set up push") }
                 }
             }
+        case .dropped:
+            Text(ui: "Push stopped: the address it came through is gone.")
         case nil:
             // Without push included, on or off, notices come from background refresh.
             if (model.isLocal || !model.pushIncluded) && !backgroundRefresh {

@@ -1,6 +1,798 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@: another key is your current one" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: another key is your current one"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: en annan nyckel är din nuvarande"
+          }
+        }
+      }
+    },
+    "%@: the password or sign-in differs" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: the password or sign-in differs"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: lösenordet eller inloggningen skiljer sig"
+          }
+        }
+      }
+    },
+    "Already on this device" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already on this device"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redan på den här enheten"
+          }
+        }
+      }
+    },
+    "Keep this device's" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep this device's"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behåll den här enhetens"
+          }
+        }
+      }
+    },
+    "Replaced from the file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaced from the file"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersatt från filen"
+          }
+        }
+      }
+    },
+    "Your other device waits up to 5 minutes for your answer. If it stops waiting, nothing is restored." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your other device waits up to 5 minutes for your answer. If it stops waiting, nothing is restored."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Din andra enhet väntar upp till 5 minuter på ditt svar. Slutar den vänta återställs ingenting."
+          }
+        }
+      }
+    },
+    "Replaced from your other device" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaced from your other device"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersatt från din andra enhet"
+          }
+        }
+      }
+    },
+    "Settings you changed on this device" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings you changed on this device"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inställningar du har ändrat på den här enheten"
+          }
+        }
+      }
+    },
+    "These differ from the file. Unless you choose the file's, this device's stay as they are." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These differ from the file. Unless you choose the file's, this device's stay as they are."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De här skiljer sig från filen. Om du inte väljer filens förblir den här enhetens som de är."
+          }
+        }
+      }
+    },
+    "These differ from the file. Unless you choose the file's, this device's stay as they are. A key from the file is added either way, so mail encrypted to it still opens." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These differ from the file. Unless you choose the file's, this device's stay as they are. A key from the file is added either way, so mail encrypted to it still opens."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De här skiljer sig från filen. Om du inte väljer filens förblir den här enhetens som de är. En nyckel från filen läggs till oavsett, så att e-post som krypterats till den fortfarande går att öppna."
+          }
+        }
+      }
+    },
+    "These differ from your other device. Unless you choose the other device's, this device's stay as they are." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These differ from your other device. Unless you choose the other device's, this device's stay as they are."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De här skiljer sig från din andra enhet. Om du inte väljer den andra enhetens förblir den här enhetens som de är."
+          }
+        }
+      }
+    },
+    "These differ from your other device. Unless you choose the other device's, this device's stay as they are. A key from your other device is added either way, so mail encrypted to it still opens." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These differ from your other device. Unless you choose the other device's, this device's stay as they are. A key from your other device is added either way, so mail encrypted to it still opens."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De här skiljer sig från din andra enhet. Om du inte väljer den andra enhetens förblir den här enhetens som de är. En nyckel från din andra enhet läggs till oavsett, så att e-post som krypterats till den fortfarande går att öppna."
+          }
+        }
+      }
+    },
+    "Use the file's" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the file's"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Använd filens"
+          }
+        }
+      }
+    },
+    "Use the other device's" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the other device's"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Använd den andra enhetens"
+          }
+        }
+      }
+    },
+    "What you already have on this device is left as it is, unless you choose the file's below. A password, key or calendar address missing from it is filled in." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What you already have on this device is left as it is, unless you choose the file's below. A password, key or calendar address missing from it is filled in."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det du redan har på den här enheten lämnas som det är, om du inte väljer filens nedan. Ett lösenord, en nyckel eller en kalenderadress som saknas fylls i."
+          }
+        }
+      }
+    },
+    "%lld contacts' keys" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld contact's key"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld contacts' keys"
+                }
+              }
+            }
+          }
+        },
+        "sv" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld kontakts nyckel"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld kontakters nycklar"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Can't be read" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't be read"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan inte läsas"
+          }
+        }
+      }
+    },
+    "Contacts not saved to iPhone" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contacts not saved to iPhone"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kontakter sparas inte på iPhone"
+          }
+        }
+      }
+    },
+    "Filled in" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filled in"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ifyllt"
+          }
+        }
+      }
+    },
+    "No address book to add contacts to." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No address book to add contacts to."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen adressbok att lägga till kontakter i."
+          }
+        }
+      }
+    },
+    "OpenPGP settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenPGP settings"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenPGP-inställningar"
+          }
+        }
+      }
+    },
+    "Outwright isn't allowed to use Contacts, so Save contacts to iPhone is off for these. Turn it on in the account's settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright isn't allowed to use Contacts, so Save contacts to iPhone is off for these. Turn it on in the account's settings."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright får inte använda Kontakter, så Spara kontakter på iPhone är avstängt för dessa. Slå på det i kontots inställningar."
+          }
+        }
+      }
+    },
+    "The file can't be made: something in your setup is too large for it, or damaged." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file can't be made: something in your setup is too large for it, or damaged."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filen kan inte göras: något i dina inställningar är för stort för den, eller skadat."
+          }
+        }
+      }
+    },
+    "The information sent to Outwright contains no private information, no mail and no details of any account." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The information sent to Outwright contains no private information, no mail and no details of any account."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informationen som skickas till Outwright innehåller ingen privat information, ingen e-post och inga uppgifter om något konto."
+          }
+        }
+      }
+    },
+    "These parts of the file are damaged; they are left out and the rest is restored." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These parts of the file are damaged; they are left out and the rest is restored."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De här delarna av filen är skadade; de lämnas utanför och resten återställs."
+          }
+        }
+      }
+    },
+    "These were on this device without their password, key or address; it came from the file." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These were on this device without their password, key or address; it came from the file."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De här fanns på enheten utan sitt lösenord, sin nyckel eller adress; det kom från filen."
+          }
+        }
+      }
+    },
+    "Unnamed part" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unnamed part"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Namnlös del"
+          }
+        }
+      }
+    },
+    "What you already have on this device is left as it is. A password, key or calendar address missing from it is filled in." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What you already have on this device is left as it is. A password, key or calendar address missing from it is filled in."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det du redan har på den här enheten lämnas som det är. Ett lösenord, en nyckel eller en kalenderadress som saknas fylls i."
+          }
+        }
+      }
+    },
+    "Your address books are read-only." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your address books are read-only."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dina adressböcker är skrivskyddade."
+          }
+        }
+      }
+    },
+    "Add photo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add photo"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lägg till bild"
+          }
+        }
+      }
+    },
+    "Change photo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change photo"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Byt bild"
+          }
+        }
+      }
+    },
+    "Index" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Index"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Register"
+          }
+        }
+      }
+    },
+    "Job title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Job title"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Befattning"
+          }
+        }
+      }
+    },
+    "Remove photo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove photo"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta bort bild"
+          }
+        }
+      }
+    },
+    "The draft was not deleted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The draft was not deleted"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utkastet togs inte bort"
+          }
+        }
+      }
+    },
+    "The original couldn't be loaded, so it isn't quoted." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original couldn't be loaded, so it isn't quoted."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Originalet kunde inte läsas in, så det citeras inte."
+          }
+        }
+      }
+    },
+    "This doesn't look like an email address." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This doesn't look like an email address."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det här ser inte ut som en e-postadress."
+          }
+        }
+      }
+    },
+    "This message couldn't be loaded." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This message couldn't be loaded."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meddelandet kunde inte läsas in."
+          }
+        }
+      }
+    },
+    "Delete draft" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete draft"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta bort utkast"
+          }
+        }
+      }
+    },
+    "Encrypted, but a recipient's key has changed. Tap their name to look at it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encrypted, but a recipient's key has changed. Tap their name to look at it."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Krypterat, men en mottagares nyckel har ändrats. Tryck på namnet för att titta på den."
+          }
+        }
+      }
+    },
+    "Events" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Events"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Händelser"
+          }
+        }
+      }
+    },
+    "Keep this draft?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep this draft?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vill du behålla utkastet?"
+          }
+        }
+      }
+    },
+    "Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Key"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nyckel"
+          }
+        }
+      }
+    },
+    "No results on this phone or the server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No results on this phone or the server"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inga resultat på den här telefonen eller servern"
+          }
+        }
+      }
+    },
+    "Save draft" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save draft"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spara utkast"
+          }
+        }
+      }
+    },
+    "See all" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See all"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visa alla"
+          }
+        }
+      }
+    },
+    "Set up encryption for this account" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set up encryption for this account"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurera kryptering för det här kontot"
+          }
+        }
+      }
+    },
+    "Set up encryption…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set up encryption…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurera kryptering…"
+          }
+        }
+      }
+    },
     "The mail server refused to set up push." : {
       "localizations" : {
         "en" : {
@@ -763,22 +1555,6 @@
         }
       }
     },
-    "Add a photo" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add a photo"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lägg till en bild"
-          }
-        }
-      }
-    },
     "Add account" : {
       "localizations" : {
         "en" : {
@@ -920,22 +1696,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Adressbok"
-          }
-        }
-      }
-    },
-    "Address books" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Address books"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adressböcker"
           }
         }
       }
@@ -1244,22 +2004,6 @@
         }
       }
     },
-    "Attachments can be at most 25 MB together." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attachments can be at most 25 MB together."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bilagorna får vara högst 25 MB tillsammans."
-          }
-        }
-      }
-    },
     "Back" : {
       "localizations" : {
         "en" : {
@@ -1368,22 +2112,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kalender"
-          }
-        }
-      }
-    },
-    "Calendars" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Calendars"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kalendrar"
           }
         }
       }
@@ -2412,22 +3140,6 @@
         }
       }
     },
-    "Encrypt or sign" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Encrypt or sign"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kryptera eller signera"
-          }
-        }
-      }
-    },
     "Encrypted and signed: only you and the recipients can read it, and they can see it's from you." : {
       "localizations" : {
         "en" : {
@@ -3336,22 +4048,6 @@
         }
       }
     },
-    "Label" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Label"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Etikett"
-          }
-        }
-      }
-    },
     "Last name" : {
       "localizations" : {
         "en" : {
@@ -4008,22 +4704,6 @@
         }
       }
     },
-    "Not encrypted: sent as ordinary email." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not encrypted: sent as ordinary email."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inte krypterat: skickas som vanlig e-post."
-          }
-        }
-      }
-    },
     "Not junk" : {
       "localizations" : {
         "en" : {
@@ -4356,22 +5036,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Logga in igen för att fortsätta få e-post"
-          }
-        }
-      }
-    },
-    "Signed: anyone can read it, and it shows it's from you." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Signed: anyone can read it, and it shows it's from you."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Signerat: alla kan läsa det, och det visar att det kommer från dig."
           }
         }
       }
@@ -5673,22 +6337,6 @@
         }
       }
     },
-    "Swipe left on a message to delete it." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Swipe left on a message to delete it."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Svep åt vänster på ett meddelande för att ta bort det."
-          }
-        }
-      }
-    },
     "Swipe right" : {
       "localizations" : {
         "en" : {
@@ -5701,22 +6349,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Svep åt höger"
-          }
-        }
-      }
-    },
-    "Swipe right to flag it." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Swipe right to flag it."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Svep åt höger för att flagga det."
           }
         }
       }
@@ -5945,6 +6577,22 @@
         }
       }
     },
+    "The photo couldn't be saved to the server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The photo couldn't be saved to the server"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilden kunde inte sparas på servern"
+          }
+        }
+      }
+    },
     "The contact was changed on the server meanwhile. Apply your change again on top of the new version, or discard it." : {
       "localizations" : {
         "en" : {
@@ -6053,38 +6701,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Händelsen ändrades på servern under tiden. Gör dina ändringar igen, i ordning, ovanpå den nya versionen, eller släng dem."
-          }
-        }
-      }
-    },
-    "The file could not be read." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The file could not be read."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filen gick inte att läsa."
-          }
-        }
-      }
-    },
-    "The file was not added" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The file was not added"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filen lades inte till"
           }
         }
       }
@@ -6709,6 +7325,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meddelandet är långt, bara början visas."
+          }
+        }
+      }
+    },
+    "This person's key has changed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This person's key has changed"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den här personens nyckel har ändrats"
           }
         }
       }
@@ -7748,6 +8380,3422 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meddelandet kan inte krypteras från det här kontot ännu."
+          }
+        }
+      }
+    },
+    "Needs attention" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs attention"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behöver åtgärdas"
+          }
+        }
+      }
+    },
+    "Server settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server settings"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serverinställningar"
+          }
+        }
+      }
+    },
+    "Opens the account's Drafts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the account's Drafts"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öppnar kontots Utkast"
+          }
+        }
+      }
+    },
+    "Signs in again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signs in again"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loggar in igen"
+          }
+        }
+      }
+    },
+    "Off" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Av"
+          }
+        }
+      }
+    },
+    "For 1 hour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For 1 hour"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I en timme"
+          }
+        }
+      }
+    },
+    "Until tomorrow" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Until tomorrow"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Till i morgon"
+          }
+        }
+      }
+    },
+    "On until %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On until %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "På till %@"
+          }
+        }
+      }
+    },
+    "Mark as read" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as read"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markera som läst"
+          }
+        }
+      }
+    },
+    "Default account" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default account"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standardkonto"
+          }
+        }
+      }
+    },
+    "New mail is sent from the default account when no account is open." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New mail is sent from the default account when no account is open."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nytt e-postmeddelande skickas från standardkontot när inget konto är öppet."
+          }
+        }
+      }
+    },
+    "Account added" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account added"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kontot är tillagt"
+          }
+        }
+      }
+    },
+    "Add another account" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add another account"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lägg till ett konto till"
+          }
+        }
+      }
+    },
+    "Signed in again to %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signed in again to %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inloggad igen på %@"
+          }
+        }
+      }
+    },
+    "Couldn't find the servers for this address. Enter them below." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't find the servers for this address. Enter them below."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servrarna för den här adressen hittades inte. Fyll i dem nedan."
+          }
+        }
+      }
+    },
+    "No account" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No account"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inget konto"
+          }
+        }
+      }
+    },
+    "Add an account to read your mail." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add an account to read your mail."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lägg till ett konto för att läsa din e-post."
+          }
+        }
+      }
+    },
+    "Add an account to see your calendar." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add an account to see your calendar."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lägg till ett konto för att se din kalender."
+          }
+        }
+      }
+    },
+    "Add an account to see your contacts." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add an account to see your contacts."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lägg till ett konto för att se dina kontakter."
+          }
+        }
+      }
+    },
+    "%lld conversations archived" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld conversations archived"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld konversationer arkiverade"
+          }
+        }
+      }
+    },
+    "%lld conversations deleted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld conversations deleted"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld konversationer borttagna"
+          }
+        }
+      }
+    },
+    "%lld conversations moved" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld conversations moved"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld konversationer flyttade"
+          }
+        }
+      }
+    },
+    "%lld conversations moved to %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld conversations moved to %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld konversationer flyttade till %@"
+          }
+        }
+      }
+    },
+    "%lld conversations moved to Junk" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld conversations moved to Junk"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld konversationer flyttade till Skräppost"
+          }
+        }
+      }
+    },
+    "%lld selected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld selected"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld markerade"
+          }
+        }
+      }
+    },
+    "Archived (toast)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arkiverad"
+          }
+        }
+      }
+    },
+    "Delete for good" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete for good"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta bort för alltid"
+          }
+        }
+      }
+    },
+    "Delete for good?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete for good?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta bort för alltid?"
+          }
+        }
+      }
+    },
+    "Deleted (toast)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleted"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borttagen"
+          }
+        }
+      }
+    },
+    "Encrypted (row)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encrypted"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Krypterat"
+          }
+        }
+      }
+    },
+    "Getting your mail…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Getting your mail…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hämtar din e-post…"
+          }
+        }
+      }
+    },
+    "It can't be brought back." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It can't be brought back."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det går inte att få tillbaka."
+          }
+        }
+      }
+    },
+    "Mark all as read" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark all as read"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markera alla som lästa"
+          }
+        }
+      }
+    },
+    "Mark as unread" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as unread"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markera som oläst"
+          }
+        }
+      }
+    },
+    "Moved (toast)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moved"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flyttad"
+          }
+        }
+      }
+    },
+    "Moved to %@ (toast)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moved to %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flyttad till %@"
+          }
+        }
+      }
+    },
+    "Moved to Junk (toast)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moved to Junk"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flyttad till Skräppost"
+          }
+        }
+      }
+    },
+    "Newsletters and the like are in Other." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Newsletters and the like are in Other."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nyhetsbrev och liknande finns i Annan."
+          }
+        }
+      }
+    },
+    "Nothing in Focused" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing in Focused"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inget i Prioriterad"
+          }
+        }
+      }
+    },
+    "See Other" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See Other"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visa Annan"
+          }
+        }
+      }
+    },
+    "Select" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markera"
+          }
+        }
+      }
+    },
+    "Select all" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select all"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markera alla"
+          }
+        }
+      }
+    },
+    "Select none" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select none"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avmarkera alla"
+          }
+        }
+      }
+    },
+    "Swipe left on a message to %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe left on a message to %@."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svep åt vänster på ett meddelande för att %@."
+          }
+        }
+      }
+    },
+    "Swipe right on a message to %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe right on a message to %@."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svep åt höger på ett meddelande för att %@."
+          }
+        }
+      }
+    },
+    "Touch and hold a message to select several." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch and hold a message to select several."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Håll fingret på ett meddelande för att markera flera."
+          }
+        }
+      }
+    },
+    "Undo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undo"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ångra"
+          }
+        }
+      }
+    },
+    "archive it" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "archive it"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arkivera det"
+          }
+        }
+      }
+    },
+    "delete it" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "delete it"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ta bort det"
+          }
+        }
+      }
+    },
+    "flag or unflag it" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "flag or unflag it"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "flagga det eller ta bort flaggan"
+          }
+        }
+      }
+    },
+    "mark it read or unread" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mark it read or unread"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "markera det som läst eller oläst"
+          }
+        }
+      }
+    },
+    "move it to another folder" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "move it to another folder"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "flytta det till en annan mapp"
+          }
+        }
+      }
+    },
+    "Hide the original" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide the original"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dölj originalet"
+          }
+        }
+      }
+    },
+    "Show the original" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the original"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visa originalet"
+          }
+        }
+      }
+    },
+    "Text to show" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text to show"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text som visas"
+          }
+        }
+      }
+    },
+    "That isn't a web or email address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That isn't a web or email address"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det är ingen webb- eller e-postadress"
+          }
+        }
+      }
+    },
+    "Type an address like example.org or name@example.org." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type an address like example.org or name@example.org."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skriv en adress som example.org eller namn@example.org."
+          }
+        }
+      }
+    },
+    "Not everything was added" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not everything was added"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allt lades inte till"
+          }
+        }
+      }
+    },
+    "Photos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photos"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilder"
+          }
+        }
+      }
+    },
+    "Camera" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera"
+          }
+        }
+      }
+    },
+    "Numbered list" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Numbered list"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Numrerad lista"
+          }
+        }
+      }
+    },
+    "Sending…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skickar…"
+          }
+        }
+      }
+    },
+    "Video" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        }
+      }
+    },
+    "%lld files were not added (too large)" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file was not added (too large)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files were not added (too large)"
+                }
+              }
+            }
+          }
+        },
+        "sv" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld fil lades inte till (för stor)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld filer lades inte till (för stora)"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld files could not be read" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file could not be read"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files could not be read"
+                }
+              }
+            }
+          }
+        },
+        "sv" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld fil kunde inte läsas"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld filer kunde inte läsas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld files were left out: at most 20 are added at a time" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file was left out: at most 20 are added at a time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files were left out: at most 20 are added at a time"
+                }
+              }
+            }
+          }
+        },
+        "sv" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld fil utelämnades: högst 20 läggs till åt gången"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld filer utelämnades: högst 20 läggs till åt gången"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "No calendar takes new events" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No calendar takes new events"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen kalender tar emot nya händelser"
+          }
+        }
+      }
+    },
+    "Add an account with a calendar to add events. Subscribed calendars can't be changed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add an account with a calendar to add events. Subscribed calendars can't be changed."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lägg till ett konto med en kalender för att lägga till händelser. Prenumererade kalendrar kan inte ändras."
+          }
+        }
+      }
+    },
+    "No calendars" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No calendars"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inga kalendrar"
+          }
+        }
+      }
+    },
+    "Add an account that has a calendar, or subscribe to a published one." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add an account that has a calendar, or subscribe to a published one."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lägg till ett konto som har en kalender, eller prenumerera på en publicerad."
+          }
+        }
+      }
+    },
+    "Previous month" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous month"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Föregående månad"
+          }
+        }
+      }
+    },
+    "Next month" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next month"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nästa månad"
+          }
+        }
+      }
+    },
+    "Join" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Join"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anslut"
+          }
+        }
+      }
+    },
+    "More links" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More links"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fler länkar"
+          }
+        }
+      }
+    },
+    "Opens in Maps" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens in Maps"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öppnas i Kartor"
+          }
+        }
+      }
+    },
+    "Email attendees" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email attendees"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mejla deltagarna"
+          }
+        }
+      }
+    },
+    "Private" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Private"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privat"
+          }
+        }
+      }
+    },
+    "Show as" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show as"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visa som"
+          }
+        }
+      }
+    },
+    "Busy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busy"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upptagen"
+          }
+        }
+      }
+    },
+    "Free" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ledig"
+          }
+        }
+      }
+    },
+    "Away" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Away"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borta"
+          }
+        }
+      }
+    },
+    "Every weekday" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Every weekday"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Varje vardag"
+          }
+        }
+      }
+    },
+    "Custom repeat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom repeat"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anpassad upprepning"
+          }
+        }
+      }
+    },
+    "Repeats" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repeats"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upprepas"
+          }
+        }
+      }
+    },
+    "Daily" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daily"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dagligen"
+          }
+        }
+      }
+    },
+    "Weekly" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekly"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veckovis"
+          }
+        }
+      }
+    },
+    "Monthly" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monthly"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Månadsvis"
+          }
+        }
+      }
+    },
+    "Yearly" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yearly"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Årligen"
+          }
+        }
+      }
+    },
+    "On day %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On day %lld"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den %lld i månaden"
+          }
+        }
+      }
+    },
+    "On the first %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On the first %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Första %@ i månaden"
+          }
+        }
+      }
+    },
+    "On the second %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On the second %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andra %@ i månaden"
+          }
+        }
+      }
+    },
+    "On the third %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On the third %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tredje %@ i månaden"
+          }
+        }
+      }
+    },
+    "On the fourth %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On the fourth %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjärde %@ i månaden"
+          }
+        }
+      }
+    },
+    "On the last %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On the last %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sista %@ i månaden"
+          }
+        }
+      }
+    },
+    "Each month" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each month"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Varje månad"
+          }
+        }
+      }
+    },
+    "End repeat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End repeat"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sluta upprepa"
+          }
+        }
+      }
+    },
+    "On date" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On date"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ett visst datum"
+          }
+        }
+      }
+    },
+    "After a number of times" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After a number of times"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Efter ett antal gånger"
+          }
+        }
+      }
+    },
+    "Last day" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last day"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sista dagen"
+          }
+        }
+      }
+    },
+    "Add a comment…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a comment…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lägg till en kommentar…"
+          }
+        }
+      }
+    },
+    "All events" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All events"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alla händelser"
+          }
+        }
+      }
+    },
+    "Colour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colour"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Färg"
+          }
+        }
+      }
+    },
+    "Calendar's own colour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calendar's own colour"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kalenderns egen färg"
+          }
+        }
+      }
+    },
+    "Blue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blue"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blå"
+          }
+        }
+      }
+    },
+    "Red" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Red"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Röd"
+          }
+        }
+      }
+    },
+    "Green" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Green"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grön"
+          }
+        }
+      }
+    },
+    "Orange" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orange"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orange"
+          }
+        }
+      }
+    },
+    "Purple" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purple"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lila"
+          }
+        }
+      }
+    },
+    "Teal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teal"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blågrön"
+          }
+        }
+      }
+    },
+    "Pink" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pink"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rosa"
+          }
+        }
+      }
+    },
+    "Olive" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olive"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olivgrön"
+          }
+        }
+      }
+    },
+    "After %lld times" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "After %lld time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "After %lld times"
+                }
+              }
+            }
+          }
+        },
+        "sv" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Efter %lld gång"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Efter %lld gånger"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Push stopped: the address it came through is gone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push stopped: the address it came through is gone."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push har slutat: adressen den kom via finns inte längre."
+          }
+        }
+      }
+    },
+    "Added" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Added"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tillagt"
+          }
+        }
+      }
+    },
+    "AirDrop it to your other device, or save it where that device can open it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AirDrop it to your other device, or save it where that device can open it."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skicka den med AirDrop till din andra enhet, eller spara den där den enheten kan öppna den."
+          }
+        }
+      }
+    },
+    "Already here" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already here"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finns redan"
+          }
+        }
+      }
+    },
+    "Back up" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back up"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Säkerhetskopiera"
+          }
+        }
+      }
+    },
+    "Back up and move" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back up and move"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Säkerhetskopiera och flytta"
+          }
+        }
+      }
+    },
+    "Can't open this file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't open this file"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filen går inte att öppna"
+          }
+        }
+      }
+    },
+    "Contacts' OpenPGP keys" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contacts' OpenPGP keys"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kontakters OpenPGP-nycklar"
+          }
+        }
+      }
+    },
+    "Copied" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copied"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopierat"
+          }
+        }
+      }
+    },
+    "Copy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiera"
+          }
+        }
+      }
+    },
+    "Couldn't be added" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't be added"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunde inte läggas till"
+          }
+        }
+      }
+    },
+    "It isn't a setup file this version of Outwright reads, or it is damaged." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It isn't a setup file this version of Outwright reads, or it is damaged."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det är ingen inställningsfil som den här versionen av Outwright läser, eller så är den skadad."
+          }
+        }
+      }
+    },
+    "Made on" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Made on"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gjord på"
+          }
+        }
+      }
+    },
+    "Make the file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make the file"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gör filen"
+          }
+        }
+      }
+    },
+    "Making the file…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Making the file…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gör filen…"
+          }
+        }
+      }
+    },
+    "Move to another device" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to another device"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flytta till en annan enhet"
+          }
+        }
+      }
+    },
+    "Not added" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not added"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inte tillagt"
+          }
+        }
+      }
+    },
+    "Not in this version" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not in this version"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inte i den här versionen"
+          }
+        }
+      }
+    },
+    "Nothing was added." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing was added."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inget lades till."
+          }
+        }
+      }
+    },
+    "Notifications off" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications off"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notiser av"
+          }
+        }
+      }
+    },
+    "Opening the file…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening the file…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öppnar filen…"
+          }
+        }
+      }
+    },
+    "Outwright setup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright setup"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright-inställningar"
+          }
+        }
+      }
+    },
+    "Passphrase" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passphrase"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lösenfras"
+          }
+        }
+      }
+    },
+    "Restore" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Återställ"
+          }
+        }
+      }
+    },
+    "Restore from a file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore from a file"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Återställ från en fil"
+          }
+        }
+      }
+    },
+    "Restoring…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restoring…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Återställer…"
+          }
+        }
+      }
+    },
+    "Save it in Files or iCloud Drive, or mail it to yourself." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save it in Files or iCloud Drive, or mail it to yourself."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spara den i Filer eller iCloud Drive, eller mejla den till dig själv."
+          }
+        }
+      }
+    },
+    "Save or send the file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save or send the file"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spara eller skicka filen"
+          }
+        }
+      }
+    },
+    "Send the file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send the file"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skicka filen"
+          }
+        }
+      }
+    },
+    "Six words" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Six words"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sex ord"
+          }
+        }
+      }
+    },
+    "The file couldn't be made. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file couldn't be made. Try again."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filen kunde inte göras. Försök igen."
+          }
+        }
+      }
+    },
+    "The six words shown on the device the file was made on." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The six words shown on the device the file was made on."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De sex ord som visades på enheten där filen gjordes."
+          }
+        }
+      }
+    },
+    "Their notifications couldn't be turned on. Turn them on in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Their notifications couldn't be turned on. Turn them on in Settings."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deras notiser kunde inte slås på. Slå på dem i Inställningar."
+          }
+        }
+      }
+    },
+    "Their sign-in couldn't come along. Sign in from the account in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Their sign-in couldn't come along. Sign in from the account in Settings."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deras inloggning kunde inte följa med. Logga in från kontot i Inställningar."
+          }
+        }
+      }
+    },
+    "These words don't open the file. Check them and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These words don't open the file. Check them and try again."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orden öppnar inte filen. Kontrollera dem och försök igen."
+          }
+        }
+      }
+    },
+    "This version of Outwright doesn't read these parts of the file; they are left out." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version of Outwright doesn't read these parts of the file; they are left out."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den här versionen av Outwright läser inte de här delarna av filen; de lämnas utanför."
+          }
+        }
+      }
+    },
+    "Type it on your other device when you open the file there. It is shown only now." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type it on your other device when you open the file there. It is shown only now."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skriv den på din andra enhet när du öppnar filen där. Den visas bara nu."
+          }
+        }
+      }
+    },
+    "Type the six words shown when the file was made." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type the six words shown when the file was made."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skriv de sex ord som visades när filen gjordes."
+          }
+        }
+      }
+    },
+    "Unlock to back up your accounts and keys." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock to back up your accounts and keys."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lås upp för att säkerhetskopiera dina konton och nycklar."
+          }
+        }
+      }
+    },
+    "Unlock to move your accounts and keys." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock to move your accounts and keys."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lås upp för att flytta dina konton och nycklar."
+          }
+        }
+      }
+    },
+    "Write it down and keep it apart from the file. It is shown only now, and without it the file can't be opened." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write it down and keep it apart from the file. It is shown only now, and without it the file can't be opened."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skriv ner den och förvara den skild från filen. Den visas bara nu, och utan den går filen inte att öppna."
+          }
+        }
+      }
+    },
+    "You unlock first. Then six words are shown: the file opens only with them." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You unlock first. Then six words are shown: the file opens only with them."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Först låser du upp. Sedan visas sex ord: filen öppnas bara med dem."
+          }
+        }
+      }
+    },
+    "Your OpenPGP keys" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your OpenPGP keys"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dina OpenPGP-nycklar"
+          }
+        }
+      }
+    },
+    "%lld settings" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld setting"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld settings"
+                }
+              }
+            }
+          }
+        },
+        "sv" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld inställning"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld inställningar"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "What is listed below goes into one encrypted file to keep somewhere safe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What is listed below goes into one encrypted file to keep somewhere safe."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det som står nedan läggs i en krypterad fil som du förvarar på ett säkert ställe."
+          }
+        }
+      }
+    },
+    "What is listed below goes into one encrypted file to open with Outwright on your other device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What is listed below goes into one encrypted file to open with Outwright on your other device."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det som står nedan läggs i en krypterad fil som du öppnar med Outwright på din andra enhet."
+          }
+        }
+      }
+    },
+    "Connecting to %@…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting to %@…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ansluter till %@…"
+          }
+        }
+      }
+    },
+    "Waiting for your other device…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for your other device…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Väntar på din andra enhet…"
+          }
+        }
+      }
+    },
+    "Sending… Keep both devices near each other." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending… Keep both devices near each other."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skickar… Håll enheterna nära varandra."
+          }
+        }
+      }
+    },
+    "On your other device, open Outwright and choose Bring my setup from another device. Then scan the code it shows." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On your other device, open Outwright and choose Bring my setup from another device. Then scan the code it shows."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öppna Outwright på din andra enhet och välj Hämta mina inställningar från en annan enhet. Skanna sedan koden som visas."
+          }
+        }
+      }
+    },
+    "Send as a file instead" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send as a file instead"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skicka som fil i stället"
+          }
+        }
+      }
+    },
+    "That isn't a code for moving your setup. Scan the code on your other device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That isn't a code for moving your setup. Scan the code on your other device."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det där är ingen kod för att flytta inställningar. Skanna koden på din andra enhet."
+          }
+        }
+      }
+    },
+    "That device is sending, not receiving. On it, choose Bring my setup from another device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That device is sending, not receiving. On it, choose Bring my setup from another device."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den enheten skickar, den tar inte emot. Välj Hämta mina inställningar från en annan enhet där."
+          }
+        }
+      }
+    },
+    "That code is from a newer version of Outwright. Update Outwright on this device first." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That code is from a newer version of Outwright. Update Outwright on this device first."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koden kommer från en nyare version av Outwright. Uppdatera Outwright på den här enheten först."
+          }
+        }
+      }
+    },
+    "Send your setup to %@?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send your setup to %@?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skicka dina inställningar till %@?"
+          }
+        }
+      }
+    },
+    "What is listed below goes to that device only, encrypted. You unlock first." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What is listed below goes to that device only, encrypted. You unlock first."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det som står nedan går bara till den enheten, krypterat. Först låser du upp."
+          }
+        }
+      }
+    },
+    "Your setup is on %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your setup is on %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dina inställningar finns nu på %@"
+          }
+        }
+      }
+    },
+    "Its report shows on that device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Its report shows on that device."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vad som lades till visas på den enheten."
+          }
+        }
+      }
+    },
+    "Not sent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not sent"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inte skickat"
+          }
+        }
+      }
+    },
+    "Scan again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan again"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skanna igen"
+          }
+        }
+      }
+    },
+    "The other device wasn't found. Keep both devices near each other, with Outwright open on the code. If you are asked, allow Outwright on the local network (Settings › Privacy & Security › Local Network)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The other device wasn't found. Keep both devices near each other, with Outwright open on the code. If you are asked, allow Outwright on the local network (Settings › Privacy & Security › Local Network)."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den andra enheten hittades inte. Håll enheterna nära varandra, med Outwright öppet på koden. Om du blir tillfrågad, ge Outwright tillgång till det lokala nätverket (Inställningar › Integritet och säkerhet › Lokalt nätverk)."
+          }
+        }
+      }
+    },
+    "The other device doesn't hold this code any more. Show a new code on it and scan that." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The other device doesn't hold this code any more. Show a new code on it and scan that."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den andra enheten har inte längre den här koden. Visa en ny kod på den och skanna den nya."
+          }
+        }
+      }
+    },
+    "It was cancelled on the other device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It was cancelled on the other device."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det avbröts på den andra enheten."
+          }
+        }
+      }
+    },
+    "The connection was lost. Keep both devices near each other and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The connection was lost. Keep both devices near each other and try again."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anslutningen bröts. Håll enheterna nära varandra och försök igen."
+          }
+        }
+      }
+    },
+    "Your setup can't be sent: something in it is too large, or damaged." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your setup can't be sent: something in it is too large, or damaged."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dina inställningar kan inte skickas: något i dem är för stort eller skadat."
+          }
+        }
+      }
+    },
+    "Your setup couldn't be read on this device just now. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your setup couldn't be read on this device just now. Try again."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dina inställningar gick inte att läsa på den här enheten just nu. Försök igen."
+          }
+        }
+      }
+    },
+    "your other device" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "your other device"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "din andra enhet"
+          }
+        }
+      }
+    },
+    "Outwright can't use the camera" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright can't use the camera"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright får inte använda kameran"
+          }
+        }
+      }
+    },
+    "Allow it in the Settings app, under Outwright, to scan the code." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow it in the Settings app, under Outwright, to scan the code."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tillåt det i appen Inställningar, under Outwright, för att skanna koden."
+          }
+        }
+      }
+    },
+    "Open Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öppna Inställningar"
+          }
+        }
+      }
+    },
+    "No camera" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No camera"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen kamera"
+          }
+        }
+      }
+    },
+    "This device has no camera to scan the code with. Send your setup as a file instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device has no camera to scan the code with. Send your setup as a file instead."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enheten har ingen kamera att skanna koden med. Skicka dina inställningar som fil i stället."
+          }
+        }
+      }
+    },
+    "Bring my setup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bring my setup"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hämta mina inställningar"
+          }
+        }
+      }
+    },
+    "Bring my setup from another device" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bring my setup from another device"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hämta mina inställningar från en annan enhet"
+          }
+        }
+      }
+    },
+    "Making a code…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Making a code…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skapar en kod…"
+          }
+        }
+      }
+    },
+    "Connected. Confirm on your other device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected. Confirm on your other device."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ansluten. Bekräfta på din andra enhet."
+          }
+        }
+      }
+    },
+    "The code to scan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The code to scan"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koden att skanna"
+          }
+        }
+      }
+    },
+    "On your other device, open Outwright, choose Move to another device in Settings and scan this code." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On your other device, open Outwright, choose Move to another device in Settings and scan this code."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öppna Outwright på din andra enhet, välj Flytta till en annan enhet i Inställningar och skanna den här koden."
+          }
+        }
+      }
+    },
+    "Keep both devices near each other. Nothing is sent until you confirm on the other device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep both devices near each other. Nothing is sent until you confirm on the other device."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Håll enheterna nära varandra. Inget skickas förrän du bekräftar på den andra enheten."
+          }
+        }
+      }
+    },
+    "Valid for %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valid for %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giltig i %@"
+          }
+        }
+      }
+    },
+    "Show a new code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show a new code"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visa en ny kod"
+          }
+        }
+      }
+    },
+    "The code has expired" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The code has expired"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koden har gått ut"
+          }
+        }
+      }
+    },
+    "Nothing was brought over" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing was brought over"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inget skickades"
+          }
+        }
+      }
+    },
+    "No device scanned it in time." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No device scanned it in time."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen enhet skannade den i tid."
+          }
+        }
+      }
+    },
+    "A device connected without the code, so it can't be used again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A device connected without the code, so it can't be used again."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En enhet anslöt utan koden, så den kan inte användas igen."
+          }
+        }
+      }
+    },
+    "A device connected but didn't finish connecting, so the code can't be used again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A device connected but didn't finish connecting, so the code can't be used again."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En enhet anslöt men anslutningen blev aldrig klar, så koden kan inte användas igen."
+          }
+        }
+      }
+    },
+    "It was sent from a newer version of Outwright. Update Outwright on this device and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It was sent from a newer version of Outwright. Update Outwright on this device and try again."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det skickades från en nyare version av Outwright. Uppdatera Outwright på den här enheten och försök igen."
+          }
+        }
+      }
+    },
+    "Outwright can't reach the local network. If you are asked, allow it (Settings › Privacy & Security › Local Network)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright can't reach the local network. If you are asked, allow it (Settings › Privacy & Security › Local Network)."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright kommer inte åt det lokala nätverket. Om du blir tillfrågad, tillåt det (Inställningar › Integritet och säkerhet › Lokalt nätverk)."
+          }
+        }
+      }
+    },
+    "Shows a code to scan with Outwright on the device that has your accounts." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows a code to scan with Outwright on the device that has your accounts."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visar en kod som du skannar med Outwright på enheten där dina konton finns."
+          }
+        }
+      }
+    },
+    "These were on this device without their password, key or address; it came from your other device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These were on this device without their password, key or address; it came from your other device."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De här fanns på enheten utan sitt lösenord, sin nyckel eller adress; det kom från din andra enhet."
+          }
+        }
+      }
+    },
+    "Your accounts, keys and settings, encrypted, straight to your other device or in a file. They go only where you send them." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your accounts, keys and settings, encrypted, straight to your other device or in a file. They go only where you send them."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dina konton, nycklar och inställningar, krypterade, direkt till din andra enhet eller i en fil. De hamnar bara där du skickar dem."
+          }
+        }
+      }
+    },
+    "A file made with Back up or Send as a file instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A file made with Back up or Send as a file instead."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En fil gjord med Säkerhetskopiera eller Skicka som fil i stället."
+          }
+        }
+      }
+    },
+    "The camera couldn't be started" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The camera couldn't be started"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kameran gick inte att starta"
+          }
+        }
+      }
+    },
+    "Try again later, or send your setup as a file instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again later, or send your setup as a file instead."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Försök igen senare, eller skicka dina inställningar som fil i stället."
           }
         }
       }

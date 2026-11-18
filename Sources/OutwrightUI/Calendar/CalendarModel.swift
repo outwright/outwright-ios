@@ -6,9 +6,18 @@ public import Observation
 public import OutwrightModel
 import OutwrightStore
 
-/// How the calendar shows its days.
+/// How the calendar shows its days. The week and the work week are offered on a wide screen; a phone
+/// shows the week when it lies on its side.
 public enum CalendarMode: String, Sendable, CaseIterable {
-    case agenda, day, threeDay, month
+    case agenda, day, threeDay, month, week, workWeek
+
+    /// The views a phone held upright offers.
+    public static let upright: [CalendarMode] = [.agenda, .day, .threeDay, .month]
+}
+
+/// An end of the agenda: the past at the top, the future at the bottom.
+public enum AgendaEdge: Sendable {
+    case top, bottom
 }
 
 /// Which week the calendar shows in landscape.
@@ -44,22 +53,78 @@ public struct DayColumn: Sendable, Equatable, Identifiable {
 /// and without the network.
 @Observable @MainActor
 public final class CalendarModel {
-    /// How many days the agenda reads ahead of its first day.
+    /// How many days the agenda reads each way from today, and adds when one of its ends is reached.
     static let agendaDays = 30
+    /// The most days the agenda holds at once; growing past them lets go of the other end.
+    static let agendaWindow = 120
+    /// How far from today the agenda goes, either way: about ten years.
+    static let agendaReach = 3_660
+    /// How many days the paging grid holds on each side of the days shown.
+    static let pageMargin = 7
 
     public var mode: CalendarMode = .threeDay {
-        didSet { if mode != oldValue { reloadDays() } }
+        didSet {
+            guard mode != oldValue else { return }
+            if !applyingDefault {
+                defaults.set(mode.rawValue, forKey: SettingsKeys.calendarMode)
+                modeChosen = true
+            }
+            if mode == .agenda { resetAgenda(around: anchor) }
+            reloadDays()
+        }
     }
+    /// The screen is wide (an iPad): the week and the work week are offered, and the week is the view
+    /// until another is chosen.
+    public var isRegularWidth = false {
+        didSet {
+            guard isRegularWidth != oldValue, !modeChosen else { return }
+            applyingDefault = true
+            mode = isRegularWidth ? .week : .threeDay
+            applyingDefault = false
+        }
+    }
+    /// The views the switcher offers.
+    public var offeredModes: [CalendarMode] {
+        isRegularWidth ? [.agenda, .day, .threeDay, .week, .workWeek, .month] : CalendarMode.upright
+    }
+    /// The month above the days is open (the title was tapped); it opens at the day in view.
+    public var showsMiniMonth = false {
+        didSet {
+            guard showsMiniMonth else {
+                // A closed month's failed read no longer shows.
+                miniMonthFailed = false
+                return
+            }
+            guard !oldValue else { return }
+            miniMonth = anchor
+            loadMiniMonth()
+        }
+    }
+    /// A day in the month the open month shows, and that month's weeks with their events.
+    public internal(set) var miniMonth: Date
+    public internal(set) var miniMonthDays: [DayColumn] = []
+    /// The days the agenda lists, today and a month each way until it grows.
+    public internal(set) var agendaRange: ClosedRange<Date>
     /// The phone lies on its side: every view shows the week, and `mode` waits for the turn back.
     public var isLandscape = false {
         didSet { if isLandscape != oldValue { reloadDays() } }
     }
     /// The week shown in landscape.
     public var weekMode: WeekMode = .week {
-        didSet { if weekMode != oldValue { reloadDays() } }
+        didSet {
+            guard weekMode != oldValue else { return }
+            defaults.set(weekMode.rawValue, forKey: SettingsKeys.calendarWeekMode)
+            reloadDays()
+        }
     }
-    /// Whether the days shown are a week (in landscape).
-    public var showsWeek: Bool { isLandscape }
+    /// Whether the days shown are a week (in landscape, or the week chosen on a wide screen).
+    public var showsWeek: Bool { isLandscape || mode == .week || mode == .workWeek }
+    /// The week shown: the landscape choice on its side, else the one chosen.
+    var shownWeek: WeekMode { isLandscape ? weekMode : (mode == .workWeek ? .workWeek : .week) }
+    /// Day and 3 Day page a day at a time under the finger.
+    public var pages: Bool { !showsWeek && (mode == .day || mode == .threeDay) }
+    /// The days on screen at once in the paging grid.
+    public var pageWidth: Int { mode == .day ? 1 : 3 }
     /// The first day shown (the chosen day in Month); always the start of a day. While it is today it
     /// stays today: after midnight it moves to the new day.
     public var anchorDay: Date {
@@ -68,14 +133,32 @@ public final class CalendarModel {
             anchor = calendar.startOfDay(for: newValue)
             anchorParts = calendar.dateComponents([.year, .month, .day], from: anchor)
             anchorIsToday = isToday(anchor)
+            if mode == .agenda, !showsWeek {
+                // Within the agenda's days only the title follows; no reading again.
+                guard !agendaRange.contains(anchor) else { return }
+                resetAgenda(around: anchor)
+            }
             reloadDays()
         }
     }
     /// The calendars shown; nil means all.
     public var shownCalendars: Set<CalendarID>? {
-        didSet { if shownCalendars != oldValue { reloadDays() } }
+        didSet {
+            guard shownCalendars != oldValue else { return }
+            if let shown = shownCalendars {
+                defaults.set(shown.map(\.raw).sorted(), forKey: SettingsKeys.shownCalendars)
+            } else {
+                defaults.removeObject(forKey: SettingsKeys.shownCalendars)
+            }
+            reloadDays()
+        }
     }
-    public private(set) var days: [DayColumn] = []
+    /// The days shown.
+    public internal(set) var days: [DayColumn] = []
+    /// Day and 3 Day: the days shown with a week either side, which the grid pages through.
+    public private(set) var pageDays: [DayColumn] = []
+    /// Counts the times a day was chosen to go to (the month, the week strip), which the views scroll to.
+    public internal(set) var jumps = 0
     public private(set) var calendarGroups: [(account: Account, calendars: [CalendarInfo])] = []
     /// The subscribed calendars, a group of their own: they belong to no account.
     public private(set) var subscribedCalendars: [CalendarInfo] = []
@@ -84,7 +167,7 @@ public final class CalendarModel {
     /// The subscribed calendars whose last fetch failed, and why.
     public private(set) var subscriptionFailures: [CalendarID: SubscriptionFailure] = [:]
     /// The store could not be read: the banner shows until a read works again.
-    public var failed: Bool { calendarsFailed || daysFailed }
+    public var failed: Bool { calendarsFailed || daysFailed || miniMonthFailed }
     /// Counts the times the hour grid should go back to now (a new day, a return to the front).
     public private(set) var nowScrolls = 0
 
@@ -92,24 +175,41 @@ public final class CalendarModel {
     /// The phone's calendar (by default it follows the phone's zone and locale as they change).
     @ObservationIgnored var calendar: Calendar
     @ObservationIgnored let now: () -> Date
+    /// Where the view and the calendars chosen are kept across launches.
+    @ObservationIgnored let defaults: UserDefaults
+    /// A view was chosen (now or at an earlier launch): the wide screen's default no longer applies.
+    @ObservationIgnored var modeChosen = false
+    @ObservationIgnored var applyingDefault = false
+    /// The stored view and week as last read, so only a change to them is followed.
+    @ObservationIgnored var lastStoredMode: String?
+    @ObservationIgnored var lastStoredWeek: String?
     @ObservationIgnored private let titleFormat: DateFormatter
+    @ObservationIgnored private let monthFormat: DateFormatter
     @ObservationIgnored private let hourFormat: Date.FormatStyle
     @ObservationIgnored private var anchorIsToday = true
     /// The anchor's day, which stays the same day when the phone's zone changes.
     @ObservationIgnored private var anchorParts: DateComponents
-    private var anchor: Date
+    private(set) var anchor: Date
     private var calendarsFailed = false
-    private var daysFailed = false
+    var daysFailed = false
+    var miniMonthFailed = false
     private var colors: [CalendarID: Int] = [:]
 
-    /// `now` is the app's clock unless another is given.
-    public init(app: AppModel, calendar: Calendar = .autoupdatingCurrent, now: (() -> Date)? = nil) {
+    /// `now` is the app's clock unless another is given. The view and the calendars are the ones last
+    /// chosen, kept in `defaults`; a launch argument may choose the view.
+    public init(
+        app: AppModel, calendar: Calendar = .autoupdatingCurrent, now: (() -> Date)? = nil,
+        defaults: UserDefaults = .standard
+    ) {
         self.app = app
         self.calendar = calendar
         let now = now ?? app.now
         self.now = now
+        self.defaults = defaults
         let start = calendar.startOfDay(for: now())
         anchor = start
+        miniMonth = start
+        agendaRange = Self.agenda(around: start, calendar: calendar)
         anchorParts = calendar.dateComponents([.year, .month, .day], from: start)
         let formatter = DateFormatter()
         formatter.calendar = calendar
@@ -117,6 +217,12 @@ public final class CalendarModel {
         formatter.timeZone = calendar.timeZone
         formatter.setLocalizedDateFormatFromTemplate("LLLLy")
         titleFormat = formatter
+        let monthOnly = DateFormatter()
+        monthOnly.calendar = calendar
+        monthOnly.locale = calendar.locale
+        monthOnly.timeZone = calendar.timeZone
+        monthOnly.setLocalizedDateFormatFromTemplate("LLLL")
+        monthFormat = monthOnly
         // Hour labels from a day with no clock change, in UTC, so none repeats or goes missing.
         var plain = Calendar(identifier: .gregorian)
         plain.timeZone = TimeZone(identifier: "UTC") ?? .gmt
@@ -124,29 +230,25 @@ public final class CalendarModel {
         hourFormat = Date.FormatStyle(
             date: .omitted, time: .shortened, locale: calendar.locale ?? .current, calendar: plain,
             timeZone: plain.timeZone)
-        mode = app.initialCalendarMode
+        readStoredSettings()
+        if let ids = defaults.array(forKey: SettingsKeys.shownCalendars) as? [Int64] {
+            shownCalendars = Set(ids.map(CalendarID.init(raw:)))
+        }
         reload()
     }
 
-    /// Today's start on the phone.
-    public var today: Date { calendar.startOfDay(for: now()) }
+    /// The month of the first day shown, in the phone's language, with the year unless it is this year.
+    public var monthTitle: String { monthTitle(of: anchor) }
 
-    public func isToday(_ day: Date) -> Bool { calendar.isDate(day, inSameDayAs: now()) }
-
-    /// The month (and year) of the first day shown, in the phone's language.
-    public var monthTitle: String {
+    /// A day's month, in the phone's language, with the year unless it is this year.
+    public func monthTitle(of day: Date) -> String {
         // The phone's zone may have changed since the last title.
         titleFormat.calendar = calendar
         titleFormat.timeZone = calendar.timeZone
-        return titleFormat.string(from: anchor)
-    }
-
-    /// The weekdays' one-letter names, from the locale's first weekday.
-    public var weekdaySymbols: [String] {
-        let symbols = calendar.veryShortStandaloneWeekdaySymbols
-        guard symbols.count == 7 else { return symbols }
-        let first = min(max(calendar.firstWeekday, 1), 7) - 1
-        return Array(symbols[first...] + symbols[..<first])
+        monthFormat.calendar = calendar
+        monthFormat.timeZone = calendar.timeZone
+        let sameYear = calendar.component(.year, from: day) == calendar.component(.year, from: now())
+        return (sameYear ? monthFormat : titleFormat).string(from: day)
     }
 
     /// The hour grid's label for an hour of the day (empty at midnight).
@@ -155,44 +257,14 @@ public final class CalendarModel {
         return hourFormat.format(Date(timeIntervalSinceReferenceDate: Double(hour) * 3_600))
     }
 
-    /// Whether there is any calendar, an account's or a subscribed one.
-    public var hasCalendars: Bool { !calendarGroups.isEmpty || !subscribedCalendars.isEmpty }
-
-    /// Every calendar, the accounts' and the subscribed ones.
-    var everyCalendar: [CalendarInfo] { calendarGroups.flatMap(\.calendars) + subscribedCalendars }
-
-    /// Whether any calendar takes new events (not one that is read-only, such as a subscription).
-    public var canAddEvents: Bool {
-        calendarGroups.contains { group in group.calendars.contains { !$0.isReadOnly } }
-    }
-
     /// The calendar's colour (0xRRGGBB).
     public func color(of id: CalendarID) -> Int { colors[id] ?? 0x8A8F98 }
 
     public func goToToday() {
         anchorDay = now()
+        showsMiniMonth = false
         nowScrolls &+= 1
     }
-
-    public func move(by days: Int) {
-        anchorDay = calendar.date(byAdding: .day, value: days, to: anchor) ?? anchor
-    }
-
-    /// One swipe: a day in Day and 3 Day, a week in the agenda and in landscape, a month in Month.
-    public func step(_ direction: Int) {
-        if showsWeek {
-            move(by: 7 * direction)
-            return
-        }
-        switch mode {
-        case .day, .threeDay: move(by: direction)
-        case .agenda: move(by: 7 * direction)
-        case .month: anchorDay = calendar.date(byAdding: .month, value: direction, to: anchor) ?? anchor
-        }
-    }
-
-    /// The day chosen in Month: the anchor, with its events below the grid.
-    public var chosenDay: DayColumn? { days.first { $0.day == anchor } }
 
     /// The app came back to the front: a new day may have begun, and the grid goes back to now.
     public func sceneBecameActive() {
@@ -211,17 +283,13 @@ public final class CalendarModel {
         }
     }
 
-    /// A calendar was just added: it is shown, also when only some calendars are ticked.
-    func added(_ calendar: CalendarID) {
-        if shownCalendars != nil { shownCalendars?.insert(calendar) }
-        reload()
-    }
-
     /// The calendars and the days shown, from the store.
     public func reload() {
         do {
             try loadCalendars()
             calendarsFailed = false
+            // A choice that changed has read the days already.
+            if forgetGoneCalendars() { return }
         } catch {
             calendarsFailed = true
         }
@@ -229,20 +297,26 @@ public final class CalendarModel {
     }
 
     /// The days shown; the calendars are read again only when the store changes.
-    private func reloadDays() {
+    func reloadDays() {
         followToday()
         let range = shownRange()
+        // Day and 3 Day read a week more on each side, for the grid to page into.
+        let read = pages ? (adding(-Self.pageMargin, to: range.from), adding(Self.pageMargin, to: range.to)) : range
         do {
-            let events = try app.store.occurrences(from: range.from, to: range.to, in: shownCalendars)
-            var columns = dayStarts(range).map { column($0, events) }
-            if mode == .agenda, !showsWeek {
-                columns = columns.filter { !$0.isEmpty || isToday($0.day) }
+            let events = try app.store.occurrences(from: read.0, to: read.1, in: shownCalendars)
+            let columns = columns(dayStarts(read), events)
+            if pages {
+                pageDays = columns
+                days = columns.filter { $0.day >= range.from && $0.day < range.to }
+            } else {
+                pageDays = []
+                days = columns
             }
-            days = columns
             daysFailed = false
         } catch {
             daysFailed = true
         }
+        if showsMiniMonth { loadMiniMonth() }
     }
 
     /// An anchor that follows today is today's start, after midnight and after a zone change alike. An
@@ -264,8 +338,9 @@ public final class CalendarModel {
         var groups: [(account: Account, calendars: [CalendarInfo])] = []
         var refused: [CalendarID: Int] = [:]
         var found: [CalendarID: Int] = [:]
+        let chosen = CalendarColors.chosen(defaults)
         for account in app.accounts {
-            let cals = try app.store.calendars(account.id)
+            let cals = try app.store.calendars(account.id).map { CalendarColors.applied($0, chosen) }
             guard !cals.isEmpty else { continue }
             groups.append((account: account, calendars: cals))
             for cal in cals {
@@ -277,8 +352,9 @@ public final class CalendarModel {
         var failures: [CalendarID: SubscriptionFailure] = [:]
         var subscribed: [CalendarInfo] = []
         for held in try app.store.subscriptions() {
-            subscribed.append(held.calendar)
-            found[held.id] = held.calendar.color
+            let calendar = CalendarColors.applied(held.calendar, chosen)
+            subscribed.append(calendar)
+            found[held.id] = calendar.color
             if let failure = held.failure { failures[held.id] = failure }
             let count = try app.store.refusedEventCount(held.id)
             if count > 0 { refused[held.id] = count }
@@ -290,80 +366,4 @@ public final class CalendarModel {
         colors = found
     }
 
-    // MARK: Days
-
-    /// Minutes from the day's start on its wall clock: 02:30 is 150 on a day the clocks change too. A
-    /// time before the day is its top, one after it its bottom.
-    public func minutes(of date: Date, on day: Date) -> Int {
-        if date <= day { return 0 }
-        guard calendar.isDate(date, inSameDayAs: day) else { return 24 * 60 }
-        let parts = calendar.dateComponents([.hour, .minute], from: date)
-        return min(max((parts.hour ?? 0) * 60 + (parts.minute ?? 0), 0), 24 * 60)
-    }
-
-    private func shownRange() -> (from: Date, to: Date) {
-        if showsWeek { return weekRange() }
-        switch mode {
-        case .day: return (anchor, adding(1, to: anchor))
-        case .threeDay: return (anchor, adding(3, to: anchor))
-        case .agenda: return (anchor, adding(Self.agendaDays, to: anchor))
-        case .month:
-            let first = calendar.dateInterval(of: .month, for: anchor)?.start ?? anchor
-            let count = calendar.range(of: .day, in: .month, for: anchor)?.count ?? 30
-            let weekday = calendar.component(.weekday, from: first)
-            let lead = ((weekday - calendar.firstWeekday) % 7 + 7) % 7
-            let weeks = (lead + count + 6) / 7
-            let start = adding(-lead, to: first)
-            return (start, adding(weeks * 7, to: start))
-        }
-    }
-
-    /// The week holding the anchor: seven days from the locale's first weekday, or Monday to Friday of
-    /// the week that starts on Monday.
-    private func weekRange() -> (from: Date, to: Date) {
-        let weekday = calendar.component(.weekday, from: anchor)
-        switch weekMode {
-        case .week:
-            let start = adding(-(((weekday - calendar.firstWeekday) % 7 + 7) % 7), to: anchor)
-            return (start, adding(7, to: start))
-        case .workWeek:
-            // Weekday 2 is Monday in the Gregorian calendar.
-            let start = adding(-(((weekday - 2) % 7 + 7) % 7), to: anchor)
-            return (start, adding(5, to: start))
-        }
-    }
-
-    private func adding(_ days: Int, to day: Date) -> Date {
-        calendar.date(byAdding: .day, value: days, to: day) ?? day.addingTimeInterval(Double(days) * 86_400)
-    }
-
-    /// The day starts in the range, at most a year of them.
-    private func dayStarts(_ range: (from: Date, to: Date)) -> [Date] {
-        var starts: [Date] = []
-        var day = range.from
-        while day < range.to, starts.count < 366 {
-            starts.append(day)
-            day = adding(1, to: day)
-        }
-        return starts
-    }
-
-    private func column(_ day: Date, _ events: [CalendarEvent]) -> DayColumn {
-        let end = adding(1, to: day)
-        let parts = calendar.dateComponents([.year, .month, .day], from: day)
-        let key = (parts.year ?? 0) * 10_000 + (parts.month ?? 0) * 100 + (parts.day ?? 0)
-        var allDay: [CalendarEvent] = []
-        var timed: [CalendarEvent] = []
-        for event in events {
-            let occurrence = event.occurrence
-            if let first = occurrence.allDayStart, let last = occurrence.allDayEnd {
-                if first <= key && key < max(last, first + 1) { allDay.append(event) }
-            } else if occurrence.end > occurrence.start {
-                if occurrence.start < end && occurrence.end > day { timed.append(event) }
-            } else if occurrence.start >= day && occurrence.start < end {
-                timed.append(event)
-            }
-        }
-        return DayColumn(day: day, allDay: allDay, timed: DayLayout.place(timed) { self.minutes(of: $0, on: day) })
-    }
 }

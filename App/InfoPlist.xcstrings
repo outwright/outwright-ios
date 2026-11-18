@@ -25,6 +25,24 @@
         }
       }
     },
+    "NSCameraUsageDescription" : {
+      "comment" : "Asked when Camera is chosen to attach a photo to a message.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright uses the camera when you take a photo to attach to a message."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright använder kameran när du tar en bild att bifoga i ett meddelande."
+          }
+        }
+      }
+    },
     "NSContactsUsageDescription" : {
       "comment" : "Asked when Save contacts to iPhone is turned on.",
       "extractionState" : "manual",
@@ -39,6 +57,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Outwright sparar en kopia av ett kontos kontakter i Kontakter när du slår på det, så att du ser vem som ringer."
+          }
+        }
+      }
+    },
+    "NSFaceIDUsageDescription" : {
+      "comment" : "Asked before the passwords and keys are put in a setup file (Settings › Back up and move).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright asks for Face ID before it puts your passwords and keys in a setup file."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outwright frågar efter Face ID innan dina lösenord och nycklar läggs i en inställningsfil."
           }
         }
       }

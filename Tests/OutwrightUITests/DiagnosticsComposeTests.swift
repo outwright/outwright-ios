@@ -24,6 +24,24 @@ import Testing
         #expect(!model.hasChanges)
     }
 
+    @Test func theMailSaysWhatIsSent() throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let model = ComposeModel(request: ComposeRequest(kind: .diagnostics(report)), store: box.store, accounts: [anna])
+        #expect(String(model.body.characters).hasPrefix(
+            "The information sent to Outwright contains no private information, no mail and no details of any account."))
+    }
+
+    /// A signature can hold a name or a phone number: the diagnostics mail has none.
+    @Test func theMailCarriesNoSignature() throws {
+        var box = try Mailbox()
+        var anna = try box.addAccount("anna@example.org")
+        anna.signature = "Anna Andersson, +46 70 123 45 67"
+        try box.store.save(anna)
+        let model = ComposeModel(request: ComposeRequest(kind: .diagnostics(report)), store: box.store, accounts: [anna])
+        #expect(!String(model.body.characters).contains("Andersson"))
+    }
+
     @Test func untouchedDiagnosticsLeavesNoDraft() throws {
         var box = try Mailbox()
         let anna = try box.addAccount("anna@example.org")

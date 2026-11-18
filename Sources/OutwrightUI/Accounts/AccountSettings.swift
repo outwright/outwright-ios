@@ -232,7 +232,7 @@ extension AppModel {
     public func refreshCalendars(_ account: AccountID) async {
         await sync.refreshCalendars(of: account)
         reloadAccounts()
-        await updateSyncProblems()
+        await updateAttention()
     }
 
     /// The calendar new events go to.
@@ -270,7 +270,7 @@ extension AppModel {
     public func refreshContacts(_ account: AccountID) async {
         await sync.refreshContacts(of: account)
         reloadAccounts()
-        await updateSyncProblems()
+        await updateAttention()
     }
 
     /// Changes the account as stored now (never a copy that may be behind), then reloads.

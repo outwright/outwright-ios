@@ -6,52 +6,72 @@ import OutwrightModel
 import SwiftUI
 
 /// A person: avatar, name, organisation, call, mail and message, the details, the latest mail
-/// with them; Edit and Delete, and when a change was not taken, how to go on.
+/// with them and the events with them; Edit at the top right, and when a change was not taken, how
+/// to go on.
 struct PersonCardView: View {
+    /// Where the card stands, which decides its top left button.
+    enum Presentation {
+        /// Over whatever opened it (an address in a message): ✕.
+        case sheet
+        /// Beside the contact list on a wide screen: nothing.
+        case pane
+        /// Pushed over the contact list in one column: back.
+        case pushed
+    }
+
     let app: AppModel
     @State private var model: PersonCardModel
     @State private var showsAllDetails = false
     @State private var showsAllMessages = false
-    @State private var confirmsDelete = false
     @State private var actionFailed = false
     @Environment(\.openURL) private var openURL
-    /// Beside the contact list on a wide screen rather than a sheet: no close button.
-    let inPane: Bool
+    @Environment(\.dismiss) private var dismiss
+    let presentation: Presentation
 
-    init(app: AppModel, request: PersonRequest, inPane: Bool = false) {
+    init(app: AppModel, request: PersonRequest, presentation: Presentation = .sheet) {
         self.app = app
-        self.inPane = inPane
+        self.presentation = presentation
         _model = State(initialValue: PersonCardModel(app: app, request: request))
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if model.failed {
-                    ProblemBanner(text: L10n.string("The contact couldn't be read. Try again."))
+        // The bar stands above the scroll view, not over it: on iOS 26 the scroll view's top edge
+        // takes the taps meant for buttons laid over it (Edit did nothing on an iPad and a Mac).
+        VStack(spacing: 0) {
+            topBar
+            ScrollView {
+                VStack(spacing: 20) {
+                    if model.failed {
+                        ProblemBanner(text: L10n.string("The contact couldn't be read. Try again."))
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
+                    }
+                    if actionFailed {
+                        ProblemBanner(text: L10n.string("The contact couldn't be saved. Try again."))
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
+                    }
+                    header
+                    if model.conflict != nil { conflictBanner }
+                    if model.changeFailed && model.conflict == nil { failedBanner }
+                    quickButtons
+                    if model.canAddContact { addContact }
+                    details
+                    if let address = model.mailAddress?.email {
+                        ForEach(Array(app.modules.protectionScreens.enumerated()), id: \.offset) { _, screens in
+                            screens.personSection(for: address)
+                        }
+                    }
+                    messages
+                    if !model.events.isEmpty { events }
+                    if !model.files.isEmpty { PersonCardFiles(files: model.files, app: app) }
                 }
-                if actionFailed {
-                    ProblemBanner(text: L10n.string("The contact couldn't be saved. Try again."))
-                }
-                header
-                if model.conflict != nil { conflictBanner }
-                if model.changeFailed && model.conflict == nil { failedBanner }
-                quickButtons
-                if model.canAddContact { addContact }
-                details
-                if let screens = app.modules.protectionUI, let address = model.mailAddress?.email {
-                    screens.personSection(for: address)
-                }
-                messages
-                if !model.files.isEmpty { PersonCardFiles(files: model.files, app: app) }
-                if model.canEdit { actions }
+                .padding(16)
             }
-            .padding(16)
+            .refreshable { await model.pull() }
         }
         .background(Theme.drawerBackground)
-        .overlay(alignment: .topTrailing) {
-            if !inPane { closeButton }
-        }
+        #if os(iOS)
+        .toolbar(.hidden, for: .navigationBar)
+        #endif
         .task { await model.observe() }
     }
 
@@ -62,9 +82,10 @@ struct PersonCardView: View {
             } else {
                 Avatar(name: model.name, email: model.emails.first?.value ?? model.name, size: 96)
             }
-            Text(verbatim: model.name).font(.title.bold()).multilineTextAlignment(.center)
-            if !model.organization.isEmpty {
-                Text(verbatim: model.organization).font(.body).foregroundStyle(Theme.secondaryText)
+            Text(verbatim: model.name).font(.title2.bold()).multilineTextAlignment(.center)
+            let role = [model.title, model.organization].filter { !$0.isEmpty }.joined(separator: " · ")
+            if !role.isEmpty {
+                Text(verbatim: role).font(.body).foregroundStyle(Theme.secondaryText).multilineTextAlignment(.center)
             }
         }
         .padding(.top, 24)
@@ -93,27 +114,28 @@ struct PersonCardView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 64)
             .foregroundStyle(enabled ? Theme.accent : Theme.secondaryText.opacity(0.6))
-            .background(Theme.background, in: RoundedRectangle(cornerRadius: 14))
+            .background(Theme.background, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
     }
 
-    /// The card closes first; the compose sheet opens once it is gone.
+    /// A card sheet closes first; compose opens once it is gone.
     private func mail() {
         model.mail()
-        app.personToShow = nil
     }
 
-    /// Leads into the new-contact editor with the address filled in, once the card has closed.
+    /// Leads into the new-contact editor with the address filled in (once a card sheet has closed).
     private var addContact: some View {
         Button {
             if let address = model.mailAddress {
-                app.pendingContactEditor = ContactEditorRequest(prefill: address)
-                app.personToShow = nil
+                let back = presentation == .sheet
+                app.afterCard { [app] in
+                    app.contactEditor = ContactEditorRequest(prefill: address, returnsToCard: back)
+                }
             }
         } label: {
-            ModuleLabel("Add contact", systemImage: "person.badge.plus").frame(maxWidth: .infinity, minHeight: 44)
+            ModuleLabel("Add contact", systemImage: Icons.personAdd).frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
     }
@@ -129,10 +151,19 @@ struct PersonCardView: View {
             secondary: ("Discard", { attempt { try model.discard() } }))
     }
 
-    /// The change the server did not take, and giving it up for the server's version.
+    /// The change the server did not take, sending it again when it is a photo, and giving it up
+    /// for the server's version.
     private var failedBanner: some View {
         HStack(spacing: 0) {
-            ProblemBanner(text: L10n.string("Could not be saved"))
+            ProblemBanner(
+                text: model.photoFailed
+                    ? L10n.string("The photo couldn't be saved to the server") : L10n.string("Could not be saved"))
+            if model.photoFailed {
+                Button { attempt { try model.retryPhoto() } } label: { Text(ui: "Retry") }
+                    .buttonStyle(.bordered)
+                    .padding(.leading, 8)
+                    .accessibilityIdentifier("card.retryPhoto")
+            }
             Button(role: .destructive) { attempt { try model.discardFailedChange() } } label: {
                 Text(ui: "Discard")
             }
@@ -178,7 +209,7 @@ struct PersonCardView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.background, in: RoundedRectangle(cornerRadius: 14))
+        .background(Theme.background, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
     }
 
     private func detailRow(_ label: String, _ value: String) -> some View {
@@ -197,7 +228,7 @@ struct PersonCardView: View {
 
     private var messages: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(ui: "Latest messages").font(.headline)
+            SectionHeader("Latest messages")
             let shown = showsAllMessages ? model.messages : model.latest
             if shown.isEmpty {
                 Text(ui: "No messages with this person.").foregroundStyle(Theme.secondaryText)
@@ -236,57 +267,63 @@ struct PersonCardView: View {
                         .foregroundStyle(Theme.accent)
                     }
                 }
-                .background(Theme.background, in: RoundedRectangle(cornerRadius: 14))
+                .background(Theme.background, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
-    private var actions: some View {
-        VStack(spacing: 0) {
-            Button {
-                if let id = model.contact?.id {
-                    app.pendingContactEditor = ContactEditorRequest(editing: id)
-                    app.personToShow = nil
-                }
-            } label: {
-                ModuleLabel("Edit contact", systemImage: Icons.edit).frame(maxWidth: .infinity, minHeight: 44)
-            }
-            Divider()
-            Button(role: .destructive) { confirmsDelete = true } label: {
-                ModuleLabel("Delete contact", systemImage: Icons.delete).frame(maxWidth: .infinity, minHeight: 44)
-            }
-        }
-        .background(Theme.background, in: RoundedRectangle(cornerRadius: 14))
-        .confirmationDialog(
-            Text(ui: "Delete this contact?"), isPresented: $confirmsDelete, titleVisibility: .visible
-        ) {
-            Button(role: .destructive) {
-                attempt {
-                    try model.delete()
-                    app.personToShow = nil
-                }
-            } label: {
-                Text(ui: "Delete contact")
-            }
-            Button(role: .cancel) {} label: { Text(ui: "Cancel") }
-        } message: {
-            Text(ui: "The contact is deleted from its address book.")
-        }
-    }
 }
 
 extension PersonCardView {
-    /// Closes the sheet.
-    fileprivate var closeButton: some View {
-        Button { app.personToShow = nil } label: {
-            Image(systemName: Icons.close)
-                .font(.body.weight(.semibold))
-                .frame(width: 40, height: 40)
-                .foregroundStyle(.primary)
+    /// The coming events with the person, then the past ones; a tap opens one.
+    private var events: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader("Events")
+            VStack(spacing: 0) {
+                ForEach(Array(model.events.enumerated()), id: \.offset) { index, event in
+                    Button {
+                        app.afterCard { [app] in app.eventToShow = EventRequest(event) }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: event.occurrence.details.title.isEmpty
+                                ? L10n.string("(No title)") : event.occurrence.details.title)
+                                .font(.body).lineLimit(1)
+                            let when = SearchEventRow.when(event.occurrence, now: app.now(), in: .autoupdatingCurrent)
+                            Text(verbatim: when)
+                                .font(.subheadline).foregroundStyle(Theme.secondaryText).lineLimit(1)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if index < model.events.count - 1 { Divider().padding(.leading, 14) }
+                }
+            }
+            .background(Theme.background, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         }
-        .glassEffect(.regular.interactive(), in: .circle)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// ✕ on a sheet, back when pushed, nothing beside the list; Edit on the right when the contact's
+    /// book can be written to.
+    private var topBar: some View {
+        HStack {
+            switch presentation {
+            case .sheet: GlassIconButton(Icons.close, label: "Close") { app.personToShow = nil }
+            case .pushed: GlassIconButton(Icons.back, label: "Back") { dismiss() }
+            case .pane: EmptyView()
+            }
+            Spacer(minLength: 0)
+            if model.canEdit, let id = model.contact?.id {
+                GlassIconButton(Icons.edit, label: "Edit contact", tint: Theme.accent) {
+                    let back = presentation == .sheet
+                    app.afterCard { [app] in
+                        app.contactEditor = ContactEditorRequest(editing: id, returnsToCard: back)
+                    }
+                }
+            }
+        }
         .padding(16)
-        .accessibilityLabel(Text(ui: "Close"))
     }
 }

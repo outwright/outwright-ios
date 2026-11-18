@@ -13,7 +13,7 @@ struct PersonCardFiles: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(ui: "Files").font(.headline)
+            SectionHeader("Files")
             VStack(spacing: 0) {
                 ForEach(Array((showsAll ? files : Array(files.prefix(3))).enumerated()), id: \.offset) { _, file in
                     Button {
@@ -51,7 +51,7 @@ struct PersonCardFiles: View {
                     .foregroundStyle(Theme.accent)
                 }
             }
-            .background(Theme.background, in: RoundedRectangle(cornerRadius: 14))
+            .background(Theme.background, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .opensAttachment($opening)

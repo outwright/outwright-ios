@@ -42,11 +42,11 @@ public struct MessageContent: Sendable {
     }
 
     /// Reads a stored message away from the main actor.
-    static func read(_ data: Data, store: MailStore) async -> MessageContent? {
+    static func read(_ data: Data, store: MailStore, account: AccountID? = nil) async -> MessageContent? {
         await Task.detached(priority: .userInitiated) {
             // The text is cut while it is read, not after: four bytes at most for a character.
             let limits = MIMELimits(textBytes: textLimit * 4)
-            return store.open(data, limits: limits).map {
+            return store.open(data, limits: limits, account: account).map {
                 var content = MessageContent($0.message)
                 content.facts = $0.facts
                 return content
@@ -71,10 +71,6 @@ public struct MessageContent: Sendable {
             }
             return !shown.contains(CIDSchemeHandler.normalize(cid))
         }
-    }
-
-    public var hasRemotePictures: Bool {
-        html.map(RemoteContent.mentionsRemote) ?? false
     }
 
     static func contentIDsUsed(_ html: String) -> Set<String> {
@@ -113,6 +109,14 @@ public struct ThreadItem: Identifiable, Sendable {
     public var id: MessageID { row.id }
 }
 
+/// What the reading view does after an action.
+public enum ReadingStep: Equatable, Sendable {
+    /// Back to the list (on a phone; beside the list the conversation stays, its row selected).
+    case close
+    /// The conversation stays open.
+    case stay
+}
+
 /// A conversation as the reading view shows it: oldest first, the latest open; opening it marks
 /// it read; actions apply to the messages of the folder it was opened from.
 @Observable @MainActor
@@ -127,28 +131,37 @@ public final class ThreadModel {
     public private(set) var failed = false
     /// Opened from Junk: its links and pictures stay shut, and Not junk is offered.
     public private(set) var isInJunk = false
+    /// Opened from Trash: Delete is for good, and asks first.
+    public private(set) var deleteNeedsConfirmation = false
     /// The address of the account the conversation is in.
     @ObservationIgnored private var ownerAddress = ""
 
     /// Reads a body into what is shown, off the main actor.
     @ObservationIgnored let read: @Sendable (Data) async -> MessageContent?
+    /// The move or delete waiting out its undo window: its messages are left out; nil leaves out none.
+    @ObservationIgnored public let pending: PendingMail?
 
     public convenience init(
-        store: MailStore, message: MessageID, fetchBody: @escaping @MainActor (MessageID) async -> Void
+        store: MailStore, message: MessageID, pending: PendingMail? = nil,
+        fetchBody: @escaping @MainActor (MessageID) async -> Void
     ) {
-        self.init(store: store, message: message, fetchBody: fetchBody) { [store] in
-            await MessageContent.read($0, store: store)
+        let account = (try? store.message(message))??.accountID
+        self.init(store: store, message: message, pending: pending, fetchBody: fetchBody) { [store] in
+            await MessageContent.read($0, store: store, account: account)
         }
     }
 
     init(
-        store: MailStore, message: MessageID, fetchBody: @escaping @MainActor (MessageID) async -> Void,
+        store: MailStore, message: MessageID, pending: PendingMail? = nil,
+        fetchBody: @escaping @MainActor (MessageID) async -> Void,
         read: @escaping @Sendable (Data) async -> MessageContent?
     ) {
         self.store = store
         self.opened = message
         self.fetchBody = fetchBody
         self.read = read
+        self.pending = pending
+        pending?.watch(self)
     }
 
     /// The newest message of the conversation, which the action bar acts on.
@@ -178,18 +191,23 @@ public final class ThreadModel {
     /// The messages of the thread, from the folders that belong with the one it was opened in.
     private func loadRows() -> MessageRow? {
         do {
-            guard let row = try store.message(opened) else {
+            let hidden = pending?.hidden ?? []
+            guard let row = try store.message(opened), !hidden.contains(row.id) else {
                 isGone = true
+                items = []
                 return nil
             }
             ownerAddress = try store.accounts().first { $0.id == row.accountID }?.email.lowercased() ?? ""
             let kinds = Dictionary(
                 try store.folders(row.accountID).map { ($0.id, $0.kind) }, uniquingKeysWith: { first, _ in first })
-            let hidden: Set<FolderKind> = [.trash, .junk]
+            let apart: Set<FolderKind> = [.trash, .junk]
             let openedKind = kinds[row.folderID] ?? .other
             isInJunk = openedKind == .junk
+            deleteNeedsConfirmation = openedKind == .trash
             let rows = try store.thread(row.threadID, account: row.accountID).filter { other in
-                other.id == row.id || hidden.contains(openedKind) || !hidden.contains(kinds[other.folderID] ?? .other)
+                guard !hidden.contains(other.id) else { return false }
+                let otherKind = kinds[other.folderID] ?? .other
+                return other.id == row.id || apart.contains(openedKind) || !apart.contains(otherKind)
             }
             let previous = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             items = rows.map { row in
@@ -210,6 +228,16 @@ public final class ThreadModel {
         if items[index].isExpanded { await load(at: index) }
     }
 
+    /// Reads the message's body again (a key it was signed with came in): what it says now is shown
+    /// without the owner opening it again.
+    public func reverify(_ id: MessageID) async {
+        guard let index = items.firstIndex(where: { $0.id == id }), !items[index].isLoading,
+              let data = (try? store.body(id)) ?? nil else { return }
+        guard let content = await read(data), let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].content = content
+        items[index].failed = false
+    }
+
     public func recipients(of item: ThreadItem) -> RecipientLine {
         let all = (item.content?.to ?? item.row.to) + (item.content?.cc ?? item.row.cc)
         if !ownerAddress.isEmpty, all.contains(where: { $0.email.lowercased() == ownerAddress }) {
@@ -218,8 +246,11 @@ public final class ThreadModel {
         return .others(all.prefix(20).map { $0.name.flatMap { $0.isEmpty ? nil : $0 } ?? $0.email })
     }
 
+    /// Downloads the message's pictures, unless its content may not fetch any.
     public func allowPictures(_ id: MessageID) {
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = items.firstIndex(where: { $0.id == id }),
+              items[index].content?.facts?.allowsRemoteContent ?? true
+        else { return }
         items[index].allowsRemote = true
     }
 
@@ -259,34 +290,70 @@ public final class ThreadModel {
         return (try? Conversation.inFolder(of: row, store: store)) ?? [row]
     }
 
-    public func markUnread() {
-        guard let target = inFolder.last else { return }
+    /// Marks the newest message unread, at once: the view goes back to the list after it.
+    @discardableResult
+    public func markUnread() -> ReadingStep {
+        guard let target = inFolder.last else { return .stay }
+        commitIfStaged([target.id])
         apply(.setRead(target.id, false))
         refreshRows()
+        return failed ? .stay : .close
     }
 
     public func toggleFlag() {
         guard let target = inFolder.last else { return }
+        commitIfStaged([target.id])
         apply(.setFlagged(target.id, !target.isFlagged))
         refreshRows()
     }
 
-    public func delete() { moveAll { .delete($0) } }
-    public func archive() { moveAll { .move($0, to: .archive) } }
-    public func junk() { moveAll { .move($0, to: .junk) } }
+    public func delete() { stage(UndoText.deleted) { .delete($0) } }
+    public func archive() { stage(UndoText.archived) { .move($0, to: .archive) } }
+    public func junk() { stage(UndoText.movedToJunk) { .move($0, to: .junk) } }
     /// Not junk: the conversation of Junk goes to the Inbox.
-    public func notJunk() { moveAll { .move($0, to: .inbox) } }
-    public func move(to folder: FolderID) { moveAll { .moveTo($0, folder) } }
+    public func notJunk() {
+        stage({ UndoText.moved($0, to: L10n.string("Inbox")) }, { .move($0, to: .inbox) })
+    }
 
-    private func moveAll(_ action: (MessageID) -> MailAction) {
+    public func move(to folder: FolderID) {
+        let name = store.findFolder(folder).map(FolderNames.name) ?? ""
+        stage({ UndoText.moved($0, to: name) }, { .moveTo($0, folder) })
+    }
+
+    /// Deletes the conversation for good (from Trash), at once: the owner was asked.
+    public func deleteForGood() {
+        let messages = inFolder
+        commitIfStaged(messages.map(\.id))
+        moveAll(messages) { .delete($0) }
+    }
+
+    /// A move or delete of the conversation waits out the undo window and leaves the view at once;
+    /// without the undo window (nothing to stage with) it is made at once.
+    private func stage(_ text: (Int) -> String, _ action: (MessageID) -> MailAction) {
+        let messages = inFolder
+        guard let pending, !messages.isEmpty else {
+            moveAll(messages, action)
+            return
+        }
+        failed = false
+        pending.stage(messages.map { action($0.id) }, hiding: Set(messages.map(\.id)), text: text(1))
+    }
+
+    private func moveAll(_ messages: [MessageRow], _ action: (MessageID) -> MailAction) {
         do {
-            try Conversation.apply(inFolder, store: store, action)
+            try Conversation.apply(messages, store: store, action)
             failed = false
             isGone = true
         } catch {
             failed = true
             refreshRows()
         }
+    }
+
+    /// Commits the staged batch when it holds any of these messages, so changes reach the store in order.
+    private func commitIfStaged(_ messages: [MessageID]) {
+        guard let pending, !pending.hidden.isDisjoint(with: messages) else { return }
+        pending.commitNow()
     }
 
     /// Sorts the sender (of the newest message the owner did not send) into Focused or Other from
@@ -322,5 +389,11 @@ public final class ThreadModel {
         } catch {
             failed = true
         }
+    }
+}
+
+extension ThreadModel: PendingMailWatcher {
+    func pendingMailChanged() {
+        refreshRows()
     }
 }

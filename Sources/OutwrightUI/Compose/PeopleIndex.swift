@@ -77,11 +77,15 @@ enum PeopleIndex {
         }
     }
 
-    /// Whether a word of the name, or the address, starts with `prefix` (ignoring case and accents).
-    static func matches(_ person: Address, _ prefix: String) -> Bool {
+    /// Whether every word of `query` starts a word of the name or the address (ignoring case and
+    /// accents): "anna s" finds Anna Svensson. Bounded: at most 8 words of the query are looked at.
+    static func matches(_ person: Address, _ query: String) -> Bool {
         let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive, .anchored]
-        if person.email.range(of: prefix, options: options) != nil { return true }
-        let words = (person.name ?? "").split { $0.isWhitespace || $0 == "," || $0 == "-" }
-        return words.contains { $0.range(of: prefix, options: options) != nil }
+        let wanted = query.split(whereSeparator: \.isWhitespace).prefix(8)
+        guard !wanted.isEmpty else { return false }
+        let words = [Substring(person.email)] + (person.name ?? "").split { $0.isWhitespace || $0 == "," || $0 == "-" }
+        return wanted.allSatisfy { part in
+            words.contains { $0.range(of: part, options: options) != nil }
+        }
     }
 }

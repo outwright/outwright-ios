@@ -7,6 +7,7 @@ import SwiftUI
 
 /// Show details: who, to whom, when.
 struct MessageDetails: View {
+    @Environment(\.dismiss) private var dismiss
     let row: MessageRow
     let content: MessageContent?
     let onPerson: (Address) -> Void
@@ -25,6 +26,12 @@ struct MessageDetails: View {
                 LabeledContent { Text(verbatim: row.subject) } label: { Text(ui: "Subject") }
             }
             .navigationTitle(Text(ui: "Details"))
+            .inlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { dismiss() } label: { Text(ui: "Done") }
+                }
+            }
         }
     }
 

@@ -41,3 +41,34 @@ extension MailStore {
         }
     }
 }
+
+extension MailStore {
+    /// The first value is now; another follows each change to the accounts, their folders or a
+    /// folder's unread count (new mail, a message read, a sync of the folder list). Only the newest
+    /// unseen change is kept. If the database can't be watched any more, the stream ends with that error.
+    public func observeFolders() -> AsyncThrowingStream<Void, any Error> {
+        let observation = ValueObservation.tracking { database in
+            // Compared as text: a row is not Sendable.
+            try Row.fetchAll(database, sql: "SELECT * FROM account").map(\.description)
+                + Row.fetchAll(
+                    database,
+                    sql: """
+                        SELECT f.*, (SELECT COUNT(*) FROM message m WHERE m.folderId = f.id AND m.isRead = 0)
+                            AS unread FROM folder f
+                        """
+                ).map(\.description)
+        }.removeDuplicates()
+        let queue = queue
+        return AsyncThrowingStream(Void.self, bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let task = Task {
+                do {
+                    for try await _ in observation.values(in: queue) { continuation.yield() }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}

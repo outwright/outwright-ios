@@ -3,12 +3,24 @@
 
 import Foundation
 import OutwrightMIME
+import OutwrightModel
 import SwiftUI
 
 /// A message's attachments; tapping one opens it (`opensAttachment`).
 struct AttachmentList: View {
+    @ScaledMetric(relativeTo: .title2) private var iconWidth: CGFloat = 36
     let attachments: [Attachment]
+    /// What the modules add to each attachment's menu.
+    var actions: [any AttachmentAction] = []
+    var account: Account?
     @State private var opening: ShownAttachment?
+    /// The view of the module action chosen, shown in a sheet.
+    @State private var actionView: ActionSheet?
+
+    private struct ActionSheet: Identifiable {
+        let id = UUID()
+        let view: AnyView
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -20,7 +32,7 @@ struct AttachmentList: View {
                         Image(systemName: AttachmentFiles.icon(attachment.mimeType))
                             .font(.title2)
                             .foregroundStyle(Theme.accent)
-                            .frame(width: 36)
+                            .frame(width: iconWidth)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(attachment.filename.isEmpty ? String(localized: "Attachment", bundle: .module)
                                 : attachment.filename)
@@ -34,13 +46,43 @@ struct AttachmentList: View {
                         Spacer()
                     }
                     .padding(10)
-                    .background(RoundedRectangle(cornerRadius: 10).stroke(Theme.separator))
+                    .background(RoundedRectangle(cornerRadius: Theme.cardRadius).stroke(Theme.separator))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .modifier(ActionMenu(items: items(for: attachment)) { actionView = ActionSheet(view: $0) })
             }
         }
         .opensAttachment($opening)
+        .sheet(item: $actionView) { $0.view }
+    }
+}
+
+/// The attachment's long-press menu of module actions; none when no module has one for it.
+private struct ActionMenu: ViewModifier {
+    let items: [AttachmentActionItem]
+    let show: (AnyView) -> Void
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if items.isEmpty {
+            content
+        } else {
+            content.contextMenu {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    Button {
+                        show(item.perform())
+                    } label: {
+                        Label { item.title } icon: { Image(systemName: item.systemImage) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+extension AttachmentList {
+    fileprivate func items(for attachment: Attachment) -> [AttachmentActionItem] {
+        actions.compactMap { $0.action(for: attachment, account: account) }
     }
 }
 

@@ -13,11 +13,12 @@ extension MailStore {
     /// Queues the owner's answer to an invitation, shown at once; two answers are two edits, each
     /// owed its own reply. Declining the whole event hides it (it stays in the store); one occurrence
     /// declined is not shown either. `StoreError.readOnly` unless the event is an invitation
-    /// (`EventOwnership.isInvitation`) in a writable calendar.
+    /// (`EventOwnership.isInvitation`) in a writable calendar. `comment`, the owner's note to the
+    /// organiser, goes with the reply (`EventEdit.comment` cleans it).
     public func respond(
-        _ id: EventID, _ response: Attendee.Response, scope: EditScope, sendReply: Bool
+        _ id: EventID, _ response: Attendee.Response, scope: EditScope, sendReply: Bool, comment: String? = nil
     ) throws(StoreError) {
-        try edit(id, .respond(response, scope: scope, sendReply: sendReply))
+        try edit(id, .respond(response, scope: scope, sendReply: sendReply, comment: EventEdit.comment(comment)))
     }
 
     /// The owner's own reminder on an invitation, in minutes before the start (at most a year); nil
@@ -77,7 +78,7 @@ extension MailStore {
             else { return nil }
             if repliedByServer {
                 let index = revision - (before.revision - before.pending.count) - 1
-                if before.pending.indices.contains(index), case let .respond(_, scope, _) = before.pending[index] {
+                if before.pending.indices.contains(index), case let .respond(_, scope, _, _) = before.pending[index] {
                     try Self.markServerReplied(database, id.raw, scope)
                 }
             }
@@ -196,13 +197,18 @@ extension MailStore {
             var later = row.pending
             var queued: String?
             if row.href == nil, case .create? = row.pending.first, let lead = CalendarRecords.lead(series) {
+                // The create not sent yet goes as the change; one already on its way lands as it was, and
+                // the change, queued after it as its own revision, is written over it then.
                 later.removeFirst()
+                let edits = [.create(lead, rule: series.rule)] + later + [.organiserChange]
                 try database.execute(
                     sql: """
-                        UPDATE event SET pendingEditJSON = ?, newIcs = CASE WHEN newHref IS NULL THEN NULL ELSE ? END
+                        UPDATE event SET appliedIcs = ?, pendingEditJSON = ?, attempts = 0, revision = revision + 1,
+                            newIcs = CASE WHEN newHref IS NULL THEN NULL ELSE ? END
                         WHERE id = ?
                         """,
-                    arguments: [CalendarRecords.encode([.create(lead, rule: series.rule)] + later), ics, id.raw])
+                    arguments: [ics, CalendarRecords.encode(edits), ics, id.raw])
+                queued = row.account
             } else if row.href != nil, row.hasCalDAV, !row.calendarReadOnly {
                 // Each change from mail is its own revision: one written while the next came stays
                 // queued after it (`changeDone`).
@@ -343,7 +349,7 @@ extension MailStore {
             return false
         }
         var sendReply = false
-        if case let .respond(_, _, owed)? = unsent { sendReply = owed }
+        if case let .respond(_, _, owed, _)? = unsent { sendReply = owed }
         let mailed = try !sendReply
             && (Int.fetchOne(database, sql: "SELECT replySent FROM event WHERE id = ?", arguments: [app.id]) ?? 0) > 0
         guard mailed || theirAnswer == .needsAction else { return }

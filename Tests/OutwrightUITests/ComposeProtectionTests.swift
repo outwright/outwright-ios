@@ -11,7 +11,18 @@ import Testing
 @testable import OutwrightUI
 
 @MainActor private final class FakeProtectionUI: ProtectionUI {
-    let protection = ProtectionID(raw: "fake")
+    let protection: ProtectionID
+    var rank: Int?
+    init(id: String = "fake", rank: Int? = nil) {
+        protection = ProtectionID(raw: id)
+        self.rank = rank
+    }
+    /// How many times compose asked for the rank.
+    private(set) var rankAsked = 0
+    func composeRank(for account: Account) -> Int? {
+        rankAsked += 1
+        return rank
+    }
     var answer = ComposeProtection(lockOn: true, mustAsk: true, recipients: [:])
     private(set) var asked: [[String]] = []
     /// When set, the answer follows the recipients: these have keys, the rest do not.
@@ -46,9 +57,12 @@ import Testing
         if delay > .zero { try? await Task.sleep(for: delay) }
         return result
     }
-    func keyImporter(for address: String) -> AnyView { AnyView(EmptyView()) }
-    func readingMarks(_ facts: ProtectionFacts, sender: Address) -> AnyView { AnyView(EmptyView()) }
+    func keyImporter(for address: String, account: Account?) -> AnyView { AnyView(EmptyView()) }
+    func readingMarks(
+        _ facts: ProtectionFacts, sender: Address, reverify: @escaping @MainActor () async -> Void
+    ) -> AnyView { AnyView(EmptyView()) }
     func personSection(for address: String) -> AnyView { AnyView(EmptyView()) }
+    func accountSetup(for account: Account) -> AnyView? { nil }
 }
 
 @MainActor @Suite struct ComposeProtectionTests {
@@ -517,6 +531,150 @@ import Testing
         try edited.send()
         #expect(try box.store.submittedTo(of: id).isEmpty)
     }
+
+    // MARK: - A kept draft reopens as it was kept
+
+    private func keptDraft(_ kind: ProtectionRequirement.Kind, canProtect: Bool) async throws -> (ComposeModel, Mailbox) {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let id = try box.add(anna, .drafts, uid: 0, from: "anna@example.org", subject: "S", body: Data(
+                "From: anna@example.org\r\nTo: bo@example.org\r\nSubject: S\r\nMessage-ID: <k@example.org>\r\n\r\nHi\r\n".utf8),
+            to: ["bo@example.org"])
+        try box.store.setProtection(
+            ProtectionRequirement(
+                protection: ProtectionID(raw: "fake"), recipients: ["bo@example.org"], plainChosen: false, kind: kind),
+            for: id)
+        let ui = FakeProtectionUI()
+        ui.answer = ComposeProtection(
+            lockOn: false, mustAsk: false, recipients: ["bo@example.org": .has], canProtect: canProtect,
+            signOn: false, signsSeparately: true)
+        let model = await ComposeModel.make(
+            request: ComposeRequest(kind: .draft(id)), store: box.store, accounts: [anna], protectionUI: ui)
+        await model.refreshProtection()
+        return (model, box)
+    }
+
+    /// The kind is read as the draft opens: a requirement kept since (by this model) does not change
+    /// how it reopened.
+    @Test func keptKindIsReadWhenTheDraftOpens() async throws {
+        let (model, box) = try await keptDraft(.encryptUnsigned, canProtect: true)
+        #expect(model.protection?.signOn == false)
+        try box.store.setProtection(
+            ProtectionRequirement(
+                protection: ProtectionID(raw: "fake"), recipients: ["bo@example.org"], plainChosen: false, kind: .encrypt),
+            for: try #require(model.draftID))
+        await model.refreshProtection()
+        #expect(model.protection?.signOn == false)
+    }
+
+    @Test func keptEncryptedAndSignedReopensSigned() async throws {
+        let (model, box) = try await keptDraft(.encrypt, canProtect: true)
+        try model.send()
+        #expect(try requirement(model, box)?.kind == .encrypt)
+    }
+
+    @Test func keptEncryptUnsignedStaysUnsignedWhenKeptAgain() async throws {
+        let (model, box) = try await keptDraft(.encryptUnsigned, canProtect: true)
+        try model.send()
+        #expect(try requirement(model, box)?.kind == .encryptUnsigned)
+    }
+
+    @Test func keptEncryptUnsignedStaysUnsignedWhenTheAccountCannotProtect() async throws {
+        let (model, box) = try await keptDraft(.encryptUnsigned, canProtect: false)
+        model.draftWasProtected = true
+        model.subject = "Changed"
+        try model.keep()
+        #expect(try requirement(model, box)?.kind == .encryptUnsigned)
+    }
+
+    // MARK: - Which protection, encrypting without signing
+
+    private func lockedModel(_ screens: [any ProtectionUI]) async throws -> (ComposeModel, Mailbox) {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let model = ComposeModel(
+            request: ComposeRequest(kind: .new), store: box.store, accounts: [anna], protectionScreens: screens)
+        model.to = [Address(name: nil, email: "bo@example.org")]
+        model.protection = ComposeProtection(
+            lockOn: true, mustAsk: true, recipients: ["bo@example.org": .has])
+        return (model, box)
+    }
+
+    @Test func composeUsesHighestRankedProtection() async throws {
+        let (model, box) = try await lockedModel([
+            FakeProtectionUI(id: "one", rank: 1), FakeProtectionUI(id: "two", rank: 2)])
+        try model.send()
+        #expect(try requirement(model, box)?.protection == ProtectionID(raw: "two"))
+    }
+
+    /// Which protection compose uses is asked once per account it is from, not on each look.
+    @Test func theProtectionIsChosenOncePerAccount() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let bea = try box.addAccount("bea@example.org")
+        let one = FakeProtectionUI(id: "one", rank: 1)
+        let model = ComposeModel(
+            request: ComposeRequest(kind: .new), store: box.store, accounts: [anna, bea], protectionScreens: [one])
+        for _ in 0..<5 { _ = model.protectionUI }
+        #expect(one.rankAsked == 1)
+        model.from = bea.id
+        for _ in 0..<5 { _ = model.protectionUI }
+        #expect(one.rankAsked == 2)
+    }
+
+    @Test func composeFallsBackToFirstWhenNoneSetUp() async throws {
+        let (model, box) = try await lockedModel([FakeProtectionUI(id: "one"), FakeProtectionUI(id: "two")])
+        try model.send()
+        #expect(try requirement(model, box)?.protection == ProtectionID(raw: "one"))
+    }
+
+    @Test func lockWithoutSignGivesEncryptUnsignedWhenSignsSeparately() async throws {
+        let (model, box) = try await lockedModel([FakeProtectionUI()])
+        model.protection?.signsSeparately = true
+        model.protection?.signOn = false
+        try model.send()
+        #expect(try requirement(model, box)?.kind == .encryptUnsigned)
+    }
+
+    @Test func lockWithSignGivesEncryptWhenSignsSeparately() async throws {
+        let (model, box) = try await lockedModel([FakeProtectionUI()])
+        model.protection?.signsSeparately = true
+        model.protection?.signOn = true
+        try model.send()
+        #expect(try requirement(model, box)?.kind == .encrypt)
+    }
+
+    /// A protection that can sign from the account but not encrypt: the lock stays off, and
+    /// signing goes on.
+    @Test func aProtectionThatOnlySignsLeavesTheLockOff() throws {
+        let (model, box) = try make(
+            FakeProtectionUI(), protection: ComposeProtection(
+                lockOn: false, mustAsk: false, recipients: keys, canEncrypt: false, signOn: true, signsSeparately: true))
+        model.toggleLock()
+        #expect(model.protection?.lockOn == false)
+        try model.send()
+        #expect(try requirement(model, box) == ProtectionRequirement(
+            protection: ProtectionID(raw: "fake"), recipients: [], plainChosen: false, kind: .sign))
+    }
+
+    /// One that must ask (an answer to encrypted mail) stops at Send and goes, signed, only once the
+    /// owner chose to send it unencrypted.
+    @Test func aProtectionThatOnlySignsStopsWhereItMustAsk() throws {
+        let (model, box) = try make(
+            FakeProtectionUI(), protection: ComposeProtection(
+                lockOn: false, mustAsk: true, recipients: keys, canEncrypt: false, signOn: true, signsSeparately: true))
+        #expect(throws: ComposeError.protectionUnavailable) { try model.send() }
+        try model.send(choice: .sendPlain)
+        let stored = try #require(try requirement(model, box))
+        #expect(stored.plainChosen && stored.kind == .sign)
+    }
+
+    @Test func lockWithoutSignGivesEncryptWhenSigningIsPartOfLock() async throws {
+        let (model, box) = try await lockedModel([FakeProtectionUI()])
+        model.protection?.signOn = false
+        try model.send()
+        #expect(try requirement(model, box)?.kind == .encrypt)
+    }
 }
 
 /// What the line under the subject says the lock does: what Send then does.
@@ -526,15 +684,22 @@ import Testing
     private let bo = Address(name: nil, email: "bo@example.org")
 
     private func note(
-        _ state: ComposeProtection?, _ recipients: [Address], fromStart: Bool = false
+        _ state: ComposeProtection?, _ recipients: [Address], fromStart: Bool = false, ownerLock: Bool? = nil
     ) -> ProtectionNote? {
-        ComposeModel.note(state, recipients: recipients, protectedFromStart: fromStart)
+        ComposeModel.note(state, recipients: recipients, protectedFromStart: fromStart, ownerLock: ownerLock)
     }
 
     @Test func lockOnWithEveryRecipientKeyedIsEncrypted() {
         let state = ComposeProtection(
-            lockOn: true, mustAsk: false, recipients: ["anna@example.org": .has, "bo@example.org": .changed])
+            lockOn: true, mustAsk: false, recipients: ["anna@example.org": .has, "bo@example.org": .has])
         #expect(note(state, [anna, bo]) == .encrypted)
+    }
+
+    /// Encrypted to a key that is not the one used before: the line says so.
+    @Test func changedKeyIsNoted() {
+        let state = ComposeProtection(
+            lockOn: true, mustAsk: false, recipients: ["anna@example.org": .has, "bo@example.org": .changed])
+        #expect(note(state, [anna, bo]) == .keyChanged)
     }
 
     /// Send asks about a recipient without a key when the lock must ask.
@@ -544,11 +709,11 @@ import Testing
         #expect(note(state, [anna, bo]) == .notEveryone)
     }
 
-    /// Without the question the lock is only a wish: Send sends it as it is.
-    @Test func keylessRecipientWithoutAskingIsNotEncrypted() {
+    /// Without the question the lock is only a wish: Send sends it as it is, and no line shows.
+    @Test func keylessRecipientWithoutAskingShowsNothing() {
         let state = ComposeProtection(
             lockOn: true, mustAsk: false, recipients: ["anna@example.org": .has, "bo@example.org": .none])
-        #expect(note(state, [anna, bo]) == .notEncrypted)
+        #expect(note(state, [anna, bo]) == nil)
     }
 
     /// A key being looked up, or a recipient not yet asked about (just added, or still typed), is
@@ -560,29 +725,25 @@ import Testing
         #expect(note(answered, [anna, bo]) == .checking)
     }
 
-    @Test func lockOffIsNotEncrypted() {
-        let state = ComposeProtection(lockOn: false, mustAsk: false, recipients: ["anna@example.org": .has])
-        #expect(note(state, [anna]) == .notEncrypted)
+    /// Ordinary mail, signed or not, gets no line.
+    @Test func signedLineIsNotShownForAPlainSignedMessage() {
+        let signed = ComposeProtection(lockOn: false, mustAsk: false, recipients: [:], signOn: true)
+        #expect(note(signed, [anna]) == nil)
+        let plain = ComposeProtection(lockOn: false, mustAsk: false, recipients: ["anna@example.org": .has])
+        #expect(note(plain, [anna]) == nil)
     }
 
-    /// Wherever it goes unencrypted, it goes signed when signing is on.
-    @Test func unencryptedWithSignIsSigned() {
-        let off = ComposeProtection(lockOn: false, mustAsk: false, recipients: [:], signOn: true)
-        #expect(note(off, [anna]) == .signed)
-        let wish = ComposeProtection(
-            lockOn: true, mustAsk: false, recipients: ["anna@example.org": .none], signOn: true)
-        #expect(note(wish, [anna]) == .signed)
-        let cannot = ComposeProtection(lockOn: true, mustAsk: false, recipients: [:], canProtect: false, signOn: true)
-        #expect(note(cannot, [anna]) == .notEncrypted)
-    }
-
-    /// An account that can't protect: Send asks only when it must; with no lock there is no line.
-    @Test func accountThatCannotProtect() {
-        let asking = ComposeProtection(lockOn: true, mustAsk: true, recipients: [:], canProtect: false)
+    /// Whenever Send would stop because the account can't encrypt, the line says so beforehand,
+    /// whether the lock shows on or not.
+    @Test func noteShowsWhenSendWouldStop() {
+        let asking = ComposeProtection(lockOn: false, mustAsk: true, recipients: [:], canProtect: false)
         #expect(note(asking, [anna]) == .cannotProtect)
-        let wish = ComposeProtection(lockOn: true, mustAsk: false, recipients: [:], canProtect: false)
-        #expect(note(wish, [anna]) == .notEncrypted)
+        let locked = ComposeProtection(lockOn: true, mustAsk: true, recipients: [:], canProtect: false)
+        #expect(note(locked, [anna]) == .cannotProtect)
+        let wish = ComposeProtection(lockOn: false, mustAsk: false, recipients: [:], canProtect: false)
         #expect(note(wish, [anna], fromStart: true) == .cannotProtect)
+        // The owner turned the lock off: Send doesn't stop, and no line shows.
+        #expect(note(asking, [anna], ownerLock: false) == nil)
         let off = ComposeProtection(lockOn: false, mustAsk: false, recipients: [:], canProtect: false)
         #expect(note(off, [anna]) == nil)
     }

@@ -26,7 +26,17 @@ public enum AddAccountError: Error, Sendable, Equatable {
 /// (RFC 6186), the password; IMAP and SMTP must both take the password before anything is kept.
 @Observable @MainActor
 public final class AddAccountModel {
-    public var email = ""
+    public var email = "" {
+        // Another address needs its own lookup; the form below it goes until then.
+        didSet {
+            guard email != oldValue else { return }
+            hasLookedUp = false
+            // What was allowed or filled in for the old address does not carry over to the new one.
+            confirmedHosts = []
+            if user == autoFilledUser { user = "" }
+            autoFilledUser = nil
+        }
+    }
     public var name = ""
     public var password = ""
     /// The user name for both servers; the address when left empty.
@@ -34,6 +44,12 @@ public final class AddAccountModel {
     public var imap: MailEndpoint?
     public var smtp: MailEndpoint?
     public private(set) var discovered: DiscoveredServers?
+    /// The owner's own server was looked up for the address in the field, and the form below it is shown.
+    public private(set) var hasLookedUp = false
+    /// The lookup found no server named for the domain, so the fields hold a guess, or nothing.
+    public var discoveryFailed: Bool {
+        hasLookedUp && (discovered?.guessed ?? true)
+    }
     /// What the CardDAV lookup found, so an address outside the domain is asked about.
     private var discoveredCardDAV: DAVFound?
     /// What the CalDAV lookup found, the same way.
@@ -41,7 +57,9 @@ public final class AddAccountModel {
     public private(set) var isDiscovering = false
     public private(set) var isConnecting = false
     /// Observed, like the two above: the form redraws when the owner says yes (#57).
-    private var confirmedHosts: Set<String> = []
+    private(set) var confirmedHosts: Set<String> = []
+    /// The user name `discover()` filled in, so an edit of the address can take it back (one typed stays).
+    private var autoFilledUser: String?
 
     @ObservationIgnored let store: MailStore
     @ObservationIgnored let secrets: any SecretStore
@@ -104,8 +122,13 @@ public final class AddAccountModel {
             imap = found.imap
             smtp = found.smtp
         }
-        if user.isEmpty { user = email.trimmingCharacters(in: .whitespaces) }
+        if user.isEmpty {
+            user = email.trimmingCharacters(in: .whitespaces)
+            autoFilledUser = user
+        }
         await discoverDAV()
+        // A lookup that was cancelled for the next one leaves the form to it.
+        if !Task.isCancelled { hasLookedUp = true }
     }
 
     /// The CardDAV and CalDAV addresses found for the address and the servers now filled in (RFC 6764).
@@ -198,7 +221,7 @@ public final class AddAccountModel {
             signature: DefaultSignature.text, sortOrder: 0, cardDAV: trimmedCardDAV,
             cardDAVOff: Self.isOff(contactsOn, trimmedCardDAV, discoveredCardDAV), calDAV: trimmedCalDAV,
             calDAVOff: Self.isOff(calendarOn, trimmedCalDAV, discoveredCalDAV)
-        ).placed(after: existing, colors: Theme.avatarColors.count)
+        ).placed(after: existing, colors: AccountColors.count)
         let secret = Secret(password)
         isConnecting = true
         defer { isConnecting = false }

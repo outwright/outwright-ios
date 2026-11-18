@@ -57,13 +57,13 @@ import Testing
         return EventRequest(event)
     }
 
-    @Test func newEventDefaultsToDefaultCalendarNextHourAnd15Minutes() throws {
+    @Test func newEventDefaultsToDefaultCalendarNextHalfHourAnd15Minutes() throws {
         let fixture = try CalendarFixture()
         try fixture.store.setDefaultCalendar(try fixture.calendar("Home").id)
         let model = editor(fixture)
         #expect(model.calendar == (try fixture.calendar("Home").id))
-        #expect(model.start == fixture.at(day: 10, 11))
-        #expect(model.end == fixture.at(day: 10, 12))
+        #expect(model.start == fixture.at(day: 10, 10, 30))
+        #expect(model.end == fixture.at(day: 10, 11))
         #expect(model.details.reminder == 15)
         #expect(model.zone == stockholm)
         #expect(model.rule == nil)
@@ -71,7 +71,30 @@ import Testing
         #expect(model.canSave)
 
         let onDay = editor(fixture, day: fixture.at(day: 14, 0))
-        #expect(onDay.start == fixture.at(day: 14, 11))
+        #expect(onDay.start == fixture.at(day: 14, 10, 30))
+    }
+
+    /// Thirty minutes from the next half hour, or from the slot tapped, in the account in view's calendar.
+    @Test func newEventIsThirtyMinutesInTheAccountInView() throws {
+        let fixture = try CalendarFixture()
+        try fixture.store.setDefaultCalendar(try fixture.calendar("Home").id)
+        let home = try #require(fixture.app.accounts.first { $0.email == "home@example.org" })
+        fixture.app.scope = .folder(try fixture.box.folder(home, .inbox).id)
+        let model = EventEditorModel(
+            app: fixture.app, editing: nil, day: nil, calendar: phoneCalendar(), now: { fixture.at(day: 10, 10, 47) })
+        #expect(model.calendar == (try fixture.calendar("Family").id))
+        #expect(model.start == fixture.at(day: 10, 11))
+        #expect(model.end == fixture.at(day: 10, 11, 30))
+
+        let tapped = EventEditorModel(
+            app: fixture.app, editing: nil, day: nil, start: fixture.at(day: 14, 9, 30), calendar: phoneCalendar(),
+            now: { calendarNow })
+        #expect(tapped.start == fixture.at(day: 14, 9, 30))
+        #expect(tapped.end == fixture.at(day: 14, 10))
+
+        // With every account in view, the default calendar.
+        fixture.app.scope = .allAccounts
+        #expect(editor(fixture).calendar == (try fixture.calendar("Home").id))
     }
 
     @Test func allDayHasNoReminder() throws {
@@ -489,11 +512,12 @@ import Testing
         #expect(try fixture.store.series(id)?.rule == custom)
     }
 
-    /// A rule with parts the picker does not show (seconds, a calendar scale, a skip, unknown parts)
-    /// is Custom, and moving the series leaves it exactly as it was.
+    /// A rule with parts the picker does not show (seconds, a calendar scale, a skip, unknown parts, a
+    /// frequency under a day) is Custom, and moving the series leaves it exactly as it was.
     @Test func aRuleWithPartsThePickerDoesNotShowIsKeptOnAMove() throws {
         for text in ["FREQ=WEEKLY;BYDAY=TU;BYSECOND=30", "FREQ=MONTHLY;BYMONTHDAY=10;RSCALE=GREGORIAN",
-                     "FREQ=MONTHLY;RSCALE=GREGORIAN;SKIP=BACKWARD", "FREQ=WEEKLY;X-OWN=kept"] {
+                     "FREQ=MONTHLY;RSCALE=GREGORIAN;SKIP=BACKWARD", "FREQ=WEEKLY;X-OWN=kept",
+                     "FREQ=HOURLY;INTERVAL=4;COUNT=3"] {
             let fixture = try CalendarFixture()
             let rule = try #require(RecurrenceRule.parse(text))
             let id = try plainSeries(fixture, day: 10, rule: rule)
@@ -515,14 +539,16 @@ import Testing
     @Test func lateInTheEveningANewEventStartsAtMidnight() throws {
         let fixture = try CalendarFixture()
         let model = EventEditorModel(
-            app: fixture.app, editing: nil, day: nil, calendar: phoneCalendar(), now: { fixture.at(day: 10, 23, 20) })
+            app: fixture.app, editing: nil, day: nil, calendar: phoneCalendar(), now: { fixture.at(day: 10, 23, 40) })
         #expect(model.start == fixture.at(day: 11, 0))
-        #expect(model.end == fixture.at(day: 11, 1))
+        #expect(model.end == fixture.at(day: 11, 0, 30))
     }
 
     @Test func aNewZoneKeepsTheHoursShown() throws {
         let fixture = try CalendarFixture()
-        let model = editor(fixture)
+        let model = EventEditorModel(
+            app: fixture.app, editing: nil, day: nil, start: fixture.at(day: 10, 11), calendar: phoneCalendar(),
+            now: { calendarNow })
         let newYork = try #require(TimeZone(identifier: "America/New_York"))
         model.zone = newYork
         #expect(model.details.start == .zoned(wall(day: 10, 11), zone: "America/New_York"))
@@ -584,5 +610,146 @@ import Testing
         expected.minute = 0
         let saved = try #require(try fixture.store.series(request.event))
         #expect(saved.base?.start == .zoned(expected, zone: "Europe/Berlin"))
+    }
+    // MARK: Show as, private, length and repeat
+
+    @Test func showAsAndPrivateAreSaved() throws {
+        let fixture = try CalendarFixture()
+        let model = editor(fixture)
+        model.details.title = "Dentist"
+        #expect(model.details.showAs == .busy && !model.details.isPrivate)
+        model.details.showAs = .away
+        model.details.isPrivate = true
+        let id = try model.save(scope: .event)
+        let saved = try #require(try fixture.store.series(id)?.base)
+        #expect(saved.showAs == .away && saved.isPrivate)
+    }
+
+    @Test func theLengthMovesTheEnd() throws {
+        let fixture = try CalendarFixture()
+        let model = editor(fixture)
+        #expect(model.durationMinutes == EventEditorModel.defaultMinutes)
+        model.durationMinutes = 90
+        #expect(model.end.timeIntervalSince(model.start) == 90 * 60)
+        model.start = model.start.addingTimeInterval(3_600)
+        #expect(model.durationMinutes == 90, "moving the start keeps the length")
+    }
+
+    @Test func weekdayPresetIsMOtoFR() throws {
+        let fixture = try CalendarFixture()
+        let model = editor(fixture)
+        model.repeatChoice = .weekdays
+        let rule = try #require(model.rule)
+        #expect(rule.freq == .weekly && rule.interval == 1)
+        #expect(rule.byDay.map(\.weekday) == [1, 2, 3, 4, 5] && rule.byDay.allSatisfy { $0.ordinal == 0 })
+        #expect(model.repeatChoice == .weekdays)
+        model.details.title = "Stand-up"
+        let id = try model.save(scope: .event)
+        // Tuesday 10 November to Tuesday 17 November: five weekdays, no weekend.
+        let days = try fixture.store.occurrences(from: fixture.at(day: 11, 0), to: fixture.at(day: 18, 0), in: nil)
+            .filter { $0.id == id }
+        #expect(days.count == 5)
+        #expect(days.allSatisfy { !phoneCalendar().isDateInWeekend($0.occurrence.start) })
+    }
+
+    @Test func untilRuleIsEditable() throws {
+        let fixture = try CalendarFixture()
+        let until = EventTime.utc(fixture.at(day: 30, 23, 59))
+        let id = try plainSeries(
+            fixture, day: 10, rule: RecurrenceRule(freq: .weekly, until: until, byDay: [WeekdayNum(weekday: 2)]))
+        let model = editor(fixture, editing: EventRequest(event: id, occurrence: nil))
+        var custom = try #require(model.customRepeat)
+        #expect(custom.frequency == .weekly && custom.interval == 1 && custom.weekdays == [2])
+        guard case let .onDay(day) = custom.end else {
+            Issue.record("an UNTIL rule ends on its date")
+            return
+        }
+        #expect(phoneCalendar().isDate(day, inSameDayAs: fixture.at(day: 30, 12)))
+        custom.end = .after(5)
+        custom.interval = 2
+        custom.weekdays = [2, 4]
+        model.customRepeat = custom
+        _ = try model.save(scope: .event)
+        let rule = try #require(try fixture.store.series(id)?.rule)
+        #expect(rule.freq == .weekly && rule.interval == 2 && rule.count == 5 && rule.until == nil)
+        #expect(rule.byDay.map(\.weekday) == [2, 4])
+    }
+
+    @Test func aCustomEndOnADateEndsThatDay() throws {
+        let fixture = try CalendarFixture()
+        let model = editor(fixture)
+        model.details.title = "Course"
+        var custom = try #require(model.customRepeat)
+        custom.frequency = .daily
+        custom.end = .onDay(fixture.at(day: 12, 0))
+        model.customRepeat = custom
+        let id = try model.save(scope: .event)
+        let days = try fixture.store.occurrences(from: fixture.at(day: 10, 0), to: fixture.at(day: 20, 0), in: nil)
+            .filter { $0.id == id }
+        #expect(days.count == 3, "the 10th, the 11th and the 12th")
+    }
+
+    @Test func monthlyByWeekdayIsTheStartsWeekdayOfTheMonth() throws {
+        let fixture = try CalendarFixture()
+        // Tuesday 10 November is the second Tuesday.
+        let id = try plainSeries(fixture, day: 10, rule: RecurrenceRule(freq: .monthly))
+        let model = editor(fixture, editing: EventRequest(event: id, occurrence: nil))
+        var custom = try #require(model.customRepeat)
+        #expect(custom.frequency == .monthly && custom.monthlyBy == .date)
+        custom.monthlyBy = .weekday
+        model.customRepeat = custom
+        _ = try model.save(scope: .event)
+        let rule = try #require(try fixture.store.series(id)?.rule)
+        #expect(rule.byDay == [WeekdayNum(weekday: 2, ordinal: 2)])
+        let reopened = editor(fixture, editing: EventRequest(event: id, occurrence: nil))
+        #expect(reopened.customRepeat?.monthlyBy == .weekday)
+    }
+
+    @Test func aRuleTheCustomScreenCantShowIsNotOpenedInIt() throws {
+        let fixture = try CalendarFixture()
+        let id = try plainSeries(fixture, day: 10, rule: RecurrenceRule(freq: .hourly, interval: 4, count: 3))
+        #expect(editor(fixture, editing: EventRequest(event: id, occurrence: nil)).customRepeat == nil)
+    }
+    @Test func openingCustomAndBackingOutLeavesTheEventNotRepeating() throws {
+        let fixture = try CalendarFixture()
+        let model = editor(fixture)
+        model.details.title = "Once"
+        // The custom screen opens on its pattern; nothing is changed on it.
+        #expect(model.openCustom()?.frequency == .weekly)
+        #expect(model.rule == nil && model.repeatChoice == .never)
+        let id = try model.save(scope: .event)
+        #expect(try fixture.store.series(id)?.rule == nil)
+    }
+
+    @Test func aCustomPatternFollowsTheStart() throws {
+        let fixture = try CalendarFixture()
+        // Tuesday 10 November is the second Tuesday.
+        let id = try plainSeries(
+            fixture, day: 10, rule: RecurrenceRule(freq: .monthly, count: 6, byDay: [WeekdayNum(weekday: 2, ordinal: 2)]))
+        let model = editor(fixture, editing: EventRequest(event: id, occurrence: nil))
+        #expect(model.repeatChoice == .custom)
+        // Wednesday 18 November is the third Wednesday.
+        model.start = fixture.at(day: 18, 9)
+        #expect(model.customRepeat?.monthlyBy == .weekday)
+        _ = try model.save(scope: .event)
+        let rule = try #require(try fixture.store.series(id)?.rule)
+        #expect(rule.byDay == [WeekdayNum(weekday: 3, ordinal: 3)] && rule.count == 6)
+    }
+
+    @Test func aLengthOutOfRangeIsClampedNotATrap() {
+        #expect(EventEditorModel.lengthMinutes(.infinity) == EventEditorModel.maxMinutes)
+        #expect(EventEditorModel.lengthMinutes(-.infinity) == 0)
+        #expect(EventEditorModel.lengthMinutes(.nan) == 0)
+        #expect(EventEditorModel.lengthMinutes(1e300) == EventEditorModel.maxMinutes)
+        #expect(EventEditorModel.lengthMinutes(-300) == 0)
+        #expect(EventEditorModel.lengthMinutes(5_400) == 90)
+    }
+
+    @Test func aHugeEventStillHasALength() throws {
+        let fixture = try CalendarFixture()
+        let model = editor(fixture)
+        // Further than the calendar reads: no trap, and a length within the bounds.
+        model.details.end = .utc(Date(timeIntervalSinceReferenceDate: 1e300))
+        #expect((0...EventEditorModel.maxMinutes).contains(model.durationMinutes))
     }
 }

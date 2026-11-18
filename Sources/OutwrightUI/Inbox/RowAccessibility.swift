@@ -18,6 +18,9 @@ enum RowAccessibility {
         if row.isFlagged {
             parts.append(L10n.string("Flagged (row)", locale: locale))
         }
+        if row.isProtected {
+            parts.append(L10n.string("Encrypted (row)", locale: locale))
+        }
         if row.hasAttachment {
             parts.append(L10n.string("Has attachment (row)", locale: locale))
         }

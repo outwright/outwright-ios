@@ -82,9 +82,20 @@ public enum MIMEWriter {
             headers = ["Content-Type: multipart/alternative; boundary=\"\(boundary)\""]
             body = multipart(boundary, [textPart("text/plain", message.textBody), textPart("text/html", html)])
         }
-        guard !message.attachments.isEmpty else { return (headers, body) }
+        // Pictures the HTML shows by Content-ID go with it in multipart/related (RFC 2387).
+        let isShown = { (attachment: Attachment) in
+            attachment.isInline && attachment.contentID.flatMap(WriterSupport.messageID) != nil
+        }
+        let shown = message.htmlBody == nil || message.calendar != nil ? [] : message.attachments.filter(isShown)
+        let files = shown.isEmpty ? message.attachments : message.attachments.filter { !isShown($0) }
+        if !shown.isEmpty {
+            let boundary = makeBoundary()
+            body = multipart(boundary, [part(headers, body)] + shown.map(attachmentPart))
+            headers = ["Content-Type: multipart/related; boundary=\"\(boundary)\"; type=\"multipart/alternative\""]
+        }
+        guard !files.isEmpty else { return (headers, body) }
         let boundary = makeBoundary()
-        let parts = [part(headers, body)] + message.attachments.map(attachmentPart)
+        let parts = [part(headers, body)] + files.map(attachmentPart)
         return (["Content-Type: multipart/mixed; boundary=\"\(boundary)\""], multipart(boundary, parts))
     }
 

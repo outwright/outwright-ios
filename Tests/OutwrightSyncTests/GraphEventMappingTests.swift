@@ -188,7 +188,7 @@ private func days(_ found: [Occurrence]) -> [String] {
 
     @Test func showAsFreeAndCancelled() throws {
         let free = try #require(GraphEventMapping.series(graphJSON(single(["showAs": "free"]))))
-        #expect(free.base?.transparency == .free && free.base?.status == .confirmed)
+        #expect(free.base?.showAs == .free && free.base?.status == .confirmed)
         let cancelled = try #require(GraphEventMapping.series(graphJSON(single(["isCancelled": true]))))
         #expect(cancelled.base?.status == .cancelled)
     }

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import OutwrightModel
+public import OutwrightModel
 public import OutwrightStore
 
 extension SyncCoordinator {
@@ -47,24 +47,38 @@ extension SyncCoordinator {
             }
             for await (id, error) in group where !Task.isCancelled {
                 record(id, error)
+                if scope == .allAccounts { inboxWasFetched(id) }
             }
         }
     }
 
-    /// Older mail for the list in view: the folder, or every account's Inbox. Returns whether
-    /// any of them may have more; an account that fails is said to (the next try asks again),
-    /// and its error is recorded.
-    public func fetchOlder(_ scope: InboxScope, atLeast: Int) async -> Bool {
+    /// The account's Inbox has been looked at, whether or not the server answered.
+    func inboxWasFetched(_ id: AccountID) {
+        inboxFetched.insert(id)
+    }
+
+    /// The accounts this build syncs whose Inbox has not been looked at yet: their empty list is mail on
+    /// its way. An account of a provider the build does not carry is never synced, so never among them.
+    public func awaitingFirstInbox() -> Set<AccountID> {
+        let synced = (try? store.accounts().filter(isAvailable)) ?? []
+        return Set(synced.map(\.id)).subtracting(inboxFetched)
+    }
+
+    /// Older mail for the list in view: the folder, or every account's Inbox. More when any of
+    /// them may have more; failed when none of those asked could be, and every one that fails
+    /// has its error recorded.
+    public func fetchOlder(_ scope: InboxScope, atLeast: Int) async -> OlderMail {
         let targets = await targets(scope)
         var more = false
+        var failed = false
         for target in targets {
             do {
                 more = try await target.syncer.fetchOlder(target.folder, atLeast: atLeast) || more
             } catch {
                 record(target.account, error)
-                more = true
+                failed = true
             }
         }
-        return more
+        return more ? .more : failed ? .failed : .noneLeft
     }
 }

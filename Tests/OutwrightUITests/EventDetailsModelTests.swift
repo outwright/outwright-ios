@@ -67,6 +67,35 @@ import Testing
         #expect(model.attendees.map(\.response) == [.declined, .tentative, .needsAction])
     }
 
+    @Test func theMeetingLinkStandsApartFromOtherLinks() throws {
+        let fixture = try CalendarFixture()
+        let start = fixture.at(day: 10, 9)
+        let id = try fixture.add(
+            EventDetails(
+                title: "Review", place: "Microsoft Teams Meeting",
+                notes: "Agenda: https://example.org/agenda\nJoin: https://teams.microsoft.com/l/meetup-join/19%3aabc/0",
+                start: .utc(start), end: .utc(start.addingTimeInterval(3_600))))
+        let model = details(fixture, id)
+        #expect(model.meeting?.host() == "teams.microsoft.com")
+        #expect(model.otherLinks.map(\.absoluteString) == ["https://example.org/agenda"])
+    }
+
+    @Test func emailAttendeesWritesToEveryoneButTheOwner() throws {
+        let fixture = try CalendarFixture()
+        let start = fixture.at(day: 10, 9)
+        let id = try fixture.add(
+            EventDetails(
+                title: "Planning", start: .utc(start), end: .utc(start.addingTimeInterval(3_600)),
+                attendees: [
+                    Attendee(email: "johan.berg@example.org", name: "Johan Berg"),
+                    Attendee(email: "ANNA@example.org", name: "Anna"),
+                    Attendee(email: "maja.ek@example.org", name: "Maja Ek")
+                ], organizer: "johan.berg@example.org"))
+        let model = details(fixture, id)
+        #expect(model.emailRecipients.map(\.email) == ["johan.berg@example.org", "maja.ek@example.org"])
+        #expect(model.emailRecipients.first?.name == "Johan Berg")
+    }
+
     @Test func linksComeFromPlaceAndNotes() throws {
         let fixture = try CalendarFixture()
         let start = fixture.at(day: 10, 9)

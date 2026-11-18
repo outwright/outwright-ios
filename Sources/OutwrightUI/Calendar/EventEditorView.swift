@@ -7,7 +7,7 @@ import SwiftUI
 
 /// The event editor sheet: ✕, the calendar with its account, ✓; then the title with the calendar's
 /// colour, People, All day, the start and end with the length, the time zone, the place, the
-/// reminder, the repeat and the notes.
+/// reminder, the repeat (its custom screen pushed), Show as, Private and the notes.
 struct EventEditorView: View {
     let app: AppModel
     @State private var model: EventEditorModel
@@ -15,6 +15,8 @@ struct EventEditorView: View {
     @State private var asksToDiscard = false
     @State private var warnsOverrides = false
     @State private var typing = ""
+    /// The custom repeat screen is pushed.
+    @State private var editsCustomRepeat = false
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
 
@@ -25,30 +27,37 @@ struct EventEditorView: View {
     init(app: AppModel, request: EventEditorRequest) {
         self.app = app
         _model = State(
-            initialValue: EventEditorModel(app: app, editing: request.editing, day: request.day, scope: request.scope))
+            initialValue: EventEditorModel(
+                app: app, editing: request.editing, day: request.day, start: request.start, scope: request.scope))
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                if let failure { ProblemBanner(text: Self.message(failure)) }
-                if model.isOverLimits {
-                    ProblemBanner(text: L10n.string("This calendar can't hold this repeat. Choose one from the list."))
+            VStack(spacing: 0) {
+                header
+                Form {
+                    if let failure { ProblemBanner(text: Self.message(failure)) }
+                    if model.isOverLimits {
+                        ProblemBanner(
+                            text: L10n.string("This calendar can't hold this repeat. Choose one from the list."))
+                    }
+                    titleSection
+                    timeSection
+                    detailsSection
+                    Section {
+                        TextField(text: $model.details.notes, axis: .vertical) { Text(ui: "Notes") }
+                            .lineLimit(4...12)
+                            .accessibilityIdentifier("editor.notes")
+                    }
                 }
-                titleSection
-                timeSection
-                detailsSection
-                Section {
-                    TextField(text: $model.details.notes, axis: .vertical) { Text(ui: "Notes") }
-                        .lineLimit(4...12)
-                        .accessibilityIdentifier("editor.notes")
-                }
+                .scrollDismissesKeyboard(.interactively)
+                .scrollContentBackground(.hidden)
             }
-            .scrollDismissesKeyboard(.interactively)
+            .background(Theme.drawerBackground)
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             #endif
-            .toolbar { toolbar }
+            .navigationDestination(isPresented: $editsCustomRepeat) { customRepeatScreen }
         }
         // Swiping the sheet away would lose what is typed without asking.
         .interactiveDismissDisabled(model.hasChanges)
@@ -74,21 +83,12 @@ struct EventEditorView: View {
 
     // MARK: - Header
 
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button { if model.hasChanges { asksToDiscard = true } else { dismiss() } } label: {
-                Image(systemName: Icons.close)
-            }
-            .accessibilityLabel(Text(ui: "Close"))
-            .accessibilityIdentifier("editor.close")
-        }
-        ToolbarItem(placement: .principal) { calendarPicker }
-        ToolbarItem(placement: .confirmationAction) {
-            Button { attemptSave() } label: { Image(systemName: "checkmark") }
-                .disabled(!model.canSave)
-                .accessibilityLabel(Text(ui: "Save"))
-                .accessibilityIdentifier("editor.save")
-        }
+    private var header: some View {
+        EditorHeader(
+            close: { if model.hasChanges { asksToDiscard = true } else { dismiss() } },
+            confirm: { attemptSave() }, confirmEnabled: model.canSave,
+            closeIdentifier: "editor.close", confirmIdentifier: "editor.save", middle: { calendarPicker }
+        )
     }
 
     /// The calendar the event goes to; a menu of the writable ones for a new event.
@@ -101,7 +101,7 @@ struct EventEditorView: View {
                             ForEach(group.calendars) { cal in
                                 Button { model.calendar = cal.id } label: {
                                     if cal.id == model.calendar {
-                                        Label(cal.name, systemImage: "checkmark")
+                                        Label(cal.name, systemImage: Icons.confirm)
                                     } else {
                                         Text(verbatim: cal.name)
                                     }
@@ -124,7 +124,7 @@ struct EventEditorView: View {
         HStack(spacing: 8) {
             Avatar(name: account.displayName, email: account.email, size: 24, colorIndex: account.colorIndex)
             Text(verbatim: cal.name).font(.headline).lineLimit(1).foregroundStyle(.primary)
-            if chevron { Image(systemName: "chevron.down").font(.footnote).foregroundStyle(.secondary) }
+            if chevron { Image(systemName: Icons.unfolded).font(.footnote).foregroundStyle(Theme.secondaryText) }
         }
     }
 
@@ -176,10 +176,14 @@ struct EventEditorView: View {
                     .accessibilityIdentifier("editor.end")
             }
             .environment(\.timeZone, model.pickerZone)
-            LabeledContent {
-                Text(verbatim: model.durationText)
-            } label: {
-                Text(ui: "Length")
+            if model.isAllDay {
+                LabeledContent {
+                    Text(verbatim: model.durationText)
+                } label: {
+                    Text(ui: "Length")
+                }
+            } else {
+                lengthPicker
             }
             if !model.isAllDay {
                 NavigationLink {
@@ -188,7 +192,7 @@ struct EventEditorView: View {
                     LabeledContent {
                         Text(verbatim: Self.zoneName(model.zone))
                     } label: {
-                        ModuleLabel("Time zone", systemImage: "globe")
+                        ModuleLabel("Time zone", systemImage: Icons.timeZone)
                     }
                 }
                 .accessibilityIdentifier("editor.zone")
@@ -217,9 +221,78 @@ struct EventEditorView: View {
                 ModuleLabel("Reminder", systemImage: Icons.reminder)
             }
             .accessibilityIdentifier("editor.reminder")
-            if model.editsRule {
-                RepeatPicker(choice: $model.repeatChoice, showsCustom: model.hasCustomRule)
+            if model.editsRule { repeatRows }
+            showAsPicker
+            Toggle(isOn: $model.details.isPrivate) { ModuleLabel("Private", systemImage: Icons.privateEvent) }
+                .accessibilityIdentifier("editor.private")
+        }
+    }
+
+}
+
+// MARK: - Length, repeat and Show as
+
+extension EventEditorView {
+    /// A timed event's length: choosing one moves the end.
+    private var lengthPicker: some View {
+        let current = model.durationMinutes
+        let choices = EventEditorModel.durations.contains(current)
+            ? EventEditorModel.durations : (EventEditorModel.durations + [current]).sorted()
+        return Picker(selection: $model.durationMinutes) {
+            ForEach(choices, id: \.self) { minutes in
+                Text(verbatim: model.durationText(minutes: minutes)).tag(minutes)
             }
+        } label: {
+            Text(ui: "Length")
+        }
+        .accessibilityIdentifier("editor.length")
+    }
+
+    /// The presets and Custom; a rule the custom screen shows has a row of its own that opens it.
+    @ViewBuilder private var repeatRows: some View {
+        RepeatPicker(
+            choice: $model.repeatChoice, canOpenCustom: model.customRepeat != nil,
+            opensCustom: {
+                editsCustomRepeat = model.openCustom() != nil
+            })
+        if model.repeatChoice == .custom, model.customRepeat != nil {
+            Button { editsCustomRepeat = true } label: {
+                LabeledContent {
+                    Image(systemName: Icons.folded).foregroundStyle(Theme.secondaryText)
+                } label: {
+                    Text(verbatim: EventText.repeats(model.savedRule, calendar: model.phone))
+                        .foregroundStyle(.primary)
+                }
+            }
+            .accessibilityIdentifier("editor.customRepeat")
+        }
+    }
+
+    @ViewBuilder private var customRepeatScreen: some View {
+        if let pattern = model.customRepeat {
+            CustomRepeatView(
+                pattern: Binding(get: { model.customRepeat ?? pattern }, set: { model.customRepeat = $0 }),
+                start: model.start, phone: model.phone)
+        }
+    }
+
+    private var showAsPicker: some View {
+        Picker(selection: $model.details.showAs) {
+            ForEach(ShowAs.allCases, id: \.self) { choice in
+                Text(ui: Self.title(choice)).tag(choice)
+            }
+        } label: {
+            ModuleLabel("Show as", systemImage: Icons.showAs)
+        }
+        .accessibilityIdentifier("editor.showAs")
+    }
+
+    static func title(_ showAs: ShowAs) -> LocalizedStringKey {
+        switch showAs {
+        case .busy: "Busy"
+        case .free: "Free"
+        case .tentative: "Tentative"
+        case .away: "Away"
         }
     }
 
@@ -285,16 +358,17 @@ struct ZonePicker: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: identifier.replacingOccurrences(of: "_", with: " ")).foregroundStyle(.primary)
                         if let name = TimeZone(identifier: identifier).map(EventEditorView.zoneName) {
-                            Text(verbatim: name).font(.footnote).foregroundStyle(.secondary)
+                            Text(verbatim: name).font(.footnote).foregroundStyle(Theme.secondaryText)
                         }
                     }
                     Spacer()
-                    if identifier == zone.identifier { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
+                    if identifier == zone.identifier { Image(systemName: Icons.confirm).foregroundStyle(Theme.accent) }
                 }
             }
         }
         .searchable(text: $search)
         .navigationTitle(Text(ui: "Time zone"))
+        .inlineNavigationTitle()
     }
 
     private var shown: [String] {

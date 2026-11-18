@@ -19,6 +19,8 @@ public actor FakeIMAPServer {
         var data: Data
         var internalDate: Date
         var modSeq: UInt64 = 0
+        /// Its whole body is never sent (a server that cannot read a broken message).
+        var bodyWithheld = false
     }
 
     struct Folder {
@@ -67,6 +69,7 @@ public actor FakeIMAPServer {
     var appendRefusal: String?
     var fetchDelay: Duration = .zero
     var loginDelay: Duration = .zero
+    var heldSelects: Set<String> = []
     var omitsUIDNext = false
     var refusesStores = false
     var refusesQResyncSelect = false

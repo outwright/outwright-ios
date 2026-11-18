@@ -92,7 +92,7 @@ struct CalendarColorPicker: View {
                         .frame(width: 26, height: 26)
                         .overlay {
                             if color == shade {
-                                Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(.white)
+                                Image(systemName: Icons.confirm).font(.caption.bold()).foregroundStyle(Theme.onSwatch)
                             }
                         }
                 }

@@ -83,12 +83,13 @@ struct StubProvider: AccountProvider {
         // Far beyond the limit, so a busy main actor in a full test run never makes it look waited for.
         let stub = StubProvider(claimed: ["anna@stub.example"], answersAfter: .seconds(120))
         let (app, _) = try app([stub])
-        let started = ContinuousClock.now
+        // The suspending clock: a Mac asleep mid-run is no wait.
+        let started = SuspendingClock.now
         let claimed = await AppModel.signIn(
             claiming: "anna@stub.example", among: app.addableProviders, resolver: FixedDoH(answers: [:]),
             within: .milliseconds(50))
         #expect(claimed == nil)
-        #expect(ContinuousClock.now - started < .seconds(60))
+        #expect(SuspendingClock.now - started < .seconds(60))
     }
 
     @Test func accountOfMissingProviderIsUnavailable() throws {

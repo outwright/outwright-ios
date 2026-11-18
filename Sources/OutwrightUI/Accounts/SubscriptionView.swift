@@ -70,6 +70,7 @@ struct SubscriptionView: View {
             }
         }
         .navigationTitle(Text(verbatim: subscription.calendar.name))
+        .inlineNavigationTitle()
         .onDisappear { save() }
         .confirmationDialog(
             Text(ui: "Remove this calendar from Outwright? The published calendar stays as it is."),

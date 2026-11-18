@@ -81,7 +81,15 @@ public enum GraphEventMapping {
         } else if showAs == "tentative" {
             details.status = .tentative
         }
-        details.transparency = showAs == "free" ? .free : .busy
+        details.showAs = switch showAs {
+        case "free": .free
+        case "tentative": .tentative
+        case "oof": .away
+        // workingElsewhere, unknown and absent: the time is taken.
+        default: .busy
+        }
+        let sensitivity = object["sensitivity"] as? String
+        details.isPrivate = sensitivity == "private" || sensitivity == "confidential"
         return details
     }
 

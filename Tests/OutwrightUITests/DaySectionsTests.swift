@@ -46,4 +46,18 @@ import Testing
         let sections = DaySections.group([row(1, now), row(2, yesterday)], now: now, calendar: calendar)
         #expect(sections.map(\.title) == ["Today", "Yesterday"])
     }
+
+    /// The reading header gives the time for older mail too, not only today's.
+    @Test func readingLabelHasTimeForOlderMail() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "sv_SE")
+        calendar.timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let sent = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 12, hour: 9, minute: 20)))
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 16, hour: 15)))
+        let label = DaySections.readingLabel(sent, now: now, calendar: calendar)
+        #expect(label.contains("09:20"))
+        #expect(label.contains("12"))
+        let today = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 16, hour: 9, minute: 20)))
+        #expect(DaySections.readingLabel(today, now: now, calendar: calendar) == "09:20")
+    }
 }

@@ -22,6 +22,8 @@ public struct ProtectionRequirement: Codable, Sendable, Equatable {
     public enum Kind: String, Codable, Sendable {
         /// Readable only by its recipients (and signed).
         case encrypt
+        /// Readable only by its recipients, not signed.
+        case encryptUnsigned
         /// Readable by anyone, and shown to be from the owner: nothing is hidden, so nothing is
         /// decided per recipient.
         case sign

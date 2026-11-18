@@ -37,40 +37,37 @@ public enum StoreError: Error, Sendable {
 /// reads go on while a synchronisation writes.
 public final class MailStore: Sendable {
     let queue: any DatabaseWriter
-    private let queueListeners = Mutex<[UUID: AsyncStream<AccountID>.Continuation]>([:])
-    let opening = Mutex<(any MessageOpening)?>(nil)
+    let queueListeners = Mutex<[UUID: AsyncStream<AccountID>.Continuation]>([:])
+    let openings = Mutex<[any MessageOpening]>([])
+    /// What opening applied: the migrations and how long they took (none for a current store).
+    public let migrated: Migrated
 
     /// `nil` keeps the store in memory.
     public init(path: URL?) throws(StoreError) {
         do {
-            var config = Configuration()
-            config.foreignKeysEnabled = true
+            let config = Self.configuration()
             if let path {
                 queue = try DatabasePool(path: path.path, configuration: config)
             } else {
                 queue = try DatabaseQueue(configuration: config)
             }
-            try Schema.migrator().migrate(queue)
+            migrated = try Self.migrate(queue)
         } catch {
             throw StoreError.wrap(error)
         }
     }
 
-    /// The account of each change the owner queues (`apply`), as it is queued: the cue to send it.
-    public func queuedActions() -> AsyncStream<AccountID> {
-        let (stream, continuation) = AsyncStream<AccountID>.makeStream(bufferingPolicy: .bufferingNewest(64))
-        let key = UUID()
-        queueListeners.withLock { $0[key] = continuation }
-        continuation.onTermination = { [weak self] _ in
-            self?.queueListeners.withLock { $0[key] = nil }
-        }
-        return stream
-    }
-
-    func announceQueued(_ account: AccountID) {
-        let listeners = queueListeners.withLock { Array($0.values) }
-        for listener in listeners {
-            listener.yield(account)
+    /// The store at `path` only when the app has brought it up to date: it is never migrated
+    /// here (the notification extension opens it, while the app may be migrating it).
+    public init(current path: URL) throws(StoreError) {
+        do {
+            queue = try DatabasePool(path: path.path, configuration: Self.configuration())
+            guard try queue.read({ try Schema.migrator().hasCompletedMigrations($0) }) else {
+                throw StoreError.database
+            }
+            migrated = Migrated(names: [], seconds: 0)
+        } catch {
+            throw StoreError.wrap(error)
         }
     }
 

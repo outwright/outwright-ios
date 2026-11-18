@@ -24,7 +24,7 @@ extension EventMapping {
     /// reminder written; any other edit leaves the object.
     static func invitee(_ edit: EventEdit, _ calendar: ICalComponent, uid: String, ownEmail: String) -> ICalComponent {
         switch edit {
-        case let .respond(response, scope, _): answered(calendar, response, scope, ownEmail: ownEmail)
+        case let .respond(response, scope, _, _): answered(calendar, response, scope, ownEmail: ownEmail)
         case let .ownReminder(minutes, scope): reminded(calendar, minutes, scope, uid: uid)
         case let .guestAnswer(guest, response, scope): guestAnswered(calendar, response, scope, guest: guest)
         case .create, .update, .delete, .organiserChange: calendar

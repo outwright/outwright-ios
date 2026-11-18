@@ -96,7 +96,8 @@ extension AccountSyncer {
     }
 
     /// The server's flags for held messages: `\Deleted` ones go, the others take read and flagged
-    /// from it. Uids not held are ignored.
+    /// from it; in a push's fetch (`keepsQueuedFlags`) not those with a change of the owner's still
+    /// queued, which the server has not heard of yet. Uids not held are ignored.
     func applyFlags(
         _ flags: [UInt32: Set<String>], held: [UInt32: MessageID], folder: FolderID
     ) throws(SyncError) {
@@ -104,8 +105,9 @@ extension AccountSyncer {
         if !deleted.isEmpty {
             try stored { try store.removeMessages(folder: folder, uids: deleted) }
         }
+        let queued = keepsQueuedFlags ? Set(try stored { try store.pendingActions() }.map(\.action.target)) : []
         for (uid, set) in flags where !set.contains("\\Deleted") {
-            guard let id = held[uid], let row = try stored({ try store.message(id) }) else {
+            guard let id = held[uid], !queued.contains(id), let row = try stored({ try store.message(id) }) else {
                 continue
             }
             let read = set.contains("\\Seen")

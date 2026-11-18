@@ -357,6 +357,36 @@ private func replyAttendees(_ message: MIMEMessage) throws -> [(email: String, p
         }
     }
 
+    @Test func replyCommentIsInTheITIPReply() async throws {
+        try await withReplies { h in
+            let id = try await h.serverInvitation(invitation(agent: "CLIENT"))
+            try h.store.respond(
+                id, .tentative, scope: .event, sendReply: true, comment: "Running late,\r\nstart without me\u{0}")
+            try await h.round()
+
+            let sent = try await h.sent()
+            #expect(sent.count == 1)
+            let part = try #require(sent.first?.calendar)
+            let reply = try ICalendarReader.calendar(part.data)
+            let event = try #require(reply.components.first { $0.name == "VEVENT" })
+            let comment = try #require(event.first("COMMENT")?.text)
+            #expect(comment.contains("Running late,") && comment.contains("start without me"))
+            #expect(!comment.contains("\r") && !comment.contains("\n") && !comment.contains("\u{0}"))
+            #expect(try sent.first.map(replyAttendees)?.first?.partstat == "TENTATIVE")
+        }
+    }
+
+    @Test func aReplyWithoutACommentHasNone() async throws {
+        try await withReplies { h in
+            let id = try await h.serverInvitation(invitation(agent: "CLIENT"))
+            try h.store.respond(id, .accepted, scope: .event, sendReply: true, comment: "  ")
+            try await h.round()
+            let part = try #require(try await h.sent().first?.calendar)
+            let reply = try ICalendarReader.calendar(part.data)
+            #expect(reply.components.first { $0.name == "VEVENT" }?.first("COMMENT") == nil)
+        }
+    }
+
     @Test func twoAnswersSentTogetherEachGetTheirReply() async throws {
         try await withReplies { h in
             let id = try await h.serverInvitation(invitation(agent: "CLIENT"))

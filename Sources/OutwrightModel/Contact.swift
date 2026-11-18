@@ -104,6 +104,8 @@ public struct ContactDetails: Sendable, Equatable, Codable {
     public var familyName: String
     public var displayName: String
     public var organization: String
+    /// The job title (vCard TITLE).
+    public var title: String
     public var note: String
     public var emails: [Labeled]
     public var phones: [Labeled]
@@ -111,13 +113,14 @@ public struct ContactDetails: Sendable, Equatable, Codable {
 
     public init(
         givenName: String = "", familyName: String = "", displayName: String = "",
-        organization: String = "", note: String = "", emails: [Labeled] = [], phones: [Labeled] = [],
-        addresses: [PostalAddress] = []
+        organization: String = "", title: String = "", note: String = "", emails: [Labeled] = [],
+        phones: [Labeled] = [], addresses: [PostalAddress] = []
     ) {
         self.givenName = givenName
         self.familyName = familyName
         self.displayName = displayName
         self.organization = organization
+        self.title = title
         self.note = note
         self.emails = emails
         self.phones = phones
@@ -131,6 +134,7 @@ public struct ContactDetails: Sendable, Equatable, Codable {
         familyName = try values.decodeIfPresent(String.self, forKey: .familyName) ?? ""
         displayName = try values.decodeIfPresent(String.self, forKey: .displayName) ?? ""
         organization = try values.decodeIfPresent(String.self, forKey: .organization) ?? ""
+        title = try values.decodeIfPresent(String.self, forKey: .title) ?? ""
         note = try values.decodeIfPresent(String.self, forKey: .note) ?? ""
         emails = try values.decodeIfPresent([Labeled].self, forKey: .emails) ?? []
         phones = try values.decodeIfPresent([Labeled].self, forKey: .phones) ?? []
@@ -148,6 +152,7 @@ public struct ContactDetails: Sendable, Equatable, Codable {
         take(\.familyName)
         take(\.displayName)
         take(\.organization)
+        take(\.title)
         take(\.note)
         takeList(\.emails, &result, base: base, ours: ours, server: server)
         takeList(\.phones, &result, base: base, ours: ours, server: server)
@@ -197,10 +202,12 @@ public struct Contact: Sendable, Identifiable, Equatable {
     /// The owner's version, kept when the server changed the card meanwhile (a 412).
     public var conflict: ContactDetails?
     public var changeFailed: Bool
+    /// The failed change is a photo the server (Graph) did not take: Try again sends it once more.
+    public var photoFailed: Bool
 
     public init(
         id: ContactID, accountID: AccountID, addressBookID: AddressBookID, details: ContactDetails,
-        photo: Data? = nil, conflict: ContactDetails? = nil, changeFailed: Bool = false
+        photo: Data? = nil, conflict: ContactDetails? = nil, changeFailed: Bool = false, photoFailed: Bool = false
     ) {
         self.id = id
         self.accountID = accountID
@@ -209,6 +216,7 @@ public struct Contact: Sendable, Identifiable, Equatable {
         self.photo = photo
         self.conflict = conflict
         self.changeFailed = changeFailed
+        self.photoFailed = photoFailed
     }
 }
 

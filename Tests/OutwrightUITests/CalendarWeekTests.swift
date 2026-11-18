@@ -97,4 +97,23 @@ import Testing
             #expect(shownDays(model) == [9, 10, 11, 12, 13, 14, 15])
         }
     }
+
+    @Test func regularWidthDefaultsToWeek() throws {
+        let fixture = try CalendarFixture()
+        let model = fixture.model()
+        #expect(!model.offeredModes.contains(.week))
+        model.isRegularWidth = true
+        #expect(model.mode == .week)
+        #expect(model.showsWeek)
+        #expect(model.days.count == 7)
+        #expect(model.offeredModes.contains(.week) && model.offeredModes.contains(.workWeek))
+        model.mode = .workWeek
+        #expect(model.days.count == 5)
+        // A view once chosen is kept, on a wide screen as well.
+        let defaults = freshDefaults()
+        fixture.model(defaults: defaults).mode = .day
+        let chosen = fixture.model(defaults: defaults)
+        chosen.isRegularWidth = true
+        #expect(chosen.mode == .day)
+    }
 }

@@ -30,12 +30,13 @@ enum RecipientParser {
         return Address(name: name, email: email)
     }
 
-    /// Typed or pasted text as addresses: split at commas and semicolons. `rest` holds every entry
+    /// Typed or pasted text as addresses: split at commas, semicolons and line breaks. `rest` holds every entry
     /// that is not an address, as typed (trimmed), in order.
     static func split(_ typed: String) -> (addresses: [Address], rest: [String]) {
         var addresses: [Address] = []
         var rest: [String] = []
-        for piece in typed.prefix(100_000).split(whereSeparator: { $0 == "," || $0 == ";" }).prefix(1_000) {
+        let pieces = typed.prefix(100_000).split(whereSeparator: { $0 == "," || $0 == ";" || $0.isNewline })
+        for piece in pieces.prefix(1_000) {
             let entry = piece.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !entry.isEmpty else { continue }
             if let address = address(from: entry) {

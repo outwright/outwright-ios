@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import OutwrightMIME
 import OutwrightModel
 import SwiftUI
 
-/// An event's details. Its text is shown as plain text only; a link in the place or the notes is a
-/// button that opens outside the app when the owner taps it, and nothing in the event is fetched.
+/// An event's details, under a band in its calendar's colour with Join for a meeting. Its text is
+/// shown as plain text only; a link in the place or the notes, and the place in Maps, are buttons that
+/// open outside the app when the owner taps them, and nothing in the event is fetched. The organiser
+/// and the people open their cards, and Email attendees writes to them all.
 struct EventDetailsView: View {
     let app: AppModel
     @State private var model: EventDetailsModel
@@ -26,7 +29,12 @@ struct EventDetailsView: View {
         NavigationStack {
             Group {
                 if let details = model.details {
-                    ScrollView { content(details).padding(16) }
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            heading(details)
+                            content(details).padding(16)
+                        }
+                    }
                 } else {
                     ContentUnavailableView {
                         ModuleLabel("Event not found", systemImage: Icons.calendar)
@@ -118,7 +126,6 @@ struct EventDetailsView: View {
     private func content(_ details: EventDetails) -> some View {
         VStack(alignment: .leading, spacing: 20) {
             banners
-            heading(details)
             if model.conflict != nil { conflictBanner }
             if model.canAnswer { rsvp }
             row(Icons.time) {
@@ -127,14 +134,12 @@ struct EventDetailsView: View {
                     Text(verbatim: note).font(.subheadline).foregroundStyle(Theme.secondaryText)
                 }
             }
-            if !details.place.isEmpty {
-                row(Icons.place) { Text(verbatim: details.place).textSelection(.enabled) }
-            }
-            if !model.links.isEmpty { links }
-            if let organizer = model.organizer {
+            if !details.place.isEmpty { place(details.place) }
+            if !model.otherLinks.isEmpty { links }
+            if let organizer = model.organizer, let address = model.organizerAddress {
                 row(Icons.organizer) {
                     Text(ui: "Organiser").font(.subheadline).foregroundStyle(Theme.secondaryText)
-                    Text(verbatim: organizer)
+                    personButton(address) { Text(verbatim: organizer) }
                 }
             }
             if !model.attendees.isEmpty { attendees }
@@ -181,11 +186,6 @@ struct EventDetailsView: View {
         }
     }
 
-    // swiftlint:disable:next line_length
-    private static let conflictMessage: LocalizedStringKey = "The event was changed on the server meanwhile. Apply your change again on top of the new version, or discard it."
-    // swiftlint:disable:next line_length
-    private static let conflictsMessage: LocalizedStringKey = "The event was changed on the server meanwhile. Apply your changes again, in order, on top of the new version, or discard them."
-
     /// Names every change the conflict holds, since Apply again sends them all.
     private var conflictBanner: some View {
         let count = model.conflictChanges
@@ -196,14 +196,17 @@ struct EventDetailsView: View {
             secondary: ("Discard", { attempt { try model.discard() } }))
     }
 
+    /// The band at the top, in the calendar's colour: the title, the calendar and its account, the
+    /// event's state and Join for a meeting.
     private func heading(_ details: EventDetails) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let color = Color(calendar: model.calendar?.color ?? 0x8A8F98)
+        return VStack(alignment: .leading, spacing: 8) {
             Text(verbatim: details.title.isEmpty ? L10n.string("(No title)") : details.title)
                 .font(.title2.bold())
                 .strikethrough(details.status == .cancelled)
                 .accessibilityIdentifier("event.title")
             HStack(spacing: 8) {
-                Circle().fill(Color(calendar: model.calendar?.color ?? 0x8A8F98)).frame(width: 10, height: 10)
+                Circle().fill(color).frame(width: 10, height: 10)
                 Text(verbatim: [model.calendar?.name, model.account?.displayName].compactMap { $0 }
                     .joined(separator: " · "))
                     .font(.subheadline)
@@ -215,7 +218,16 @@ struct EventDetailsView: View {
             if details.status == .cancelled {
                 Text(ui: "Cancelled").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.delete)
             }
+            if details.isPrivate {
+                Label { Text(ui: "Private") } icon: { Image(systemName: Icons.privateEvent) }
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.secondaryText)
+            }
+            if let meeting = model.meeting { JoinButton(url: meeting, prominent: true) }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.16))
     }
 }
 
@@ -242,9 +254,12 @@ extension EventDetailsView {
     /// Accept, Tentative and Decline, the current answer marked.
     private var rsvp: some View {
         RSVPControl(
-            response: model.response, occurrence: model.occurrenceScope, canWithholdReply: model.canWithholdReply
-        ) { response, sends, scope in
-            answering { () throws(InvitationError) in try model.answer(response, sendReply: sends, scope: scope) }
+            response: model.response, occurrence: model.occurrenceScope, canWithholdReply: model.canWithholdReply,
+            canComment: model.canComment
+        ) { response, sends, scope, comment in
+            answering { () throws(InvitationError) in
+                try model.answer(response, sendReply: sends, scope: scope, comment: comment)
+            }
         }
     }
 
@@ -305,15 +320,41 @@ extension EventDetailsView {
         .accessibilityIdentifier("event.reminder")
     }
 
+    /// The place: a button to Maps, or plain text when it holds a link.
+    @ViewBuilder private func place(_ text: String) -> some View {
+        row(Icons.place) {
+            if let maps = EventLinks.maps(for: text) {
+                Button { openURL(maps) } label: {
+                    Text(verbatim: text).multilineTextAlignment(.leading).foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(Text(ui: "Opens in Maps"))
+                .accessibilityIdentifier("event.place")
+            } else {
+                Text(verbatim: text).textSelection(.enabled)
+            }
+        }
+    }
+
+    /// The links but the meeting's, behind More links: each shows its whole address.
     private var links: some View {
         row(Icons.link) {
-            ForEach(model.links, id: \.self) { url in
-                Button { openURL(url) } label: {
-                    Text(verbatim: url.host() ?? url.absoluteString).lineLimit(1)
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(model.otherLinks, id: \.self) { url in
+                        Button { openURL(url) } label: {
+                            Text(verbatim: url.absoluteString).lineLimit(2).multilineTextAlignment(.leading)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Theme.accent)
+                    }
                 }
-                .buttonStyle(.bordered)
-                .accessibilityHint(Text(verbatim: url.absoluteString))
+                .padding(.top, 6)
+            } label: {
+                Text(ui: "More links")
             }
+            .tint(Theme.secondaryText)
+            .accessibilityIdentifier("event.moreLinks")
         }
     }
 
@@ -321,43 +362,39 @@ extension EventDetailsView {
         row(Icons.attendees) {
             Text(ui: "People").font(.subheadline).foregroundStyle(Theme.secondaryText)
             ForEach(Array(model.attendees.enumerated()), id: \.offset) { _, attendee in
-                HStack(spacing: 8) {
-                    Image(systemName: Icons.response(attendee.response))
-                        .foregroundStyle(Self.color(attendee.response))
-                        .accessibilityLabel(Text(ui: Self.response(attendee.response)))
-                    Text(verbatim: attendee.name.isEmpty ? attendee.email : attendee.name).lineLimit(1)
+                personButton(EventDetailsModel.address(attendee.email, name: attendee.name)) {
+                    HStack(spacing: 8) {
+                        Image(systemName: Icons.response(attendee.response))
+                            .foregroundStyle(Self.color(attendee.response))
+                            .accessibilityLabel(Text(ui: Self.response(attendee.response)))
+                        Text(verbatim: attendee.name.isEmpty ? attendee.email : attendee.name).lineLimit(1)
+                    }
                 }
+            }
+            if !model.emailRecipients.isEmpty {
+                Button {
+                    app.pendingCompose = ComposeRequest(
+                        kind: .people(model.emailRecipients, subject: model.details?.title ?? ""))
+                    dismiss()
+                } label: {
+                    Label { Text(ui: "Email attendees") } icon: { Image(systemName: Icons.emailPeople) }
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.accent)
+                .padding(.top, 4)
+                .accessibilityIdentifier("event.emailAttendees")
             }
         }
     }
 
-    private func row(_ icon: String, @ViewBuilder _ body: () -> some View) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 14) {
-            Image(systemName: icon)
-                .foregroundStyle(Theme.secondaryText)
-                .frame(width: 22)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6, content: body)
-            Spacer(minLength: 0)
+    /// A person's line: their card opens once the details have closed.
+    private func personButton(_ address: Address, @ViewBuilder label: () -> some View) -> some View {
+        Button {
+            app.pendingPerson = model.person(address)
+            dismiss()
+        } label: {
+            label().contentShape(Rectangle())
         }
-    }
-
-    static func color(_ response: Attendee.Response) -> Color {
-        switch response {
-        case .accepted: Color(hex: 0x2E9E6B)
-        case .declined: Theme.delete
-        case .tentative: Color(hex: 0xE08A1E)
-        case .delegated, .needsAction: Theme.secondaryText
-        }
-    }
-
-    static func response(_ response: Attendee.Response) -> LocalizedStringKey {
-        switch response {
-        case .accepted: "Accepted"
-        case .declined: "Declined"
-        case .tentative: "Tentative"
-        case .delegated: "Delegated"
-        case .needsAction: "No answer yet"
-        }
+        .buttonStyle(.plain)
     }
 }

@@ -4,7 +4,8 @@
 import OutwrightModel
 import SwiftUI
 
-/// The contact editor sheet: ✕, the address book with its account, ✓; then the fields.
+/// The contact editor sheet: ✕, the address book with its account, ✓; then the title, the photo, the
+/// fields, and Delete for a contact that exists.
 struct ContactEditorView: View {
     let app: AppModel
     let request: ContactEditorRequest
@@ -12,6 +13,7 @@ struct ContactEditorView: View {
     @State private var failure: ContactEditError?
     @State private var savedID: ContactID?
     @State private var asksToDiscard = false
+    @State private var asksToDelete = false
     @Environment(\.dismiss) private var dismiss
 
     init(app: AppModel, request: ContactEditorRequest) {
@@ -26,24 +28,39 @@ struct ContactEditorView: View {
             header
             ScrollView {
                 VStack(spacing: 16) {
-                    if let failure { ProblemBanner(text: Self.message(failure)) }
+                    Text(ui: model.editing == nil ? "New contact" : "Edit contact")
+                        .font(.title2.bold())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityAddTraits(.isHeader)
+                    if model.hasNoBook {
+                        ProblemBanner(text: Self.message(.noBook))
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
+                    }
+                    if let failure {
+                        ProblemBanner(text: Self.message(failure))
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
+                    }
                     if model.isOverLimits {
                         ProblemBanner(
                             text: L10n.string(
                                 """
                                 This address book holds at most three email addresses, one mobile number and \
                                 one address of each kind.
-                                """))
+                                """)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
                     }
+                    if model.limits.photoAndTitle { ContactPhotoCard(model: model) }
                     nameCard
                     labeledCard(
-                        "Phone", $model.details.phones, add: "Add phone", icon: "phone",
+                        "Phone", $model.details.phones, add: "Add phone", icon: Icons.phone,
                         labels: model.phoneLabels(for:), canAdd: true, keyboard: .phone)
                     labeledCard(
-                        "Email", $model.details.emails, add: "Add email", icon: "envelope",
+                        "Email", $model.details.emails, add: "Add email", icon: Icons.mail,
                         labels: { _ in model.emailLabels }, canAdd: model.canAddEmail, keyboard: .email)
                     addressCards
                     noteCard
+                    if model.editing != nil { deleteCard }
                 }
                 .padding(16)
             }
@@ -56,90 +73,42 @@ struct ContactEditorView: View {
             Button(role: .destructive) { close() } label: { Text(ui: "Discard changes") }
             Button(role: .cancel) {} label: { Text(ui: "Keep editing") }
         }
+        .confirmationDialog(Text(ui: "Delete this contact?"), isPresented: $asksToDelete, titleVisibility: .visible) {
+            Button(role: .destructive) { delete() } label: { Text(ui: "Delete contact") }
+            Button(role: .cancel) {} label: { Text(ui: "Cancel") }
+        } message: {
+            Text(ui: "The contact is deleted from its address book.")
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Button { if model.hasChanges { asksToDiscard = true } else { close() } } label: {
-                Image(systemName: Icons.close).font(.title3).frame(width: 48, height: 48)
-            }
-            .buttonStyle(.plain)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .accessibilityLabel(Text(ui: "Close"))
-            bookPicker
-            Spacer(minLength: 4)
-            Button { save() } label: {
-                Image(systemName: "checkmark")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 48, height: 48)
-                    .foregroundStyle(model.canSave ? Theme.accent : Color.secondary)
-            }
-            .buttonStyle(.plain)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .disabled(!model.canSave)
-            .accessibilityLabel(Text(ui: "Save"))
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 10)
-    }
-
-    /// The book the contact goes to; a menu of the writable ones for a new contact.
-    @ViewBuilder
-    private var bookPicker: some View {
-        if let chosen = model.chosen {
-            if model.editing == nil && model.writableBooks.flatMap(\.books).count > 1 {
-                Menu {
-                    ForEach(model.writableBooks, id: \.account.id) { group in
-                        Section(group.account.displayName) {
-                            ForEach(group.books) { book in
-                                Button { model.book = book.id } label: {
-                                    if book.id == model.book {
-                                        Label(book.name, systemImage: "checkmark")
-                                    } else {
-                                        Text(verbatim: book.name)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    bookLabel(chosen.account, chosen.book, chevron: true)
-                }
-                .accessibilityLabel(Text(ui: "Address book"))
-            } else {
-                bookLabel(chosen.account, chosen.book, chevron: false)
-            }
-        }
-    }
-
-    private func bookLabel(_ account: Account, _ book: AddressBook, chevron: Bool) -> some View {
-        HStack(spacing: 8) {
-            Avatar(name: account.displayName, email: account.email, size: 28, colorIndex: account.colorIndex)
-            Text(verbatim: book.name).font(.headline).lineLimit(1).foregroundStyle(.primary)
-            if chevron { Image(systemName: "chevron.down").font(.footnote).foregroundStyle(.secondary) }
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 48)
-        .glassEffect(.regular, in: .capsule)
+        EditorHeader(
+            close: { if model.hasChanges { asksToDiscard = true } else { close() } }, confirm: { save() },
+            confirmEnabled: model.canSave, middle: { bookPicker }
+        )
     }
 
     // MARK: - Cards
 
     private var nameCard: some View {
         card {
-            field("First name", $model.details.givenName)
+            field("First name", $model.details.givenName, kind: .givenName)
             Divider()
-            field("Last name", $model.details.familyName)
+            field("Last name", $model.details.familyName, kind: .familyName)
             Divider()
-            field("Organization", $model.details.organization)
+            field("Organization", $model.details.organization, kind: .organization)
+            if model.limits.photoAndTitle {
+                Divider()
+                field("Job title", $model.details.title, kind: .jobTitle)
+            }
         }
     }
 
-    private func field(_ title: LocalizedStringKey, _ text: Binding<String>) -> some View {
+    private func field(_ title: LocalizedStringKey, _ text: Binding<String>, kind: NameField) -> some View {
         TextField(text: text) { Text(ui: title) }
+            .nameEntry(kind)
             .padding(14)
             .frame(minHeight: 44)
     }
@@ -151,6 +120,7 @@ struct ContactEditorView: View {
     ) -> some View {
         card {
             ForEach(rows.wrappedValue.indices, id: \.self) { index in
+                if index > 0 { Divider() }
                 HStack(spacing: 8) {
                     Menu {
                         ForEach(labels(index), id: \.self) { label in
@@ -159,7 +129,7 @@ struct ContactEditorView: View {
                             }
                         }
                     } label: {
-                        Text(verbatim: Self.title(rows.wrappedValue[safe: index]?.label ?? ""))
+                        Text(verbatim: Self.title(rows.wrappedValue[safe: index]?.label ?? "", none: keyboard.name))
                             .font(.subheadline).foregroundStyle(Theme.accent)
                             .frame(minWidth: 64, alignment: .leading)
                     }
@@ -175,9 +145,18 @@ struct ContactEditorView: View {
                 }
                 .padding(.horizontal, 14)
                 .frame(minHeight: 44)
-                Divider()
+                let typed = rows.wrappedValue[safe: index]?.value ?? ""
+                if keyboard == .email, ContactEditorModel.looksWrong(email: typed) {
+                    Text(ui: "This doesn't look like an email address.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.warning)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                }
             }
             if canAdd {
+                if !rows.wrappedValue.isEmpty { Divider() }
                 addButton(add, icon: icon) {
                     rows.wrappedValue.append(Labeled(label: labels(rows.wrappedValue.count).first ?? "", value: ""))
                 }
@@ -197,7 +176,8 @@ struct ContactEditorView: View {
                             }
                         }
                     } label: {
-                        Text(verbatim: Self.title(model.details.addresses[safe: index]?.label ?? ""))
+                        Text(verbatim: Self.title(
+                            model.details.addresses[safe: index]?.label ?? "", none: L10n.string("Address")))
                             .font(.subheadline).foregroundStyle(Theme.accent)
                     }
                     Spacer()
@@ -221,7 +201,7 @@ struct ContactEditorView: View {
         }
         if model.canAddAddress {
             card {
-                addButton("Add address", icon: "mappin.and.ellipse") {
+                addButton("Add address", icon: Icons.place) {
                     model.details.addresses.append(PostalAddress(label: model.newAddressLabel))
                 }
             }
@@ -258,7 +238,7 @@ struct ContactEditorView: View {
     private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 0, content: content)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.background, in: RoundedRectangle(cornerRadius: 14))
+            .background(Theme.background, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
     }
 
     private func addButton(_ title: LocalizedStringKey, icon: String, action: @escaping () -> Void) -> some View {
@@ -271,7 +251,7 @@ struct ContactEditorView: View {
 
     private func removeButton(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: "minus.circle.fill").foregroundStyle(Theme.secondaryText).frame(width: 32, height: 44)
+            Image(systemName: Icons.remove).foregroundStyle(Theme.secondaryText).frame(width: 32, height: 44)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(ui: "Delete"))
@@ -283,6 +263,56 @@ struct ContactEditorView: View {
 }
 
 extension ContactEditorView {
+    /// The book the contact goes to; a menu of the writable ones for a new contact.
+    @ViewBuilder
+    private var bookPicker: some View {
+        if let chosen = model.chosen {
+            if model.editing == nil && model.writableBooks.flatMap(\.books).count > 1 {
+                Menu {
+                    ForEach(model.writableBooks, id: \.account.id) { group in
+                        Section(group.account.displayName) {
+                            ForEach(group.books) { book in
+                                Button { model.book = book.id } label: {
+                                    if book.id == model.book {
+                                        Label(book.name, systemImage: Icons.confirm)
+                                    } else {
+                                        Text(verbatim: book.name)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    bookLabel(chosen.account, chosen.book, chevron: true)
+                }
+                .accessibilityLabel(Text(ui: "Address book"))
+            } else {
+                bookLabel(chosen.account, chosen.book, chevron: false)
+            }
+        }
+    }
+
+    private func bookLabel(_ account: Account, _ book: AddressBook, chevron: Bool) -> some View {
+        HStack(spacing: 8) {
+            Avatar(name: account.displayName, email: account.email, size: 28, colorIndex: account.colorIndex)
+            Text(verbatim: book.name).font(.headline).lineLimit(1).foregroundStyle(.primary)
+            if chevron { Image(systemName: Icons.unfolded).font(.footnote).foregroundStyle(Theme.secondaryText) }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 48)
+        .glassEffect(.regular, in: .capsule)
+    }
+
+    /// Deleting the contact, asked first.
+    private var deleteCard: some View {
+        card {
+            Button(role: .destructive) { asksToDelete = true } label: {
+                ModuleLabel("Delete contact", systemImage: Icons.delete)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+        }
+    }
+
     private func save() {
         do {
             savedID = try model.save()
@@ -298,9 +328,19 @@ extension ContactEditorView {
         dismiss()
     }
 
-    /// An edit or an add-contact came from a card: back to it once the editor has gone.
+    /// The contact goes; no card comes back for it.
+    private func delete() {
+        do {
+            try model.delete()
+            dismiss()
+        } catch {
+            failure = error
+        }
+    }
+
+    /// An edit or an add-contact came from a card sheet: back to it once the editor has gone.
     private func returnToCard() {
-        guard request.editing != nil || request.prefill != nil else { return }
+        guard request.returnsToCard else { return }
         if let savedID {
             app.pendingPerson = PersonRequest(contact: savedID)
         } else if let editing = request.editing {
@@ -318,22 +358,18 @@ extension ContactEditorView {
         }
     }
 
-    /// The label as shown: the usual ones in the app's language, any other as it was written.
-    static func title(_ label: String) -> String {
+    /// The label as shown: the usual ones in the app's language, any other as it was written, and
+    /// none as `none`, what the row is (Phone, Email, Address).
+    static func title(_ label: String, none: String = "") -> String {
         switch label.lowercased() {
         case "mobile", "cell": L10n.string("Mobile")
         case "work": L10n.string("Work")
         case "home": L10n.string("Home")
         case "other": L10n.string("Other")
-        case "": L10n.string("Label")
+        case "": none
         default: label
         }
     }
-}
-
-/// What a field takes, for the keyboard.
-enum Entry {
-    case phone, email
 }
 
 extension View {

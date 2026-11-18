@@ -92,6 +92,16 @@ extension MailStore {
         }
     }
 
+    /// Whether the intake has run for the message at all: taken, unreadable, or waiting for a calendar
+    /// sync (which takes it again, not anything else).
+    public func hasInvitationRecord(_ message: MessageID) throws(StoreError) -> Bool {
+        try read { database in
+            try Int64.fetchOne(
+                database, sql: "SELECT messageId FROM invitation_message WHERE messageId = ?", arguments: [message.raw]
+            ) != nil
+        }
+    }
+
     /// The message is marked as an invitation but its calendar part does not read as iTIP: it is
     /// kept as taken (no method, so `invitation(for:)` gives nil) and is never read again.
     public func recordUnreadableInvitation(_ message: MessageID) throws(StoreError) {
@@ -120,6 +130,20 @@ extension MailStore {
                         AND (i.messageId IS NULL OR (? AND i.awaitingCalendar = 1))
                     ORDER BY m.date DESC, m.id DESC LIMIT ?
                     """, arguments: [account.raw.uuidString, waitingForCalendars, max(0, min(limit, 1_000))]
+            ).map(MessageID.init(raw:))
+        }
+    }
+
+    /// The folder's invitations held without their body, newest first, at most `limit`.
+    public func invitationsWithoutBody(in folder: FolderID, limit: Int) throws(StoreError) -> [MessageID] {
+        try read { database in
+            try Int64.fetchAll(
+                database,
+                sql: """
+                    SELECT id FROM message
+                    WHERE folderId = ? AND isInvitation = 1 AND body IS NULL AND uid > 0
+                    ORDER BY date DESC, id DESC LIMIT ?
+                    """, arguments: [folder.raw, max(0, min(limit, 1_000))]
             ).map(MessageID.init(raw:))
         }
     }
@@ -188,7 +212,7 @@ extension MailStore {
             let row = try EventRow.fetch(database, id)
             let held = try String.fetchOne(
                 database, sql: "SELECT failedReplyJSON FROM event WHERE id = ?", arguments: [id.raw])
-            guard case let .respond(_, scope, _)? = CalendarRecords.decodeEdits(held).first, let series = row.series
+            guard case let .respond(_, scope, _, _)? = CalendarRecords.decodeEdits(held).first, let series = row.series
             else { return nil }
             guard try Self.draftsFolder(database, account: row.account) != nil else { throw StoreError.noSuchFolder }
             try Self.clearFailedReply(database, id.raw, coveredBy: nil)
@@ -220,7 +244,7 @@ extension MailStore {
         if let scope, case let .occurrence(time) = scope {
             let held = try String.fetchOne(
                 database, sql: "SELECT failedReplyJSON FROM event WHERE id = ?", arguments: [id])
-            guard case .respond(_, .occurrence(time), _)? = CalendarRecords.decodeEdits(held).first else { return }
+            guard case .respond(_, .occurrence(time), _, _)? = CalendarRecords.decodeEdits(held).first else { return }
         }
         try database.execute(sql: "UPDATE event SET failedReplyJSON = NULL WHERE id = ?", arguments: [id])
     }

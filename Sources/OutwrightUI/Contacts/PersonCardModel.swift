@@ -33,6 +33,8 @@ final class PersonCardModel {
     private(set) var messages: [MessageRow] = []
     /// The attachments of that mail whose bodies are on the phone, newest first, at most 50.
     private(set) var files: [FileHit] = []
+    /// The next `eventsShown` events the person organises or attends, then the last `eventsShown` gone.
+    private(set) var events: [CalendarEvent] = []
     private(set) var failed = false
     /// How many times the mail with this person has been looked up (it scans all mail).
     @ObservationIgnored private(set) var lookups = 0
@@ -40,6 +42,8 @@ final class PersonCardModel {
     /// The contact is in an address book that can be written to.
     private(set) var canEdit = false
     var changeFailed: Bool { contact?.changeFailed ?? false }
+    /// The failed change is a photo the server did not take.
+    var photoFailed: Bool { contact?.photoFailed ?? false }
 
     @ObservationIgnored private let app: AppModel
     @ObservationIgnored private let request: PersonRequest
@@ -56,6 +60,8 @@ final class PersonCardModel {
     }
 
     var organization: String { contact?.details.organization ?? "" }
+    /// The job title.
+    var title: String { contact?.details.title ?? "" }
 
     var emails: [Labeled] {
         if let contact { return contact.details.emails.filter { !$0.value.isEmpty } }
@@ -76,25 +82,30 @@ final class PersonCardModel {
     var callURL: URL? { phones.first.flatMap { Self.url("tel", $0.value) } }
     var messageURL: URL? { phones.first.flatMap { Self.url("sms", $0.value) } }
 
-    /// Asks for a new message to the person; it opens when the card has closed (`AppModel.openPending`).
+    /// Asks for a new message to the person: at once, or once the card sheet has gone (`AppModel.afterCard`).
     func mail() {
         guard let address = mailAddress else { return }
-        app.pendingCompose = ComposeRequest(kind: .to(address))
+        app.afterCard { [app] in app.compose(.to(address)) }
     }
 
     /// Changes coming closer together than this are looked at once.
     static let settle = Duration.milliseconds(500)
 
-    /// Reloads when the stored contacts or mail change, until the task is cancelled: at once for
-    /// the first, then at most once per `settle` (a sync writing mail does so often), with the mail
-    /// looked up off the main actor.
+    /// Reloads when the stored contacts, mail or events change, until the task is cancelled: at once
+    /// for the first, then at most once per `settle` (a sync writing mail does so often), with the
+    /// mail and events looked up off the main actor. A photo the server keeps apart (Graph) is
+    /// asked for once the contact is known.
     func observe() async {
         do {
             var settling = false
-            for try await _ in app.store.observeContacts(includingMail: true) {
+            for try await _ in app.store.observeContacts(includingMail: true, includingEvents: true) {
                 if settling { try await Task.sleep(for: Self.settle) }
-                settling = true
                 await refresh()
+                if !settling, let id = contact?.id {
+                    let sync = app.sync
+                    Task { await sync.fetchContactPhoto(id) }
+                }
+                settling = true
             }
         } catch is CancellationError {
             return
@@ -103,10 +114,15 @@ final class PersonCardModel {
         }
     }
 
-    /// Queues the deletion; the contact is hidden at once.
-    func delete() throws(StoreError) {
-        guard let id = contact?.id else { return }
-        try mutate { () throws(StoreError) in try app.store.deleteContact(id) }
+    /// A pull on the card: the contacts of the contact's account are synced again (every account's
+    /// for an address no contact holds), as a pull on the list does.
+    func pull() async {
+        if let account = contact?.accountID {
+            await app.sync.refreshContacts(of: account)
+            await app.updateAttention()
+        } else {
+            await app.pullContacts()
+        }
     }
 
     /// Sends the owner's own version again, over the server's newer one.
@@ -115,26 +131,44 @@ final class PersonCardModel {
         try mutate { () throws(StoreError) in try app.store.applyConflictAgain(id) }
     }
 
-    /// Keeps the server's version and drops the owner's.
+    /// Keeps the server's version and drops the owner's, the photo too (read again from a server
+    /// keeping photos apart).
     func discard() throws(StoreError) {
         guard let id = contact?.id else { return }
         try mutate { () throws(StoreError) in try app.store.discardConflict(id) }
+        let sync = app.sync
+        Task { await sync.fetchContactPhoto(id) }
     }
 
-    /// Gives up the change the server did not take: the server's version comes back.
+    /// Gives up the change the server did not take: the server's version comes back, and with it
+    /// the photo a server keeping photos apart (Graph) holds.
     func discardFailedChange() throws(StoreError) {
         guard let id = contact?.id else { return }
         try mutate { () throws(StoreError) in try ContactRestore.discardFailedChange(id, in: app.store) }
+        let sync = app.sync
+        Task { await sync.fetchContactPhoto(id) }
     }
 
+    /// Sends the photo the server did not take once more.
+    func retryPhoto() throws(StoreError) {
+        guard let id = contact?.id else { return }
+        try mutate { () throws(StoreError) in try app.store.retryFailedPhoto(id) }
+    }
+
+    /// The contact shows the change at once; its mail and events follow from the observation.
     private func mutate(_ change: () throws(StoreError) -> Void) throws(StoreError) {
         try change()
-        reload()
+        do {
+            try loadContact()
+        } catch {
+            failed = true
+        }
     }
 
     func reload() {
         do {
             try loadContact()
+            events = try Self.events(involving: addresses, in: app.store, now: app.now())
             show(try Self.mailAndFiles(involving: addresses, in: app.store))
         } catch {
             failed = true
@@ -145,7 +179,8 @@ final class PersonCardModel {
     private func refresh() async {
         do {
             try loadContact()
-            let (store, addresses) = (app.store, addresses)
+            let (store, addresses, now) = (app.store, addresses, app.now())
+            events = try await Task.detached { try Self.events(involving: addresses, in: store, now: now) }.value
             show(try await Task.detached { try Self.mailAndFiles(involving: addresses, in: store) }.value)
         } catch {
             failed = true
@@ -178,6 +213,27 @@ final class PersonCardModel {
     ) throws(StoreError) -> (mail: [MessageRow], files: [FileHit]) {
         let rows = try mail(involving: addresses, in: store)
         return (rows, SearchModel.attachmentFiles(store, rows.filter(\.hasAttachment)))
+    }
+
+    nonisolated static let eventsShown = 5
+
+    /// The events within a year either way that one of `addresses` organises or attends (in any
+    /// case): the coming ones from the soonest, then the past ones from the latest.
+    nonisolated private static func events(
+        involving addresses: Set<String>, in store: MailStore, now: Date
+    ) throws(StoreError) -> [CalendarEvent] {
+        guard !addresses.isEmpty else { return [] }
+        let year: TimeInterval = 366 * 86_400
+        let found = try store.occurrences(
+            from: now.addingTimeInterval(-year), to: now.addingTimeInterval(year), in: nil
+        ).filter { event in
+            let details = event.occurrence.details
+            return details.organizer.map { addresses.contains($0.lowercased()) } == true
+                || details.attendees.contains { addresses.contains($0.email.lowercased()) }
+        }
+        let coming = found.filter { $0.occurrence.end > now }.sorted { $0.occurrence.start < $1.occurrence.start }
+        let gone = found.filter { $0.occurrence.end <= now }.sorted { $0.occurrence.start > $1.occurrence.start }
+        return Array(coming.prefix(eventsShown)) + Array(gone.prefix(eventsShown))
     }
 
     /// The newest 50 messages from, to or copying any of `addresses`.

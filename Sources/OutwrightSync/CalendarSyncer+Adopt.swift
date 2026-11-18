@@ -56,7 +56,7 @@ extension CalendarSyncer {
         _ change: QueuedEventChange, uid: String, at href: URL, route: ReplyRoute, _ client: CalDAVClient
     ) async throws(SyncError) -> Bool {
         let owed = change.edits.contains { edit in
-            if case .respond(_, _, true) = edit { return true }
+            if case .respond(_, _, true, _) = edit { return true }
             return false
         }
         guard owed, route == .app,
@@ -99,9 +99,10 @@ extension CalendarSyncer {
         if carried { return true }
         var queued = false
         for edit in change.edits {
-            guard case let .respond(response, scope, true) = edit else { continue }
+            // A comment carried onto a copy the server schedules is not sent: the server writes that REPLY.
+            guard case let .respond(response, scope, true, comment) = edit else { continue }
             do {
-                try store.respond(taken, response, scope: scope, sendReply: true)
+                try store.respond(taken, response, scope: scope, sendReply: true, comment: comment)
                 queued = true
             } catch .readOnly, .noSuchEvent {
                 continue

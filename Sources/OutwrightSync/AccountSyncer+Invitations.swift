@@ -58,7 +58,7 @@ extension AccountSyncer {
     /// (opened, or among the Inbox's prefetched). A message marked as an invitation whose body does
     /// not read is kept as unreadable, so it is not read again.
     private func takeInvitation(_ row: MessageRow, _ data: Data, _ folder: Folder, opened: OpenedMessage?) {
-        guard let parsed = (opened ?? store.open(data))?.message else {
+        guard let parsed = (opened ?? store.open(data, account: row.accountID))?.message else {
             if row.isInvitation {
                 try? store.recordUnreadableInvitation(row.id)
             }
@@ -72,5 +72,26 @@ extension AccountSyncer {
         _ = try? InvitationIntake.process(
             row, parsed: parsed, account: current, folder: folder, store: store,
             window: CalendarWindow.window(now: today, zone: zone), phoneZone: zone, now: today)
+    }
+
+    /// The Inbox's invitations that came in without a body get it, so an organiser's update or
+    /// cancellation reaches the calendar without the message being opened. They are few and small.
+    /// One at a time and at best: one whose body cannot be had holds back neither the others nor
+    /// the sync it follows.
+    func takeNewInvitations(_ folder: FolderID) async {
+        guard let folders = try? store.folders(account.id),
+            folders.contains(where: { $0.id == folder && $0.kind == .inbox }),
+            let new = try? store.invitationsWithoutBody(in: folder, limit: 20)
+        else { return }
+        syncLog.info("Inbox sync: \(new.count, privacy: .public) new invitations to read")
+        for id in new where !Task.isCancelled {
+            do {
+                try await exclusive { () async throws(SyncError) in
+                    try await fetchBodies([id])
+                }
+            } catch {
+                syncLog.error("Inbox sync: an invitation could not be read: \(caseName(error), privacy: .public)")
+            }
+        }
     }
 }

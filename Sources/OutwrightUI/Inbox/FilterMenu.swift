@@ -4,27 +4,33 @@
 import OutwrightStore
 import SwiftUI
 
-/// Filter: all mail, unread, flagged or with attachments.
+/// Filter: all mail, unread, flagged or with attachments; and Mark all read for the folder in view.
 struct FilterMenu: View {
     @Binding var filter: InboxFilter
+    var markAllRead: () -> Void = {}
 
     var body: some View {
         Menu {
             Picker(selection: $filter) {
                 ModuleLabel("All", systemImage: Icons.mail).tag(InboxFilter.all)
-                ModuleLabel("Unread", systemImage: "envelope.badge").tag(InboxFilter.unread)
-                ModuleLabel("Flagged", systemImage: "flag").tag(InboxFilter.flagged)
+                ModuleLabel("Unread", systemImage: Icons.unread).tag(InboxFilter.unread)
+                ModuleLabel("Flagged", systemImage: Icons.flagOutline).tag(InboxFilter.flagged)
                 ModuleLabel("Has attachments", systemImage: Icons.attachment).tag(InboxFilter.attachments)
             } label: {
                 Text(ui: "Filter")
             }
+            Divider()
+            Button(action: markAllRead) {
+                ModuleLabel("Mark all as read", systemImage: Icons.markRead)
+            }
+            .accessibilityIdentifier("inbox.markAllRead")
         } label: {
             // An active filter names itself, so a list it narrows is never mistaken for missing mail.
             HStack(spacing: 6) {
-                Image(systemName: filter == .all ? Icons.filter : "line.3.horizontal.decrease.circle.fill")
+                Image(systemName: filter == .all ? Icons.filter : Icons.filterActive)
                 Text(ui: Self.title(filter))
             }
-            .font(.title3)
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(filter == .all ? Theme.headerText : Theme.accent)
             .padding(.horizontal, filter == .all ? 0 : 10)
             .padding(.vertical, filter == .all ? 0 : 4)

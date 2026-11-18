@@ -84,6 +84,16 @@ public enum SearchResult: Identifiable, Sendable {
         }
     }
 
+    public var kind: SearchSection.Kind {
+        switch self {
+        case .person: .people
+        case .event: .events
+        case .file: .files
+        case .message: .messages
+        case .suggestion: .suggestions
+        }
+    }
+
     public var message: MessageRow? {
         if case .message(let row) = self { return row }
         return nil

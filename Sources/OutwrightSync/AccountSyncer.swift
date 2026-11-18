@@ -35,10 +35,14 @@ public actor AccountSyncer {
     let idleTimeout: Duration
     /// The protections the build carries, for what is sent and saved.
     let protections: [any MailProtection]
+    let journal: DiagnosticsJournal?
     /// Counts `disconnect`s, so an operation does not open again what was closed under it.
     var generation = 0
     /// Replaced by another syncer for the account: does nothing more.
     var retired = false
+    /// A push's fetch runs without sending the queue: the server's flags then leave the messages
+    /// with changes still queued alone (the server has not heard of them yet).
+    var keepsQueuedFlags = false
 
     public init(
         account: Account, store: MailStore, secrets: any SecretStore,
@@ -50,21 +54,24 @@ public actor AccountSyncer {
             phoneZone: phoneZone, lock: AccountLock(), protections: protections)
     }
 
+    /// `journal`: where each send's outcome is noted (nil: nowhere).
     public init(
         account: Account, store: MailStore, credentials: CredentialProvider,
         now: @escaping @Sendable () -> Date = { Date() }, phoneZone: @escaping @Sendable () -> TimeZone = { .current },
-        protections: [any MailProtection] = []
+        protections: [any MailProtection] = [], journal: DiagnosticsJournal? = nil
     ) {
         self.init(
             account: account, store: store, credentials: credentials, now: now, phoneZone: phoneZone,
-            lock: AccountLock(), protections: protections)
+            lock: AccountLock(), protections: protections, journal: journal)
     }
 
     init(
         account: Account, store: MailStore, credentials: CredentialProvider, now: @escaping @Sendable () -> Date,
         phoneZone: @escaping @Sendable () -> TimeZone = { .current }, lock: AccountLock,
-        idleTimeout: Duration = AccountSyncer.idleTimeout, protections: [any MailProtection] = []
+        idleTimeout: Duration = AccountSyncer.idleTimeout, protections: [any MailProtection] = [],
+        journal: DiagnosticsJournal? = nil
     ) {
+        self.journal = journal
         self.protections = protections
         self.idleTimeout = idleTimeout
         self.phoneZone = phoneZone
@@ -85,30 +92,6 @@ public actor AccountSyncer {
             try await withMain { client async throws(SyncError) in
                 try await refreshFolders(client)
             }
-        }
-    }
-
-    /// Sends the queued changes, then brings the folder's last 90 days in step with the server.
-    /// New mail comes in batches, each a turn of its own, so opening a message (a body fetch)
-    /// waits for one batch at most and not for the whole folder. A cancelled task fetches no
-    /// further batch; the next sync brings in the rest.
-    public func sync(_ folder: FolderID) async throws(SyncError) {
-        let (refusal, first) = try await exclusive { () async throws(SyncError) in
-            try await withMain { client async throws(SyncError) in
-                let refusal = try await runQueue(client)
-                return (refusal, try await syncMessages(folder, client))
-            }
-        }
-        var next = first
-        while let fetch = next, !Task.isCancelled {
-            next = try await exclusive { () async throws(SyncError) in
-                try await withMain { client async throws(SyncError) in
-                    try await fetchBatch(fetch, client)
-                }
-            }
-        }
-        if let refusal {
-            throw refusal
         }
     }
 
@@ -224,7 +207,7 @@ public actor AccountSyncer {
         }
     }
 
-    private func fetchBodies(_ ids: [MessageID]) async throws(SyncError) {
+    func fetchBodies(_ ids: [MessageID]) async throws(SyncError) {
         let folders = try stored { try store.folders(account.id) }
         var wanted: [(row: MessageRow, folder: Folder)] = []
         var held: [(row: MessageRow, folder: Folder)] = []
@@ -233,8 +216,10 @@ public actor AccountSyncer {
                 throw .store("noSuchMessage")
             }
             if row.hasBody {
+                // Only one the intake never ran for (it failed): one waiting for a calendar sync is
+                // taken again by that sync, and taken now it would count as having waited.
                 if row.isInvitation, let folder = folders.first(where: { $0.id == row.folderID }),
-                    !(try stored { try store.isInvitationRecorded(row.id) }) {
+                    !(try stored { try store.hasInvitationRecord(row.id) }) {
                     held.append((row, folder))
                 }
                 continue
@@ -278,7 +263,7 @@ public actor AccountSyncer {
         }
     }
 
-    private func runQueue(_ client: IMAPClient) async throws(SyncError) -> SyncError? {
+    func runQueue(_ client: IMAPClient) async throws(SyncError) -> SyncError? {
         let pending = try stored { try store.pendingActions() }.filter { $0.accountID == account.id }
         guard !pending.isEmpty else {
             return nil
@@ -288,6 +273,7 @@ public actor AccountSyncer {
             account: account, store: store, client: client, credentials: credentials, now: now(),
             folders: try stored { try store.folders(account.id) }, protections: protections,
             mayContinue: { await self.isCurrent(opened) })
+        runner.journal = journal
         let first = try await runner.run(pending)
         // What those actions queued in turn (filing a sent message) goes in the same run.
         let last = pending.map(\.id).max() ?? 0

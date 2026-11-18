@@ -59,11 +59,29 @@ public enum EventMapping {
         case "CANCELLED": details.status = .cancelled
         default: details.status = .confirmed
         }
-        details.transparency = event.first("TRANSP")?.value.uppercased() == "TRANSPARENT" ? .free : .busy
+        details.showAs = showAs(event)
+        let privacy = event.first("CLASS")?.value.trimmingCharacters(in: .whitespaces).uppercased()
+        details.isPrivate = privacy == "PRIVATE" || privacy == "CONFIDENTIAL"
         details.sequence = event.first("SEQUENCE").flatMap { Int($0.value.trimmingCharacters(in: .whitespaces)) }
             .map { min(max($0, 0), 1_000_000) } ?? 0
         return details
     }
+
+    /// The vendor property X-MICROSOFT-CDO-BUSYSTATUS where it says one of its four values (the only common
+    /// carrier of tentative and away), else TRANSP (RFC 5545 › 3.8.2.7).
+    static func showAs(_ event: ICalComponent) -> ShowAs {
+        switch event.first(busyStatus)?.value.trimmingCharacters(in: .whitespaces).uppercased() {
+        case "BUSY": return .busy
+        case "FREE": return .free
+        case "TENTATIVE": return .tentative
+        case "OOF": return .away
+        default:
+            let transp = event.first("TRANSP")?.value.trimmingCharacters(in: .whitespaces).uppercased()
+            return transp == "TRANSPARENT" ? .free : .busy
+        }
+    }
+
+    static let busyStatus = "X-MICROSOFT-CDO-BUSYSTATUS"
 
     /// DTEND, else DTSTART plus DURATION, else a day for an all-day event and no time at all for one
     /// with a time.

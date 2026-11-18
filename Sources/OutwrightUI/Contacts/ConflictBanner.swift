@@ -14,7 +14,7 @@ struct ConflictBanner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.flag)
+                Image(systemName: Icons.warningFilled).foregroundStyle(Theme.warning)
                 Text(ui: title).font(.headline)
             }
             Text(ui: message).font(.subheadline).foregroundStyle(Theme.secondaryText)
@@ -30,7 +30,7 @@ struct ConflictBanner: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.background, in: RoundedRectangle(cornerRadius: 14))
+        .background(Theme.background, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         .accessibilityElement(children: .contain)
     }
 }

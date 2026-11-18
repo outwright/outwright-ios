@@ -51,7 +51,33 @@ enum Schema {
         registerNewMailNotices(&migrator)
         registerProtection(&migrator)
         registerJunkInvitations(&migrator)
+        registerUniqueFolderUID(&migrator)
+        registerPushMailMarks(&migrator)
+        registerContactPhotos(&migrator)
         return migrator
+    }
+
+    /// uniqueFolderUID: the app and its notification extension may sync one Inbox at once, so the
+    /// store holds one row per server message in a folder (uid 0, a local placeholder, may repeat).
+    /// Duplicates already there go first: the copy with a body stays, else the oldest, and what
+    /// hangs on those removed goes by hand (a migration runs with foreign keys off, so no cascade
+    /// fires, and a row left pointing at nothing fails the check that ends it).
+    private static func registerUniqueFolderUID(_ migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("uniqueFolderUID") { database in
+            try database.execute(
+                sql: """
+                    CREATE TEMP TABLE duplicate AS SELECT m.id FROM message m WHERE m.uid > 0 AND EXISTS (
+                        SELECT 1 FROM message o WHERE o.folderId = m.folderId AND o.uid = m.uid AND o.id != m.id
+                        AND ((o.body IS NOT NULL) > (m.body IS NOT NULL)
+                            OR ((o.body IS NOT NULL) = (m.body IS NOT NULL) AND o.id < m.id)));
+                    DELETE FROM message_fts WHERE rowid IN (SELECT id FROM duplicate);
+                    DELETE FROM message_ref WHERE messageId IN (SELECT id FROM duplicate);
+                    DELETE FROM invitation_message WHERE messageId IN (SELECT id FROM duplicate);
+                    DELETE FROM message WHERE id IN (SELECT id FROM duplicate);
+                    DROP TABLE duplicate;
+                    CREATE UNIQUE INDEX message_folder_uid_unique ON message(folderId, uid) WHERE uid > 0;
+                    """)
+        }
     }
 
     /// junkInvitations: invitations refused while in Junk stayed refused once moved out. Every

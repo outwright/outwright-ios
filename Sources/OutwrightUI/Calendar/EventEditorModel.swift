@@ -13,7 +13,10 @@ import OutwrightSync
 struct EventEditorRequest: Identifiable, Equatable {
     let id = UUID()
     var editing: EventRequest?
+    /// A new all-day or timed event on this day, at the default time.
     var day: Date?
+    /// A new event at this time (a slot tapped in the hour grid).
+    var start: Date?
     var scope: EditScope = .event
 }
 
@@ -55,9 +58,11 @@ final class EventEditorModel {
     @ObservationIgnored private lazy var known: [Address] = PeopleIndex.known(app.store, accounts: app.accounts)
 
     static let defaultReminder = 15
+    /// A new event's length, as Outlook gives it.
+    static let defaultMinutes = 30
 
     init(
-        app: AppModel, editing: EventRequest?, day: Date?, scope: EditScope = .event,
+        app: AppModel, editing: EventRequest?, day: Date?, start: Date? = nil, scope: EditScope = .event,
         calendar phone: Calendar = .autoupdatingCurrent, now: () -> Date = Date.init
     ) {
         self.app = app
@@ -69,7 +74,7 @@ final class EventEditorModel {
         self.series = series
         eventID = event?.id
         let loaded = event.map { Self.loaded($0, series: series, scope: scope, phone: phone) }
-            ?? Self.fresh(day: day, now: now(), phone: phone)
+            ?? Self.fresh(day: day, start: start, now: now(), phone: phone)
         opened = loaded
         details = loaded
         rule = series?.rule
@@ -78,32 +83,44 @@ final class EventEditorModel {
             .map { Address(name: $0.name.isEmpty ? nil : $0.name, email: $0.email) }
         zoneStorage = Self.zone(of: loaded.start) ?? phone.timeZone
         calendar = event?.calendarID
+        let chosen = CalendarColors.chosen(.standard)
         writableCalendars = app.writableAccounts.compactMap { account in
             let calendars = ((try? app.store.calendars(account.id)) ?? []).filter { !$0.isReadOnly }
+                .map { CalendarColors.applied($0, chosen) }
             return calendars.isEmpty ? nil : (account: account, calendars: calendars)
         }
         if calendar == nil {
             let all = writableCalendars.flatMap(\.calendars)
             let preferred = (try? app.store.defaultCalendar())?.id
-            calendar = all.first { $0.id == preferred }?.id ?? all.first?.id
+            // The account in view's own calendar: the default one when it is the account's, else its first.
+            let inView = writableCalendars.first { $0.account.id == app.accountInView?.id }?.calendars ?? []
+            calendar = inView.first { $0.id == preferred }?.id ?? inView.first?.id
+                ?? all.first { $0.id == preferred }?.id ?? all.first?.id
         }
     }
 
-    /// A new event: at the next whole hour on the day (today when none), an hour long, in the phone's zone.
-    private static func fresh(day: Date?, now: Date, phone: Calendar) -> EventDetails {
-        let clock = phone.dateComponents([.hour, .minute, .second], from: now)
-        let late = (clock.minute ?? 0) > 0 || (clock.second ?? 0) > 0
-        let hour = (clock.hour ?? 0) + (late ? 1 : 0)
-        let base = phone.startOfDay(for: day ?? now)
-        // After 23:00 the next whole hour is midnight, the start of the next day.
-        let start = hour > 23
-            ? (phone.date(byAdding: .day, value: 1, to: base) ?? base)
-            : (phone.date(bySettingHour: hour, minute: 0, second: 0, of: base) ?? base)
+    /// A new event: at the time given, or at the next half hour on the day (today when none), half an
+    /// hour long, in the phone's zone.
+    private static func fresh(day: Date?, start given: Date?, now: Date, phone: Calendar) -> EventDetails {
+        let start = given ?? nextHalfHour(day: day, now: now, phone: phone)
         let zone = phone.timeZone
+        let end = start.addingTimeInterval(Double(defaultMinutes) * 60)
         return EventDetails(
             title: "", start: .zoned(EditorTimes.clock(start, in: zone), zone: zone.identifier),
-            end: .zoned(EditorTimes.clock(start.addingTimeInterval(3_600), in: zone), zone: zone.identifier),
+            end: .zoned(EditorTimes.clock(end, in: zone), zone: zone.identifier),
             reminder: defaultReminder)
+    }
+
+    /// The next half hour on the clock, on the day (today when none); a time on the half hour is itself.
+    private static func nextHalfHour(day: Date?, now: Date, phone: Calendar) -> Date {
+        let clock = phone.dateComponents([.hour, .minute, .second], from: now)
+        let minutes = (clock.hour ?? 0) * 60 + (clock.minute ?? 0)
+        let late = minutes % 30 > 0 || (clock.second ?? 0) > 0
+        let slot = (minutes / 30 + (late ? 1 : 0)) * 30
+        let base = phone.startOfDay(for: day ?? now)
+        // After 23:30 the next half hour is midnight, the start of the next day.
+        guard slot < 24 * 60 else { return phone.date(byAdding: .day, value: 1, to: base) ?? base }
+        return phone.date(bySettingHour: slot / 60, minute: slot % 60, second: 0, of: base) ?? base
     }
 
     /// What the editor shows of a stored event: the series' own fields when the whole series is edited
@@ -306,13 +323,16 @@ extension EventEditorModel {
             zone: zoneStorage.identifier)
     }
 
-    /// The start; moving it keeps the length.
+    /// The start; moving it keeps the length. A custom repeat keeps its pattern from the new start:
+    /// "the second Tuesday" moved to the 18th is "the third Wednesday".
     var start: Date {
         get { instant(details.start) }
         set {
             let length = end.timeIntervalSince(start)
             let days = phone.dateComponents([.day], from: start, to: end).day ?? 0
+            let pattern = editsRule && repeatChoice == .custom ? customRepeat : nil
             details.start = time(newValue)
+            if let pattern { rule = pattern.rule(startTime: details.start, start: newValue, phone: phone) }
             if isAllDay {
                 details.end = time(phone.date(byAdding: .day, value: max(days, 0) + 1, to: newValue) ?? newValue)
             } else {

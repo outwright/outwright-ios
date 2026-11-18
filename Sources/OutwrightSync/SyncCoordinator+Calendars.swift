@@ -16,10 +16,16 @@ extension SyncCoordinator {
             return nil
         }
         let discovery = await discoverCalDAV(id)
+        let syncer = await calendarSyncer(for: id)
         do {
-            try await calendarSyncer(for: id)?.sync()
+            try await syncer?.sync()
         } catch {
+            journalSync(id, .calendar, discovery ?? error)
             return discovery ?? error
+        }
+        // An account without calendars here has nothing to note.
+        if syncer != nil || discovery != nil {
+            journalSync(id, .calendar, discovery)
         }
         // Invitations that came in before the calendars were listed go in now.
         await currentSyncers().first { $0.0 == id }?.1.retakeInvitations()
@@ -50,13 +56,16 @@ extension SyncCoordinator {
     }
 
     private func planReminders() async {
-        guard await reminders.authorization() else {
-            return
-        }
         let start = now()
         let end = start.addingTimeInterval(Self.reminderHorizon)
         let held = (try? store.occurrences(from: start, to: end, in: nil)) ?? []
-        await reminders.replace(ReminderPlan.plan(held, now: start))
+        let planned = ReminderPlan.plan(held, now: start)
+        // The owner is asked when the first reminder is to be scheduled (mail has normally asked
+        // before; iOS asks only once).
+        var allowed = await reminders.authorization()
+        if !allowed, !planned.isEmpty { allowed = await reminders.requestAuthorization() }
+        guard allowed else { return }
+        await reminders.replace(planned)
     }
 
     /// The phone moved to another time zone: every event is laid out again for it, and the reminders

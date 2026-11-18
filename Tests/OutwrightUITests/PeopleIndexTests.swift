@@ -52,4 +52,12 @@ import Testing
         #expect(known.map(\.email) == ["eva@example.org"])
         #expect(known.first?.name == "Eva Ek")
     }
+
+    @Test func fullNameFindsThePerson() {
+        let anna = Address(name: "Anna Svensson", email: "a.s@example.org")
+        #expect(PeopleIndex.matches(anna, "anna s"))
+        #expect(PeopleIndex.matches(anna, "Sven ann"))
+        #expect(PeopleIndex.matches(anna, "a.s@"))
+        #expect(!PeopleIndex.matches(anna, "anna b"))
+    }
 }

@@ -8,10 +8,21 @@ extension SearchView {
     // MARK: - Results
 
     var results: some View {
+        // A new chip is a new list, which starts at the top.
+        resultList.id(model.chip)
+    }
+
+    private var resultList: some View {
         List {
-            ForEach(model.results) { result in
-                row(result)
-                    .alignmentGuide(.listRowSeparatorLeading) { _ in 60 }
+            ForEach(model.sections) { section in
+                Section {
+                    ForEach(section.results) { result in
+                        row(result)
+                            .alignmentGuide(.listRowSeparatorLeading) { _ in 60 }
+                    }
+                } header: {
+                    sectionHeader(section)
+                }
             }
             if model.isAskingServers {
                 HStack {
@@ -26,13 +37,49 @@ extension SearchView {
         .scrollDismissesKeyboard(.immediately)
         .opensAttachment($opening)
         .overlay {
-            if model.results.isEmpty && !model.isAskingServers {
+            if model.emptyState != .hasResults {
                 ContentUnavailableView {
                     Label { Text(ui: "No results") } icon: { Image(systemName: Icons.search) }
                 } description: {
-                    Text(ui: "Press Search to look on the server too.")
+                    if model.emptyState == .nothingAnywhere {
+                        Text(ui: "No results on this phone or the server")
+                    } else {
+                        Text(ui: "Press Search to look on the server too.")
+                    }
                 }
             }
+        }
+    }
+
+    /// The group's name, and under All a See all that picks that kind's chip.
+    @ViewBuilder
+    private func sectionHeader(_ section: SearchSection) -> some View {
+        if let chip = Self.chip(section.kind), model.chip == .all, model.token == nil {
+            HStack {
+                SectionHeader(Self.title(chip))
+                Spacer()
+                if section.hasMore {
+                    Button {
+                        model.chip = chip
+                    } label: {
+                        Text(ui: "See all")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("search.seeAll")
+                }
+            }
+        }
+    }
+
+    private static func chip(_ kind: SearchSection.Kind) -> SearchChip? {
+        switch kind {
+        case .suggestions: nil
+        case .people: .people
+        case .messages: .mail
+        case .events: .events
+        case .files: .files
         }
     }
 
@@ -55,7 +102,7 @@ extension SearchView {
         case .event(let event):
             Button {
                 app.pendingEvent = EventRequest(event: event.id, occurrence: event.occurrence.recurrenceID)
-                app.isSearching = false
+                app.searchHandedOver()
             } label: {
                 SearchEventRow(event: event, query: model.query)
             }
@@ -84,28 +131,21 @@ extension SearchView {
         }
     }
 
-    /// A person's mail as the inbox shows it, with its folder; other mail as a found line.
+    /// A message hit as the inbox shows it, with its folder.
     private func messageRow(_ message: MessageRow) -> some View {
         Button {
             open(message)
         } label: {
-            if model.token != nil {
-                MessageRowView(
-                    row: message,
-                    label: DaySections.rowLabel(message.date, now: Date(), calendar: .autoupdatingCurrent),
-                    folderName: model.folderName(message.folderID))
-            } else {
-                HStack(spacing: 16) {
-                    MailIcon()
-                    twoLines(SearchModel.highlighted(Self.subject(message), query: model.query), byline(message))
-                }
-            }
+            MessageRowView(
+                row: message,
+                label: DaySections.rowLabel(message.date, now: Date(), calendar: .autoupdatingCurrent),
+                folderName: model.folderName(message.folderID))
         }
     }
 
     private func openCard(_ person: SearchPerson) {
         app.pendingPerson = PersonRequest(address: person.address, contact: person.contact)
-        app.isSearching = false
+        app.searchHandedOver()
     }
 
     private func openFile(_ file: FileHit) {

@@ -11,9 +11,7 @@ public import OutwrightStore
 /// in the account's Drafts when something changed; sending queues it for the server.
 @Observable @MainActor
 public final class ComposeModel {
-    static let maxAttachmentBytes = 25 << 20
-    /// Where a diagnostics report goes: the project's support.
-    static let diagnosticsAddress = "support@10boring.com"
+    public static let maxAttachmentBytes = 25 << 20
     /// The cap this model holds attachments to: `maxAttachmentBytes`, lower only in a test, where a
     /// message near 25 MB takes seconds to read in a debug build.
     @ObservationIgnored var attachmentLimit = ComposeModel.maxAttachmentBytes
@@ -32,14 +30,20 @@ public final class ComposeModel {
     public var subject = ""
     public var body = AttributedString()
     public var attachments: [Attachment] = []
+    /// The message a reply or forward answers, under the editor; nil for a new message.
+    public internal(set) var quoted: QuotedOriginal?
+    /// What of the message answered or forwarded didn't fit under the attachment limit; the sheet says so.
+    public internal(set) var leftOut = AttachFailures()
     /// The draft row this message is kept in, once it has one.
-    public private(set) var draftID: MessageID?
+    public internal(set) var draftID: MessageID?
     /// Sent or closed: nothing more is saved.
-    public private(set) var isFinished = false
+    public internal(set) var isFinished = false
     /// The draft could not be kept on close or on the way to the background; the sheet asks.
     public var keepFailure: ComposeError?
     /// What the build's protection says of this message and its recipients; nil: nothing to show.
     public var protection: ComposeProtection?
+    /// A reply whose original couldn't be loaded: it opens without the quote, and the sheet says so.
+    public private(set) var originalNotQuoted = false
     /// A send is waiting for the protection's answer about its recipients; another is not started.
     public internal(set) var isSending = false
 
@@ -48,7 +52,8 @@ public final class ComposeModel {
     @ObservationIgnored let store: MailStore
     @ObservationIgnored let locale: Locale
     @ObservationIgnored let now: () -> Date
-    @ObservationIgnored let protectionUI: (any ProtectionUI)?
+    @ObservationIgnored let fixedProtectionUI: (any ProtectionUI)?
+    @ObservationIgnored let protectionScreens: [any ProtectionUI]
     /// What the message answers was opened with, for the protection to follow it.
     @ObservationIgnored var original: ProtectionFacts?
     /// The owner's own choice of the lock (nil: not chosen).
@@ -57,6 +62,7 @@ public final class ComposeModel {
     @ObservationIgnored var ownerSign: Bool?
     /// A draft the server held protected, opened decrypted: kept protected like an answer to such mail.
     @ObservationIgnored var draftWasProtected = false
+    @ObservationIgnored var protectionMemo = ProtectionMemo()
     /// The message carries a calendar part (a reply to an invitation): it is never protected.
     @ObservationIgnored var hasCalendar = false
     @ObservationIgnored private var inReplyTo: String?
@@ -67,26 +73,35 @@ public final class ComposeModel {
     /// The Message-ID made for this message, with the account whose domain it carries.
     @ObservationIgnored private var minted: (account: AccountID, id: String)?
     @ObservationIgnored var isStarting = true
+    /// The body as the message started, where writing begins at the top; nil for a draft opened again.
+    @ObservationIgnored var startingBody: AttributedString?
     @ObservationIgnored private var draftUID: UInt32 = 0
     @ObservationIgnored private var draftAccount: AccountID?
-    @ObservationIgnored private var snapshot: Snapshot?
-    @ObservationIgnored private lazy var people: [Address] = PeopleIndex.known(store, accounts: accounts)
+    @ObservationIgnored var snapshot: Snapshot?
+    @ObservationIgnored lazy var people: [Address] = PeopleIndex.known(store, accounts: accounts)
 
-    /// `accountInView` is the account whose folder is on screen (nil in All accounts); `locale`
+    /// `accountInView` is the account whose folder is on screen (nil in All accounts, where
+    /// `defaultAccount` from Settings is who a new message is from); `locale`
     /// is the interface's, for the `Sv:`/`Re:` prefix and the quoted header.
     /// `opened` is the stored message a reply, forward or draft starts from, read away from the
-    /// main actor (`make` reads it); without it they start from the stored row alone.
+    /// main actor (`make` reads it); without it they start from the stored row alone, and a reply
+    /// leaves the quote out when `quotesOriginal` is false.
     public init(
         request: ComposeRequest, store: MailStore, accounts: [Account], accountInView: AccountID? = nil,
-        locale: Locale = .current, now: @escaping () -> Date = { Date() },
-        protectionUI: (any ProtectionUI)? = nil, opened: OpenedMessage? = nil
+        defaultAccount: AccountID? = nil, locale: Locale = .current, now: @escaping () -> Date = { Date() },
+        protectionUI: (any ProtectionUI)? = nil, protectionScreens: [any ProtectionUI] = [],
+        opened: OpenedMessage? = nil, quotesOriginal: Bool = true,
+        attachmentLimit: Int = ComposeModel.maxAttachmentBytes
     ) {
-        self.protectionUI = protectionUI
+        self.attachmentLimit = attachmentLimit
+        originalNotQuoted = !quotesOriginal
+        fixedProtectionUI = protectionUI
+        self.protectionScreens = protectionScreens
         self.store = store
         self.accounts = accounts
         self.locale = locale
         self.now = now
-        from = accountInView ?? accounts.first?.id ?? AccountID()
+        from = accountInView ?? accounts.first { $0.id == defaultAccount }?.id ?? accounts.first?.id ?? AccountID()
         switch request.kind {
         case .new:
             body = signatureBlock()
@@ -101,38 +116,24 @@ public final class ComposeModel {
         case .to(let address):
             to = [address]
             body = signatureBlock()
+        case let .people(addresses, title):
+            (to, subject, body) = (addresses, title, signatureBlock())
         case .diagnostics(let report):
             to = [Address(name: nil, email: Self.diagnosticsAddress)]
             subject = "Outwright diagnostics"
-            body = signatureBlock()
-            attachments = [
-                Attachment(
-                    filename: "outwright-diagnostics.txt", mimeType: "text/plain", contentID: nil,
-                    isInline: false, data: report)
-            ]
+            body = AttributedString(Self.diagnosticsPromise + "\n")
+            attachments = [Attachment(
+                filename: "outwright-diagnostics.txt", mimeType: "text/plain", contentID: nil, isInline: false,
+                data: report)]
         }
         snapshot = current
+        if case .draft = request.kind {} else { startingBody = body }
         isStarting = false
     }
 
     public var account: Account? { accounts.first { $0.id == from } }
 
-    public var hasChanges: Bool { current != snapshot }
-
     public var isReply: Bool { purpose == .reply }
-
-    // MARK: - Recipients
-
-    /// People whose name or address starts with `prefix` (at a word), most written with first;
-    /// not those already on the message nor the owner's own addresses.
-    public func suggestions(for prefix: String) -> [Address] {
-        let wanted = prefix.trimmingCharacters(in: .whitespaces)
-        guard !wanted.isEmpty else { return [] }
-        let taken = Set((to + cc + bcc).map { $0.email.lowercased() })
-        return people.filter { person in
-            !taken.contains(person.email.lowercased()) && PeopleIndex.matches(person, wanted)
-        }.prefix(8).map { $0 }
-    }
 
     // MARK: - Closing and sending
 
@@ -217,23 +218,6 @@ public final class ComposeModel {
 
     // MARK: - Keeping
 
-    private struct Snapshot: Equatable {
-        var from: AccountID
-        var to: [Address]
-        var cc: [Address]
-        var bcc: [Address]
-        var subject: String
-        var body: AttributedString
-        var files: [String]
-        var ownerLock: Bool?
-    }
-
-    private var current: Snapshot {
-        Snapshot(
-            from: from, to: to, cc: cc, bcc: bcc, subject: subject, body: body,
-            files: attachments.map { "\($0.filename):\($0.data.count)" }, ownerLock: ownerLock)
-    }
-
     /// A draft opened again keeps its Message-ID; a new message's carries the domain of the account
     /// it is sent from, made again when another account is chosen.
     private func messageID(for account: Account) -> String {
@@ -262,12 +246,13 @@ public final class ComposeModel {
             draftUID = 0
         }
         let messageIDHeader = messageID(for: account)
-        let text = String(body.characters)
+        let text = String(body.characters) + (quoted?.plain ?? "")
+        let html = quoted.map { (RichText.html(body, always: true) ?? "") + $0.htmlQuote } ?? RichText.html(body)
         let message = OutgoingMessage(
             from: Address(name: account.displayName.isEmpty ? nil : account.displayName, email: account.email),
-            to: to, cc: cc, bcc: bcc, subject: subject, textBody: text, htmlBody: RichText.html(body),
-            attachments: attachments, inReplyTo: inReplyTo, references: references, date: now(),
-            messageID: messageIDHeader)
+            to: to, cc: cc, bcc: bcc, subject: subject, textBody: text, htmlBody: html,
+            attachments: attachments + (quoted?.inline ?? []), inReplyTo: inReplyTo, references: references,
+            date: now(), messageID: messageIDHeader)
         let data: Data
         do {
             data = try MIMEWriter.write(message, includeBcc: true)
@@ -330,7 +315,8 @@ extension ComposeModel {
         inReplyTo = row.messageIDHeader
         references = Array(((parsed?.references ?? []) + [row.messageIDHeader].compactMap { $0 }).suffix(20))
         threadID = row.threadID
-        body = signatureBlock() + AttributedString(quoted(row, parsed))
+        body = signatureBlock()
+        quoted = originalNotQuoted ? nil : fitted(quote(row, parsed))
     }
 
     private func startForward(_ id: MessageID, opened: OpenedMessage?) {
@@ -340,15 +326,22 @@ extension ComposeModel {
         original = Self.facts(opened, row)
         from = accounts.contains { $0.id == row.accountID } ? row.accountID : from
         subject = Self.prefixed(row.subject, L10n.string("Fw:", locale: locale))
-        for attachment in parsed?.attachments ?? [] where !attachment.isInline {
-            attach(attachment)
+        let quotation = quote(row, parsed)
+        // Inline parts the quote doesn't show (a picture placed in a text message) go as attachments;
+        // the files first, then the quote's pictures in the room left.
+        let shown = Set(quotation.inline.compactMap(\.contentID))
+        for var attachment in parsed?.attachments ?? [] where !shown.contains(attachment.contentID ?? "") {
+            attachment.isInline = false
+            if !attach(attachment) { leftOut.tooLarge += 1 }
         }
-        body = signatureBlock() + AttributedString(quoted(row, parsed))
+        quoted = fitted(quotation)
+        body = signatureBlock()
     }
 
     private func openDraft(_ id: MessageID, opened: OpenedMessage?) {
         guard let row = try? store.message(id) else { return }
         draftID = id
+        protectionMemo.keptKind = Self.keptKind(of: id, in: store)
         draftUID = row.uid
         draftAccount = row.accountID
         from = row.accountID
@@ -368,20 +361,24 @@ extension ComposeModel {
         subject = parsed.subject
         inReplyTo = parsed.inReplyTo.first
         references = parsed.references
-        for attachment in parsed.attachments {
-            attach(attachment)
+        let split = parsed.htmlBody.flatMap { QuotedOriginal.split(draftHTML: $0, parts: parsed.attachments) }
+        if let (own, _) = split {
+            body = RichText.attributed(fromHTML: own)
+        } else {
+            body = parsed.htmlBody.map(RichText.attributed(fromHTML:)) ?? AttributedString(parsed.textBody ?? "")
         }
-        body = parsed.htmlBody.map(RichText.attributed(fromHTML:)) ?? AttributedString(parsed.textBody ?? "")
+        let shown = Set((split?.quote.inline ?? []).compactMap(\.contentID))
+        for attachment in parsed.attachments where !shown.contains(attachment.contentID ?? "") {
+            if !attach(attachment) { leftOut.tooLarge += 1 }
+        }
+        quoted = split.map { fitted($0.quote) }
         if let own = parsed.messageID { keptMessageID = own }
         purpose = inReplyTo == nil ? .new : .reply
-        // A draft kept locked is locked again, and asks before going to someone without a key; so is
-        // one the server held protected.
+        // A draft kept locked, or held protected by the server, is locked again and asks before sending.
         if opened?.facts?.decryption == .decrypted, !hasCalendar {
             draftWasProtected = true
             ownerLock = true
         }
-        if let kept = try? store.protection(of: id), kept.kind == .encrypt, !kept.plainChosen, !hasCalendar {
-            ownerLock = true
-        }
+        restoreKeptChoices(of: id)
     }
 }

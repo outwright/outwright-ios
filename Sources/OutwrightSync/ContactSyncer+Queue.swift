@@ -112,7 +112,7 @@ extension ContactSyncer {
             try failed(change)
             return
         }
-        let ours = ContactMapping.written(contact.details)
+        let ours = ContactMapping.written(contact.details, photo: contact.photo)
         let card = ContactMapping.revised(base.applying(ours), at: Date())
         let data = VCardWriter.write(card)
         let tag: String?

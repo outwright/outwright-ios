@@ -1,14 +1,14 @@
 # Outwright
 
-**Simple Digital Independence.** Your mail server, on your iPhone, with nothing in between.
+**Simple Digital Independence.** Your mail server, on your iPhone and iPad, with nothing in between.
 
-Outwright is a free, open-source mail, calendar and contacts app for iPhone that talks straight
+Outwright is a free, open-source mail, calendar and contacts app for iPhone and iPad that talks straight
 to your mail server. It follows a familiar Outlook-style workflow, without sending your mail
 through anyone else's servers.
 Website: [outwright.app](https://outwright.app).
 
-**Alpha.** To join, sign up on [outwright.app](https://outwright.app/#join); you get a
-TestFlight invitation by email. It is an alpha: expect rough edges, and keep another way to
+**Alpha.** To join, sign up on [outwright.app](https://outwright.app/#join) and install it
+straight away with TestFlight. It is an alpha: expect rough edges, and keep another way to
 reach your mail while you try it. What each release brings is in
 [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
@@ -16,6 +16,9 @@ reach your mail while you try it. What each release brings is in
 
 - **Accounts:** as many as you have, each with its own inbox, and All inboxes for all of them
   at once.
+- **Microsoft 365 and Outlook.com:** mail, calendar and contacts, the app talking to Microsoft
+  directly, without passing through our servers. In the TestFlight and App Store app only, for
+  now; a build of your own does not have it yet.
 - **Mail:** [IMAP and SMTP](STANDARDS.md#mail-imap): read, write, search, folders, and older
   mail fetched as you scroll.
 - **Calendar:** [CalDAV](STANDARDS.md#calendars): agenda, day, three-day and month views;
@@ -26,8 +29,12 @@ reach your mail while you try it. What each release brings is in
   send them.
 - **Contacts:** [CardDAV](STANDARDS.md#contacts): your address books, edited on your server,
   and suggestions as you write.
-- **New mail:** notifications, if you turn them on: on Stalwart [as mail arrives](STANDARDS.md#push);
-  on other servers when iOS lets the app check, which can be late.
+- **Encrypted mail:** OpenPGP, signed and encrypted, with Proton Mail users and anyone else
+  with a key. In the TestFlight and App Store app only (see below).
+- **New mail:** notifications, if you turn them on: [as mail arrives](STANDARDS.md#push) on
+  Stalwart, on Dovecot with [our script](https://outwright.app/push/dovecot), on Microsoft
+  accounts, and on any other IMAP server through [a small program of your own](https://outwright.app/push/worker);
+  otherwise when iOS lets the app check, which can be late.
 
 ## Why Outwright exists
 
@@ -50,7 +57,7 @@ No AI assistant: Outwright does mail, calendar and contacts, and does them well.
 
 ## Who it is for
 
-- Self-hosters, who run their own mail server and want an iPhone app that talks to it directly.
+- Self-hosters, who run their own mail server and want an iPhone and iPad app that talks to it directly.
 - Anyone with email from their internet provider or a mail host. Most of them offer IMAP, so
   Outwright talks to their server directly, as it does to your own.
 - Anyone who cares about privacy and wants their mail, calendar and contacts kept out of other
@@ -62,8 +69,7 @@ sync with each server.
 
 ## Coming next
 
-Microsoft 365 work accounts and Outlook.com. The app will talk to Microsoft directly, as it does
-to your own server, without passing through our servers. After that, Gmail.
+Gmail, with the app talking to Google directly.
 
 ## Servers
 
@@ -73,7 +79,7 @@ Supported today:
   sends Web Push, which is how new-mail notifications reach the phone.
 - **[Dovecot](https://www.dovecot.org) 2.4, with Postfix 3.10 and Radicale 3.5,** as Debian 13
   ships them. Radicale does not send invitations itself, so Outwright mails them to your guests.
-  New-mail notifications come when iOS lets the app check; instant ones come later. For addresses with letters such as å before
+  Instant new-mail notifications need [our push script](https://outwright.app/push/dovecot). For addresses with letters such as å before
   the `@`, Dovecot needs `mail_utf8_extensions = yes`; without it Postfix bounces them.
 - **Any other IMAP server that follows the standards,** which is what most internet providers
   and mail hosts run. IDLE, MOVE, CONDSTORE and SPECIAL-USE are used where the server has them,

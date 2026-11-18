@@ -26,10 +26,10 @@ import Testing
             try await Task.sleep(for: .milliseconds(300))
             let waiter = Task { try await syncer.syncFolders() }
             try await Task.sleep(for: .milliseconds(200))
-            let start = ContinuousClock.now
+            let start = SuspendingClock.now
             waiter.cancel()
             _ = await waiter.result
-            #expect(ContinuousClock.now - start < .seconds(1))
+            #expect(SuspendingClock.now - start < .seconds(1))
             try await holder.value
             await server.delayFetches(.zero)
             try await syncer.syncFolders()
@@ -147,10 +147,10 @@ import Testing
             try await Task.sleep(for: .milliseconds(300))
             let refresh = Task { await coordinator.refreshAll() }
             try await Task.sleep(for: .milliseconds(200))
-            let start = ContinuousClock.now
+            let start = SuspendingClock.now
             refresh.cancel()
             await refresh.value
-            #expect(ContinuousClock.now - start < .seconds(1))
+            #expect(SuspendingClock.now - start < .seconds(1))
             #expect(await coordinator.lastErrors[h.account.id] == .noPassword)
             try await holder.value
         }

@@ -188,6 +188,16 @@ private final class Counter: Sendable {
         #expect(model.message == .notSetUp(guide: guide))
     }
 
+    @Test func droppedPushIsSaid() async {
+        let support = PushSupport(
+            switcher: FakeSwitch(), offersPush: { _ in true }, askPermission: { true }, registerForRemote: {},
+            dropped: { _ in true })
+        let model = NotificationsToggleModel(account: account(), support: support, local: FakeLocal())
+        await model.load()
+        #expect(!model.isOn)
+        #expect(model.message == .dropped)
+    }
+
     @Test func serverRefusedIsItsOwnMessage() async {
         let support = PushSupport(
             switcher: FakeSwitch(failure: .serverRefused), offersPush: { _ in true }, askPermission: { true },
@@ -255,5 +265,25 @@ private final class Counter: Sendable {
         _ = await support.isAvailable(anna)
         _ = await support.isAvailable(anna)
         #expect(asked.count == 1)
+    }
+
+    @Test func addingAnAccountSwitchesItsNotificationsOn() async throws {
+        let store = try MailStore(path: nil)
+        let app = AppModel(store: store, sync: offlineSync(store: store, secrets: InMemorySecretStore()))
+        let anna = account()
+        try store.save(anna)
+        await app.accountAdded(anna)
+        #expect(try store.notifiesNewMail(anna.id))
+    }
+
+    @Test func deniedPermissionLeavesThemOff() async throws {
+        let store = try MailStore(path: nil)
+        let app = AppModel(
+            store: store,
+            sync: offlineSync(store: store, secrets: InMemorySecretStore(), reminders: KeptReminders(allowed: false)))
+        let anna = account()
+        try store.save(anna)
+        await app.accountAdded(anna)
+        #expect(try !store.notifiesNewMail(anna.id))
     }
 }

@@ -17,9 +17,11 @@ struct LockedWebView: UIViewRepresentable {
     let onLink: (URL) -> Void
     /// The rule list couldn't be compiled: nothing was loaded, and the caller shows the text instead.
     let onUnavailable: () -> Void
+    /// The page has loaded and been laid out.
+    var onShown: () -> Void = {}
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(height: $height, onLink: onLink)
+        Coordinator(height: $height, onLink: onLink, onShown: onShown, onUnavailable: onUnavailable)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -36,10 +38,8 @@ struct LockedWebView: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = false
         context.coordinator.observe(webView)
         let page = ReadingConfiguration.page(html: html, allowRemote: allowRemote)
-        let identifier = allowRemote ? "outwright.pictures.v2" : "outwright.locked.v2"
-        WKContentRuleListStore.default().compileContentRuleList(
-            forIdentifier: identifier, encodedContentRuleList: ReadingConfiguration.rules(allowRemote: allowRemote)
-        ) { list, _ in
+        context.coordinator.page = page
+        ReadingRuleLists.list(allowRemote: allowRemote) { list in
             // Fail closed: without the rule list nothing of the HTML is loaded.
             guard let list else {
                 onUnavailable()
@@ -65,12 +65,25 @@ struct LockedWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let height: Binding<CGFloat>
         let onLink: (URL) -> Void
+        let onShown: () -> Void
+        /// The page can't be shown: the caller shows the plain text instead.
+        let onUnavailable: () -> Void
         var allowsLoad = false
+        /// Our own page, kept to load it again once after its process ended.
+        var page = ""
+        /// The body has been shown: from then on only a second process end gives it up.
+        private var shown = false
+        private var reloaded = false
         private var observation: NSKeyValueObservation?
 
-        init(height: Binding<CGFloat>, onLink: @escaping (URL) -> Void) {
+        init(
+            height: Binding<CGFloat>, onLink: @escaping (URL) -> Void, onShown: @escaping () -> Void,
+            onUnavailable: @escaping () -> Void
+        ) {
             self.height = height
             self.onLink = onLink
+            self.onShown = onShown
+            self.onUnavailable = onUnavailable
         }
 
         func observe(_ webView: WKWebView) {
@@ -109,6 +122,42 @@ struct LockedWebView: UIViewRepresentable {
             }
         }
 
+        /// The page is laid out (nothing is drawn before it is whole): the body takes its place.
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation?) {
+            shown = true
+            onShown()
+        }
+
+        /// Shown as far as it got, rather than a spinner for ever.
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation?, withError error: any Error) {
+            shown = true
+            onShown()
+        }
+
+        /// Our own page never started: the plain text stands in, rather than a spinner for ever. A
+        /// navigation cancelled here (a link, a redirect, a frame) fails too, and changes nothing.
+        func webView(
+            _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation?, withError error: any Error
+        ) {
+            let error = error as NSError
+            if ReadingFailure.needsText(domain: error.domain, code: error.code, shown: shown) {
+                onUnavailable()
+            }
+        }
+
+        /// The page's process ended (hostile HTML can bring it down): before it showed, the plain text
+        /// stands in; a body already read loads again once.
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            switch ReadingFailure.afterTermination(shown: shown, reloaded: reloaded) {
+            case .showText:
+                onUnavailable()
+            case .reload:
+                reloaded = true
+                allowsLoad = true
+                webView.loadHTMLString(page, baseURL: nil)
+            }
+        }
+
         /// A link meant for a new window is shown the same way, and no window opens.
         func webView(
             _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
@@ -116,6 +165,87 @@ struct LockedWebView: UIViewRepresentable {
         ) -> WKWebView? {
             if let url = navigationAction.request.url { onLink(url) }
             return nil
+        }
+    }
+}
+
+/// The rule lists, compiled once and kept: compiling one took up to two seconds, on every message
+/// opened. A stored list is found by the hash of its rules, so a changed rule is never answered by an
+/// older list.
+@MainActor
+enum ReadingRuleLists {
+    private static var lists: [Bool: WKContentRuleList] = [:]
+    private static var waiting: [Bool: [(WKContentRuleList?) -> Void]] = [:]
+    /// An empty locked page that keeps WebKit's processes running, so a message's body doesn't wait
+    /// for them to start (seconds on a phone that has just started the app).
+    private static var warm: WKWebView?
+    /// Lists stored under identifiers of earlier rules were removed this run.
+    private static var tidied = false
+
+    static func list(allowRemote: Bool, _ done: @escaping (WKContentRuleList?) -> Void) {
+        if let list = lists[allowRemote] {
+            done(list)
+            return
+        }
+        if waiting[allowRemote] != nil {
+            waiting[allowRemote]?.append(done)
+            return
+        }
+        waiting[allowRemote] = [done]
+        let rules = ReadingConfiguration.rules(allowRemote: allowRemote)
+        let name = identifier(allowRemote: allowRemote)
+        guard let store = WKContentRuleListStore.default() else {
+            finish(allowRemote, nil)
+            return
+        }
+        store.lookUpContentRuleList(forIdentifier: name) { found, _ in
+            if let found {
+                finish(allowRemote, found)
+                return
+            }
+            store.compileContentRuleList(forIdentifier: name, encodedContentRuleList: rules) { list, _ in
+                finish(allowRemote, list)
+            }
+        }
+    }
+
+    private static func identifier(allowRemote: Bool) -> String {
+        "outwright.reading." + ReadingConfiguration.fingerprint(ReadingConfiguration.rules(allowRemote: allowRemote))
+    }
+
+    private static func finish(_ allowRemote: Bool, _ list: WKContentRuleList?) {
+        if let list { lists[allowRemote] = list }
+        let callers = waiting[allowRemote] ?? []
+        waiting[allowRemote] = nil
+        for caller in callers { caller(list) }
+        if lists.count == 2 { removeEarlierLists() }
+    }
+
+    /// Once a run, with the current lists ready: every list of ours stored under another identifier
+    /// (earlier rules, earlier names) is removed, so old compiled rules don't pile up.
+    private static func removeEarlierLists() {
+        guard !tidied, let store = WKContentRuleListStore.default() else { return }
+        tidied = true
+        let current: Set<String> = [identifier(allowRemote: false), identifier(allowRemote: true)]
+        store.getAvailableContentRuleListIdentifiers { identifiers in
+            for old in identifiers ?? [] where old.hasPrefix("outwright.") && !current.contains(old) {
+                store.removeContentRuleList(forIdentifier: old) { _ in }
+            }
+        }
+    }
+
+    /// Readies what a message's body needs before one is opened: both rule lists, and WebKit's processes,
+    /// started by an empty locked page that loads nothing.
+    static func warmUp() {
+        list(allowRemote: true) { _ in }
+        list(allowRemote: false) { list in
+            guard let list, warm == nil else { return }
+            let configuration = ReadingConfiguration.make(
+                allowRemote: false, cidHandler: CIDSchemeHandler(attachments: []))
+            configuration.userContentController.add(list)
+            let webView = WKWebView(frame: .zero, configuration: configuration)
+            warm = webView
+            webView.loadHTMLString(ReadingConfiguration.page(html: "", allowRemote: false), baseURL: nil)
         }
     }
 }

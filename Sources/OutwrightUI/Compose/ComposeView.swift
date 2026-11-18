@@ -20,12 +20,23 @@ struct ComposeView: View {
     @State private var unprotectable = false
     /// The recipients a key is being added for.
     @State private var addingKeys: [Address] = []
+    /// The account is being set up to encrypt.
+    @State private var settingUp = false
+    /// The recipient whose changed key is being looked at.
+    @State private var personKey: String?
+    /// ✕ with changes: Delete draft, Save draft or Cancel.
+    @State private var askingClose = false
+    /// Delete draft was refused: the message stays open and says why.
+    @State private var deleteFailure: ComposeError?
+    /// Where the sending account is set up to encrypt, asked once per account; nil: nothing to set up.
+    @State private var setup: AnyView?
     @FocusState private var focus: Field?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     /// The folded line was tapped: the fields show, and the subject takes the keyboard once it is there.
     @State private var unfolds = false
+    @ScaledMetric(relativeTo: .title3) private var chevronBox: CGFloat = 44
 
     enum Field: Hashable {
         case to, cc, bcc, subject, body
@@ -46,8 +57,16 @@ struct ComposeView: View {
             } else {
                 fields
             }
+            if model.originalNotQuoted {
+                NotQuotedRow()
+                Divider()
+            }
             if let note = model.protectionNote(typed: typedAddresses) {
-                ProtectionNoteRow(note: note)
+                ProtectionNoteRow(note: note, setUp: setUp)
+                Divider()
+            }
+            if let notice = model.protection?.notice, !model.hasCalendar {
+                ProtectionNoticeRow(text: notice)
                 Divider()
             }
             if let suggestions = currentSuggestions, !suggestions.isEmpty {
@@ -58,15 +77,43 @@ struct ComposeView: View {
         }
         .background(Theme.background)
         .safeAreaInset(edge: .bottom) {
-            ComposeToolbar(model: model, text: $model.body, selection: $selection, showsCopies: $showsCopies)
+            ComposeToolbar(model: model, text: $model.body, selection: $selection, setUp: setUp)
+                // The row has to fit the phone's width: symbols and buttons stop growing together here.
+                .dynamicTypeSize(...DynamicTypeSize.xLarge)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 6)
         }
         .onAppear { focus = model.to.isEmpty ? .to : .body }
+        // Writing starts at the top, above the signature, not where the editor puts the cursor (the end).
+        .onChange(of: focus, initial: true) { _, field in
+            guard field == .body, let start = model.cursorOnEntering else { return }
+            let chars = model.body.characters
+            let point = chars.index(chars.startIndex, offsetBy: start, limitedBy: chars.endIndex) ?? chars.endIndex
+            selection = AttributedTextSelection(insertionPoint: point)
+        }
+        .task(id: model.from) { setup = model.account.flatMap { model.protectionUI?.accountSetup(for: $0) } }
         .askingAboutProtection(
             model: model, app: app,
-            questions: ProtectionQuestions(choosing: $choosing, unprotectable: $unprotectable, addingKeys: $addingKeys),
+            questions: ProtectionQuestions(
+                choosing: $choosing, unprotectable: $unprotectable, addingKeys: $addingKeys, settingUp: $settingUp,
+                personKey: $personKey, setup: setup),
             send: send)
+        .confirmationDialog(Text(ui: "Keep this draft?"), isPresented: $askingClose, titleVisibility: .hidden) {
+            Button(role: .destructive) {
+                Task {
+                    do throws(ComposeError) {
+                        try await model.discardDraft()
+                        dismiss()
+                    } catch {
+                        deleteFailure = error
+                    }
+                }
+            } label: {
+                Text(ui: "Delete draft")
+            }
+            Button { closeSheet() } label: { Text(ui: "Save draft") }
+            Button(role: .cancel) {} label: { Text(ui: "Cancel") }
+        }
         // Swiping the sheet away would skip the question below when the draft can't be kept.
         .interactiveDismissDisabled(model.hasChanges && !model.isFinished)
         .onDisappear { app.composeGone(model) }
@@ -90,6 +137,14 @@ struct ComposeView: View {
             Text(ui: Self.explanation(error))
         }
         .alert(
+            Text(ui: "The draft was not deleted"), isPresented: Binding(presenting: $deleteFailure),
+            presenting: deleteFailure
+        ) { _ in
+            Button { deleteFailure = nil } label: { Text(ui: "OK") }
+        } message: { error in
+            Text(ui: Self.explanation(error))
+        }
+        .alert(
             Text(ui: "The message was not sent"), isPresented: Binding(presenting: $failure), presenting: failure
         ) { _ in
             Button { failure = nil } label: { Text(ui: "OK") }
@@ -101,119 +156,41 @@ struct ComposeView: View {
     // MARK: - Parts
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Button {
-                closeSheet()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.title3)
-                    .frame(width: 48, height: 48)
-            }
-            .buttonStyle(.plain)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .accessibilityLabel(Text(ui: "Close"))
-            accountMenu
-            Spacer(minLength: 4)
-            Button {
-                send()
-            } label: {
-                Image(systemName: "paperplane")
-                    .font(.title3)
-                    .frame(width: 48, height: 48)
-                    .foregroundStyle(canSend ? Theme.accent : Color.secondary)
-            }
-            .buttonStyle(.plain)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .disabled(!canSend || model.isSending)
-            .accessibilityLabel(Text(ui: "Send"))
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 10)
-    }
-
-    @ViewBuilder private var accountMenu: some View {
-        if model.accounts.count < 2 {
-            accountLabel
-        } else {
-            Menu {
-                ForEach(model.accounts) { account in
-                    Button {
-                        model.from = account.id
-                    } label: {
-                        if account.id == model.from {
-                            Label(account.email, systemImage: "checkmark")
-                        } else {
-                            Text(account.email)
-                        }
-                    }
-                }
-            } label: {
-                accountLabel
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(ui: "From"))
-        }
-    }
-
-    private var accountLabel: some View {
-        HStack(spacing: 12) {
-            if let account = model.account {
-                Avatar(name: account.displayName, email: account.email, size: 36, colorIndex: account.colorIndex)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(ui: title)
-                    .font(.title2.bold())
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(model.account?.email ?? "")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-        }
-    }
-
-    private var title: LocalizedStringKey {
-        switch model.purpose {
-        case .new: "New message"
-        case .reply: "Reply (title)"
-        case .forward: "Forward (title)"
-        }
+        EditorHeader(
+            close: { closeTapped() }, confirm: { send() }, confirmEnabled: canSend && !model.isSending,
+            confirmSymbol: Icons.send, confirmLabel: "Send", middle: { FromMenu(model: model) }
+        )
     }
 
     /// To, Cc and Bcc, and the subject.
     @ViewBuilder private var fields: some View {
         RecipientField(
-            label: "To:", addresses: $model.to, typing: typing(.to), focus: $focus, field: .to, keys: model.keyStates
-        ) {
-            Button {
-                withAnimation(.snappy) { showsCopies.toggle() }
-            } label: {
-                Image(systemName: "chevron.down")
-                    .rotationEffect(.degrees(showsCopies ? 180 : 0))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
+            label: "To:", addresses: $model.to, typing: typing(.to), focus: $focus, field: .to, keys: model.keyStates,
+            showKey: showKey, add: { model.add($0, to: .to) }, next: { focus = showsCopyLines ? .cc : .subject },
+            trailing: {
+                Button {
+                    withAnimation(.snappy) { showsCopies.toggle() }
+                } label: {
+                    Image(systemName: Icons.unfolded)
+                        .rotationEffect(.degrees(showsCopies ? 180 : 0))
+                        .foregroundStyle(Theme.secondaryText)
+                        .frame(width: chevronBox, height: chevronBox)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(ui: "Cc and Bcc"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(ui: "Cc and Bcc"))
-        }
-        if showsCopies || !model.cc.isEmpty || !model.bcc.isEmpty {
+        )
+        if showsCopyLines {
             Divider()
             RecipientField(
                 label: "Cc:", addresses: $model.cc, typing: typing(.cc), focus: $focus, field: .cc,
-                keys: model.keyStates
-            ) {
-                EmptyView()
-            }
+                keys: model.keyStates, showKey: showKey, add: { model.add($0, to: .cc) }, next: { focus = .bcc },
+                trailing: { EmptyView() })
             Divider()
             RecipientField(
                 label: "Bcc:", addresses: $model.bcc, typing: typing(.bcc), focus: $focus, field: .bcc,
-                keys: model.keyStates
-            ) {
-                EmptyView()
-            }
+                keys: model.keyStates, showKey: showKey, add: { model.add($0, to: .bcc) }, next: { focus = .subject },
+                trailing: { EmptyView() })
         }
         Divider()
         subjectRow
@@ -224,7 +201,9 @@ struct ComposeView: View {
     private var subjectRow: some View {
         HStack(spacing: 6) {
             Text(ui: "Subject:")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondaryText)
+                // The label keeps its word; the field takes what is left.
+                .fixedSize()
             TextField(text: $model.subject) { EmptyView() }
                 .focused($focus, equals: .subject)
                 .accessibilityIdentifier("compose.subject")
@@ -241,19 +220,39 @@ struct ComposeView: View {
             if !model.attachments.isEmpty {
                 AttachmentChips(model: model)
             }
-            TextEditor(text: $model.body, selection: $selection)
+            TextEditor(text: bodyText, selection: $selection)
                 .focused($focus, equals: .body)
                 .accessibilityIdentifier("compose.body")
                 .font(.body)
                 .scrollContentBackground(.hidden)
                 .padding(.horizontal, 15)
                 .padding(.top, 6)
+            if let quote = model.quoted {
+                QuotedOriginalView(quote: quote)
+            }
         }
     }
 }
 
 extension ComposeView {
     // MARK: - Behaviour
+
+    /// The body as typed, with Return in a bulleted or numbered line going on with the list.
+    private var bodyText: Binding<AttributedString> {
+        Binding {
+            model.body
+        } set: { typed in
+            guard let edit = ListEditing.continued(old: model.body, new: typed) else {
+                model.body = typed
+                return
+            }
+            model.body = edit.text
+            let chars = edit.text.characters
+            let cursor =
+                chars.index(chars.startIndex, offsetBy: edit.cursor, limitedBy: chars.endIndex) ?? chars.endIndex
+            selection = AttributedTextSelection(insertionPoint: cursor)
+        }
+    }
 
     /// The addresses typed in the recipient lines that are not yet recipients.
     private var typedAddresses: [Address] {
@@ -277,11 +276,24 @@ extension ComposeView {
 
     private func add(_ address: Address) {
         switch focus {
-        case .cc: model.cc.append(address)
-        case .bcc: model.bcc.append(address)
-        default: model.to.append(address)
+        case .cc: model.add([address], to: .cc)
+        case .bcc: model.add([address], to: .bcc)
+        default: model.add([address], to: .to)
         }
         if let focus { typed[focus] = "" }
+    }
+
+    /// Cc and Bcc show: opened with the chevron, or holding someone.
+    private var showsCopyLines: Bool {
+        showsCopies || !model.cc.isEmpty || !model.bcc.isEmpty
+    }
+
+    /// ✕: closes at once when nothing changed, else asks whether to delete or save the draft.
+    private func closeTapped() {
+        switch model.closeChoice {
+        case .close: closeSheet()
+        case .ask: askingClose = true
+        }
     }
 
     /// Keeps the draft and closes; when it can't be kept the sheet stays and asks.
@@ -289,8 +301,19 @@ extension ComposeView {
         if model.closeAsked() { dismiss() }
     }
 
-    private func send(choice: ProtectionChoice = .none) {
-        choosing = []
+    /// Opens where the account is set up to encrypt; nil when the build has nothing to set up.
+    private var setUp: (() -> Void)? {
+        setup == nil ? nil : { settingUp = true }
+    }
+
+    /// Opens a recipient's key from their chip; nil without a protection.
+    private var showKey: ((String) -> Void)? {
+        guard model.protectionUI != nil else { return nil }
+        return { personKey = $0 }
+    }
+
+    /// What is still typed in each recipient line.
+    private var typedLines: [RecipientList: String] {
         var lines: [RecipientList: String] = [:]
         for (field, text) in typed {
             switch field {
@@ -300,17 +323,27 @@ extension ComposeView {
             case .subject, .body: break
             }
         }
+        return lines
+    }
+
+    private func send(choice: ProtectionChoice = .none) {
+        choosing = []
+        let lines = typedLines
         Task {
             do throws(ComposeError) {
                 // What is still typed in a line goes too; anything in it that isn't an address stops the send.
-                if app.modules.protectionUI == nil {
+                if model.protectionUI == nil {
                     try model.send(typed: lines, choice: choice)
                 } else {
                     try await model.send(afterLookupOf: lines, choice: choice)
                 }
                 typed = [:]
                 dismiss()
-                await app.sync.refreshAll()
+                if let draft = model.draftID {
+                    await app.sent(draft)
+                } else {
+                    await app.sync.refreshAll()
+                }
             } catch {
                 if case .needsProtectionChoice(let missing) = error {
                     typed = [:]
@@ -350,30 +383,5 @@ extension ComposeView {
     /// Shows the fields, then moves the keyboard to the subject: a field can only take it once it is shown.
     fileprivate func unfold() {
         unfolds = true
-    }
-}
-
-/// The compose sheet: what a reply, forward or draft starts from is read (and opened) away from the
-/// main actor first, then the message being written shows.
-struct ComposeSheet: View {
-    let app: AppModel
-    let request: ComposeRequest
-    @State private var model: ComposeModel?
-
-    var body: some View {
-        if let model {
-            ComposeView(app: app, model: model)
-        } else {
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.background)
-                .task {
-                    let language = Bundle.module.preferredLocalizations.first ?? "en"
-                    model = await ComposeModel.make(
-                        request: request, store: app.store, accounts: app.writableAccounts,
-                        accountInView: app.accountInView?.id, locale: Locale(identifier: language),
-                        protectionUI: app.modules.protectionUI)
-                }
-        }
     }
 }

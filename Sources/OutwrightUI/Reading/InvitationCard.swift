@@ -51,7 +51,7 @@ struct InvitationCard: View {
             problems
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.separator.opacity(0.45)))
+        .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Theme.separator.opacity(0.45)))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("invitation.card")
     }
@@ -133,9 +133,11 @@ struct InvitationCard: View {
         if model.canAnswer {
             RSVPControl(
                 response: model.response, occurrence: model.occurrenceScope,
-                canWithholdReply: model.canWithholdReply
-            ) { response, sends, scope in
-                attempt { () throws(InvitationError) in try model.answer(response, sendReply: sends, scope: scope) }
+                canWithholdReply: model.canWithholdReply, canComment: model.canComment
+            ) { response, sends, scope, comment in
+                attempt { () throws(InvitationError) in
+                    try model.answer(response, sendReply: sends, scope: scope, comment: comment)
+                }
             }
         } else if model.canRemove {
             Button(role: .destructive) {
@@ -158,7 +160,7 @@ struct InvitationCard: View {
                 .accessibilityIdentifier("invitation.serverReplied")
         }
         if let failure {
-            ProblemBanner(text: Self.message(failure)).clipShape(RoundedRectangle(cornerRadius: 8))
+            ProblemBanner(text: Self.message(failure)).clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
         }
     }
 
@@ -182,9 +184,9 @@ struct InvitationCard: View {
     static func headlineIcon(_ headline: Headline) -> String {
         switch headline {
         case .invited, .updated: Icons.meeting
-        case .cancelled: "calendar.badge.minus"
+        case .cancelled: Icons.eventCancelled
         case let .replied(_, response): Icons.response(response)
-        case .outdated: "clock.arrow.circlepath"
+        case .outdated: Icons.recent
         }
     }
 

@@ -49,18 +49,21 @@ public struct GraphClient: Sendable {
         return url
     }
 
-    /// The body of a 2xx answer to `method` on `url`.
+    /// The body of a 2xx answer to `method` on `url`, of at most `limit` bytes.
     func send(
-        _ method: String, _ url: URL, body: Data? = nil, ifMatch: String? = nil, prefer: String? = nil
+        _ method: String, _ url: URL, body: Data? = nil, ifMatch: String? = nil, prefer: String? = nil,
+        contentType: String = "application/json", accept: String = "application/json", limit: Int = maxAnswer
     ) async throws(GraphError) -> Data {
         try check(url)
         for attempt in 0..<2 {
             let bearer = try await token()
             var request = Self.request(method, url, bearer: bearer, body: body, ifMatch: ifMatch)
+            request.setValue(accept, forHTTPHeaderField: "Accept")
+            if body != nil { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
             if let prefer {
                 request.setValue(prefer, forHTTPHeaderField: "Prefer")
             }
-            let (status, data) = try await fetch(request)
+            let (status, data) = try await fetch(request, limit: limit)
             if (200..<300).contains(status) {
                 return data
             }
@@ -131,8 +134,8 @@ public struct GraphClient: Sendable {
     }
 
     /// The status and at most `maxAnswer` bytes of body; redirects are not followed.
-    private func fetch(_ request: URLRequest) async throws(GraphError) -> (Int, Data) {
-        switch await CappedFetch.run(request, session: session, limit: Self.maxAnswer) {
+    private func fetch(_ request: URLRequest, limit: Int) async throws(GraphError) -> (Int, Data) {
+        switch await CappedFetch.run(request, session: session, limit: limit) {
         case let .success(answer): return answer
         case .failure(.tooLarge): throw .tooLarge
         case .failure(.notHTTP): throw .malformed

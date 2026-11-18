@@ -33,6 +33,7 @@ extension GraphEventMapping {
             body["isReminderOn"] = details.reminder != nil
             if let reminder = details.reminder { body["reminderMinutesBeforeStart"] = reminder }
         }
+        body.merge(marks(details, over: held == nil ? nil : old, isCreate: held == nil)) { _, new in new }
         if old?.attendees != details.attendees, !(old == nil && details.attendees.isEmpty) {
             body["attendees"] = details.attendees.map(attendee)
         }
@@ -43,6 +44,24 @@ extension GraphEventMapping {
             } else if held?.rule != nil {
                 body["recurrence"] = NSNull()
             }
+        }
+        return body
+    }
+
+    /// `showAs` (always on a create) and `sensitivity`, where they differ from `old`.
+    private static func marks(_ details: EventDetails, over old: EventDetails?, isCreate: Bool)
+        -> [String: any Sendable] {
+        var body: [String: any Sendable] = [:]
+        if isCreate || old?.showAs != details.showAs {
+            body["showAs"] = switch details.showAs {
+            case .busy: "busy"
+            case .free: "free"
+            case .tentative: "tentative"
+            case .away: "oof"
+            }
+        }
+        if (old?.isPrivate ?? false) != details.isPrivate {
+            body["sensitivity"] = details.isPrivate ? "private" : "normal"
         }
         return body
     }

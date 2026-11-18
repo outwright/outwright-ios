@@ -57,28 +57,32 @@ enum InvitationReply {
     // swiftlint:disable function_parameter_count
     /// From the account to the ORGANIZER: subject `<prefix> <title>`, the plain-text line and the
     /// `text/calendar; method=REPLY` part (`ITIP.reply`: only the owner's ATTENDEE, at the answer).
-    /// Every header value is stripped of CR, LF and NUL. Nil when there is nothing to reply to: no
+    /// Every header value is stripped of CR, LF and NUL. The owner's `comment` is the REPLY's COMMENT
+    /// (RFC 5546 › 3.2.3) and follows the line in the text. Nil when there is nothing to reply to: no
     /// ORGANIZER that is an address, no ATTENDEE for the account, or an answer that is not a reply.
     static func message(
         calendar: ICalComponent, response: Attendee.Response, recurrenceID: EventTime?, account: Account,
-        wording: MeetingWording, now: Date
+        wording: MeetingWording, now: Date, comment: String? = nil
     ) -> OutgoingMessage? {
+        let comment = EventEdit.comment(comment)
         guard let prefix = wording.prefix(response), let partstat = EventMapping.partstat(response),
             let reply = ITIP.reply(
                 from: calendar, ownEmail: account.email, partstat: partstat,
-                recurrenceID: recurrenceID.map { ICalValue.property("RECURRENCE-ID", $0) }, now: now),
+                recurrenceID: recurrenceID.map { ICalValue.property("RECURRENCE-ID", $0) }, now: now,
+                comment: comment),
             let event = reply.components.first(where: { $0.name == "VEVENT" }),
             let organizer = event.first("ORGANIZER"), case let to = clean(EventMapping.address(organizer.value)),
             isAddress(to)
         else { return nil }
         let title = String(clean(event.first("SUMMARY")?.text ?? "").prefix(maxTitle))
         let name = clean(account.displayName)
+        let line = wording.line.replacingOccurrences(of: "%@", with: name.isEmpty ? account.email : name)
         let domain = account.email.split(separator: "@").last.map(String.init) ?? "outwright.invalid"
         return OutgoingMessage(
             from: Address(name: name.isEmpty ? nil : name, email: clean(account.email)),
             to: [Address(name: organizer.parameter("CN").map(clean).flatMap { $0.isEmpty ? nil : $0 }, email: to)],
             cc: [], bcc: [], subject: clean(title.isEmpty ? prefix : prefix + " " + title),
-            textBody: wording.line.replacingOccurrences(of: "%@", with: name.isEmpty ? account.email : name),
+            textBody: comment.map { line + "\n\n" + $0 } ?? line,
             htmlBody: nil, attachments: [], inReplyTo: nil, references: [], date: now,
             messageID: "\(UUID().uuidString.lowercased())@\(clean(domain))",
             calendar: CalendarPart(method: ITIPMethod.reply.rawValue, data: ICalendarWriter.write(reply)))

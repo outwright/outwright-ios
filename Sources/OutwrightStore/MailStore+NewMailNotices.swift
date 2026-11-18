@@ -32,7 +32,7 @@ extension MailStore {
     public func setNotifiesNewMail(_ wanted: Bool, for account: AccountID, now: Date = Date()) throws(StoreError) {
         try write { database in
             if wanted {
-                try Self.markNewest(database, account.raw.uuidString, now: now)
+                try Self.markNewest(database, .notices, account.raw.uuidString, now: now)
             } else {
                 try database.execute(
                     sql: "DELETE FROM new_mail_notice WHERE accountId = ?", arguments: [account.raw.uuidString])
@@ -45,49 +45,60 @@ extension MailStore {
     /// cut short brought in late, and is not announced. A renumbered Inbox announces nothing: the
     /// mark starts again at its newest message.
     public func claimNewInboxMail(_ account: AccountID, now: Date = Date()) throws(StoreError) -> [MessageRow] {
-        try write { database in
-            let id = account.raw.uuidString
-            guard
-                let mark = try Row.fetchOne(
-                    database, sql: "SELECT uidValidity, lastUID, markedAt FROM new_mail_notice WHERE accountId = ?",
-                    arguments: [id]),
-                let inbox = try Self.inbox(database, id)
-            else { return [] }
-            guard (mark["uidValidity"] as Int64?) == inbox.validity else {
-                try Self.markNewest(database, id, now: now)
-                return []
-            }
-            let last = (mark["lastUID"] as Int64?) ?? 0
-            let since = ((mark["markedAt"] as Double?) ?? 0) - Self.noticeSlack
-            let rows = try Row.fetchAll(
-                database,
-                sql: """
-                    SELECT \(Records.messageColumns), 1 AS cnt FROM message m
-                    WHERE m.folderId = ? AND m.uid > ? AND m.isRead = 0 AND m.date >= ? ORDER BY m.uid
-                    """,
-                arguments: [inbox.folder, last, since]
-            ).compactMap(Records.message)
-            // The mark passes everything held; when it was set stays.
-            try database.execute(
-                sql: """
-                    UPDATE new_mail_notice SET lastUID = MAX(lastUID, (SELECT IFNULL(MAX(uid), 0) FROM message
-                    WHERE folderId = ?)) WHERE accountId = ?
-                    """,
-                arguments: [inbox.folder, id])
-            return rows
-        }
+        try write { database in try Self.claim(database, MarkTable.notices, account.raw.uuidString, now: now) }
     }
 
-    /// Every mark to its Inbox's newest message: what is there now is never announced.
+    /// The marks kept apart: local notices' and pushes'. Each has the columns of `new_mail_notice`.
+    enum MarkTable: String {
+        case notices = "new_mail_notice"
+        case pushes = "push_mail_mark"
+    }
+
+    /// The claim of `claimNewInboxMail`, on `table`.
+    static func claim(_ database: Database, _ table: MarkTable, _ id: String, now: Date) throws -> [MessageRow] {
+        guard
+            let mark = try Row.fetchOne(
+                database, sql: "SELECT uidValidity, lastUID, markedAt FROM \(table.rawValue) WHERE accountId = ?",
+                arguments: [id]),
+            let inbox = try inbox(database, id)
+        else { return [] }
+        guard (mark["uidValidity"] as Int64?) == inbox.validity else {
+            try markNewest(database, table, id, now: now)
+            return []
+        }
+        let last = (mark["lastUID"] as Int64?) ?? 0
+        let since = ((mark["markedAt"] as Double?) ?? 0) - noticeSlack
+        let rows = try Row.fetchAll(
+            database,
+            sql: """
+                SELECT \(Records.messageColumns), 1 AS cnt FROM message m
+                WHERE m.folderId = ? AND m.uid > ? AND m.isRead = 0 AND m.date >= ? ORDER BY m.uid
+                """,
+            arguments: [inbox.folder, last, since]
+        ).compactMap(Records.message)
+        // The mark passes everything held; when it was set stays.
+        try database.execute(
+            sql: """
+                UPDATE \(table.rawValue) SET lastUID = MAX(lastUID, (SELECT IFNULL(MAX(uid), 0) FROM message
+                WHERE folderId = ?)) WHERE accountId = ?
+                """,
+            arguments: [inbox.folder, id])
+        return rows
+    }
+
+    /// Every mark, local notices' and pushes', to its Inbox's newest message: what is there now is
+    /// never announced.
     public func moveNewMailMarks(now: Date = Date()) throws(StoreError) {
         try write { database in
-            for id in try String.fetchAll(database, sql: "SELECT accountId FROM new_mail_notice") {
-                try Self.markNewest(database, id, now: now)
+            for table in [MarkTable.notices, .pushes] {
+                for id in try String.fetchAll(database, sql: "SELECT accountId FROM \(table.rawValue)") {
+                    try Self.markNewest(database, table, id, now: now)
+                }
             }
         }
     }
 
-    private static func inbox(_ database: Database, _ account: String) throws -> (folder: Int64, validity: Int64)? {
+    static func inbox(_ database: Database, _ account: String) throws -> (folder: Int64, validity: Int64)? {
         try Row.fetchOne(
             database, sql: "SELECT id, uidValidity FROM folder WHERE accountId = ? AND kind = ? LIMIT 1",
             arguments: [account, FolderKind.inbox.rawValue]
@@ -99,7 +110,7 @@ extension MailStore {
 
     /// The mark at the Inbox's UIDVALIDITY and highest UID (0 without an Inbox or mail in it), set
     /// `now`.
-    private static func markNewest(_ database: Database, _ account: String, now: Date) throws {
+    static func markNewest(_ database: Database, _ table: MarkTable, _ account: String, now: Date) throws {
         let inbox = try inbox(database, account)
         let highest = try inbox.map {
             try Int64.fetchOne(database, sql: "SELECT MAX(uid) FROM message WHERE folderId = ?", arguments: [$0.folder])
@@ -107,7 +118,7 @@ extension MailStore {
         } ?? 0
         try database.execute(
             sql: """
-                INSERT INTO new_mail_notice (accountId, uidValidity, lastUID, markedAt) VALUES (?, ?, ?, ?)
+                INSERT INTO \(table.rawValue) (accountId, uidValidity, lastUID, markedAt) VALUES (?, ?, ?, ?)
                 ON CONFLICT (accountId) DO UPDATE SET uidValidity = excluded.uidValidity, lastUID = excluded.lastUID,
                     markedAt = excluded.markedAt
                 """,

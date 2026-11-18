@@ -2,13 +2,17 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 public import Foundation
+public import OutwrightSync
 public import OutwrightModel
 
-/// The text of a diagnostics report, which the owner reads before sending it. Every account's
-/// address, user, name and server is replaced by `account N`, wherever it turns up.
+/// The text of a diagnostics report, which the owner reads before sending it. Its own lines name an
+/// account only by number, fingerprint and provider kind; in what came from outside (log lines,
+/// MetricKit's payloads) every account's address, user, name and server is replaced by `account N`.
 public struct DiagnosticsReport: Sendable {
     /// The most log lines a report holds: the newest.
     static let logLines = 500
+    /// The most journal lines a report holds: the newest.
+    static let journalLines = 2_000
     /// Identifiers shorter than this are not personal enough to replace, and would mangle the text.
     private static let shortest = 3
 
@@ -18,11 +22,17 @@ public struct DiagnosticsReport: Sendable {
     public var problems: [AccountProblem]
     public var payloads: [Data]
     public var log: [String]
+    /// The diagnostics journal, oldest first: the summary is made from it and its lines are listed.
+    public var journal: [JournalEntry]
+    /// Each account's push subscription fingerprint, where push is on.
+    public var pushFingerprints: [AccountID: String]
 
     public init(
         version: String, system: String, accounts: [Account], problems: [AccountProblem], payloads: [Data],
-        log: [String]
+        log: [String], journal: [JournalEntry] = [], pushFingerprints: [AccountID: String] = [:]
     ) {
+        self.journal = journal
+        self.pushFingerprints = pushFingerprints
         self.version = version
         self.system = system
         self.accounts = accounts
@@ -40,11 +50,21 @@ public struct DiagnosticsReport: Sendable {
         ]
         lines += problems.map { "account \(numbers[$0.account.id] ?? 0): \($0.problem)" }
         if problems.isEmpty { lines.append("none") }
-        lines += ["", "Log:"]
-        lines += log.suffix(Self.logLines)
-        lines += ["", "MetricKit payloads: \(payloads.count)"]
-        lines += payloads.map { String(bytes: $0, encoding: .utf8) ?? "(not UTF-8: \($0.count) bytes)" }
-        return Self.scrub(lines.joined(separator: "\n"), accounts: accounts)
+        lines += ["", "Summary:"]
+        lines += DiagnosticsSummary.lines(accounts: accounts, entries: journal, pushFingerprints: pushFingerprints)
+        // What came from outside (MetricKit's payloads, old log lines) may hold an account's
+        // identifiers and is scrubbed; the report's own lines are built from codes, numbers and
+        // fingerprints only, and are left as they are (a scrub would mangle "account N" there).
+        var crashes = ["", "MetricKit payloads: \(payloads.count)"]
+        crashes += payloads.map { String(bytes: $0, encoding: .utf8) ?? "(not UTF-8: \($0.count) bytes)" }
+        var journalLines = ["", "Journal:"]
+        journalLines += journal.suffix(Self.journalLines).map { DiagnosticsSummary.line($0, numbers: numbers) }
+        var log = ["", "Log:"]
+        log += self.log.suffix(Self.logLines)
+        return [
+            lines.joined(separator: "\n"), Self.scrub(crashes.joined(separator: "\n"), accounts: accounts),
+            journalLines.joined(separator: "\n"), Self.scrub(log.joined(separator: "\n"), accounts: accounts)
+        ].joined(separator: "\n")
     }
 
     /// Replaces each account's identifiers by `account N` in one pass, longest first, so a host is

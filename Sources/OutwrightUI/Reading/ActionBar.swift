@@ -4,38 +4,53 @@
 import OutwrightModel
 import SwiftUI
 
-/// The glass bar under a message: Reply (with Reply all and Forward behind its chevron),
-/// mark unread, delete, archive, junk, more.
+/// The glass bar under a message: Reply (with Reply all and Forward behind its chevron), archive,
+/// delete, flag, more. Where the word Reply doesn't fit, the arrow alone stands for it.
 struct ActionBar: View {
     let app: AppModel
     let model: ThreadModel
+    /// Delete, which asks first where it is for good.
+    let delete: () -> Void
     let more: () -> AnyView
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            bar(withWord: true)
+            bar(withWord: false)
+        }
+        .font(.title3)
+        .foregroundStyle(.primary)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+    }
+
+    private func bar(withWord: Bool) -> some View {
         HStack(spacing: 0) {
             Menu {
                 replyButtons
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: Icons.reply)
-                    Image(systemName: "chevron.down").font(.caption.weight(.semibold))
-                    Text(ui: "Reply").font(.title3)
+                    Image(systemName: Icons.unfolded).font(.caption.weight(.semibold))
+                    if withWord {
+                        Text(ui: "Reply").lineLimit(1).fixedSize()
+                    }
                 }
             } primaryAction: {
                 if let id = model.latest?.id { app.compose(.reply(id)) }
             }
             .accessibilityLabel(Text(ui: "Reply"))
-            Spacer(minLength: 12)
-            button("Mark unread", Icons.unread) { model.markUnread() }
-            Spacer(minLength: 12)
-            button("Delete", Icons.delete) { model.delete() }
+            // The bar's, apart from each message's own Reply.
+            .accessibilityIdentifier("reading.reply")
             Spacer(minLength: 12)
             button("Archive", Icons.archive) { model.archive() }
             Spacer(minLength: 12)
-            if model.isInJunk {
-                button("Not junk", Icons.folder(.inbox)) { model.notJunk() }
+            button("Delete", Icons.delete, action: delete)
+            Spacer(minLength: 12)
+            if model.latest?.isFlagged == true {
+                button("Unflag", Icons.flag) { model.toggleFlag() }
+                    .foregroundStyle(Theme.flag)
             } else {
-                button("Junk", Icons.junk) { model.junk() }
+                button("Flag", Icons.flagOutline) { model.toggleFlag() }
             }
             Spacer(minLength: 12)
             Menu {
@@ -45,8 +60,6 @@ struct ActionBar: View {
             }
             .accessibilityLabel(Text(ui: "More"))
         }
-        .font(.title3)
-        .foregroundStyle(.primary)
         .padding(.horizontal, 22)
         .padding(.vertical, 14)
         .glassEffect(.regular.interactive(), in: .capsule)

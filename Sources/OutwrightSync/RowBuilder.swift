@@ -54,7 +54,8 @@ struct RowBuilder {
             date: parsed.date ?? summary.internalDate, isRead: summary.flags.contains("\\Seen"),
             isFlagged: summary.flags.contains("\\Flagged"),
             hasAttachment: Self.mayHaveAttachment(parsed),
-            isInvitation: parsed.isInvitation, inboxClass: inboxClass, hasBody: false, threadCount: 1,
+            isInvitation: parsed.isInvitation || Self.mayBeInvitation(summary.calendarParts),
+            inboxClass: inboxClass, hasBody: false, threadCount: 1,
             messageIDHeader: parsed.messageID,
             references: Array(parsed.references.prefix(256)) + Array(parsed.inReplyTo.prefix(16)),
             isProtected: isProtected)
@@ -68,6 +69,15 @@ struct RowBuilder {
     /// The first From address; an empty one when there is none.
     static func sender(_ parsed: MIMEMessage) -> Address {
         parsed.from.first ?? Address(name: nil, email: "")
+    }
+
+    /// A calendar part in the message's structure whose method makes it an invitation message, or
+    /// that names none (its body says): held as an invitation until its body is read and settles it.
+    static func mayBeInvitation(_ parts: [CalendarPartOutline]) -> Bool {
+        parts.contains { part in
+            guard let method = part.method else { return true }
+            return CalendarPart.invitationMethods.contains(method.trimmingCharacters(in: .whitespaces).uppercased())
+        }
     }
 
     /// From the headers alone: a mixed multipart, a message that is one file, or one that says it is

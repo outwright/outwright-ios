@@ -18,7 +18,13 @@ public actor FakeGraphServer {
     private var server: FakeHTTPServer?
     private(set) var port: UInt16 = 0
     private var folders: [(id: String, name: String)] = []
-    private var contacts: [(id: String, stored: Stored)] = []
+    var contacts: [(id: String, stored: Stored)] = []
+    /// Each contact's photo (`/photo/$value`), by contact id, and the statuses the next photo
+    /// uploads answer (`+Photos`).
+    var photos: [String: Data] = [:]
+    var photoFailures: [Int] = []
+    var editAfterPhoto: (key: String, value: String)?
+    var malformedRead = (afterPhoto: false, pending: false)
     private var counter = 0
     private var failures: [Int] = []
     private var dropNextPost = false
@@ -162,6 +168,9 @@ public actor FakeGraphServer {
         guard path.hasPrefix("/v1.0/") else { return FakeHTTPResponse(status: 404) }
         let parts = path.dropFirst("/v1.0/".count).split(separator: "/").map(String.init)
         if let answer = calendarState.handle(request, parts, query, port: port, dropPost: &dropNextPost) {
+            return answer
+        }
+        if let answer = photoRoute(request, parts) {
             return answer
         }
         switch (request.method, parts.count) {

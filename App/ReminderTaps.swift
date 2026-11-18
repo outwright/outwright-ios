@@ -14,9 +14,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let notification = response.notification.request
-        if notification.identifier.hasPrefix(NewMailPlan.identifierPrefix) {
+        if NewMailPlan.isNewMail(identifier: notification.identifier, userInfo: notification.content.userInfo) {
             if let request = MessageRequest(userInfo: notification.content.userInfo) {
-                Task { @MainActor in OutwrightApp.open(request) }
+                Task { @MainActor in
+                    // The tap may come before the app is in front: the store is taken back first,
+                    // since opening the message writes (read, its body).
+                    StoreGrace.sharing.cameToFront()
+                    OutwrightApp.open(request)
+                }
             }
         } else if let request = EventRequest(userInfo: notification.content.userInfo) {
             Task { @MainActor in OutwrightApp.open(request) }

@@ -45,4 +45,16 @@ extension Schema {
                 """)
         }
     }
+
+    /// contact-photos: a photo the owner gave or took away that a server keeping photos apart (Graph)
+    /// has not been sent yet (`photoPending`), and one the server did not take, kept as the owner's
+    /// (with `changeFailed`) until Retry or Discard (`photoFailed`).
+    static func registerContactPhotos(_ migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("contact-photos") { database in
+            try database.execute(sql: """
+                ALTER TABLE contact ADD COLUMN photoPending INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE contact ADD COLUMN photoFailed INTEGER NOT NULL DEFAULT 0;
+                """)
+        }
+    }
 }

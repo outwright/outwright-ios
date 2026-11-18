@@ -72,13 +72,48 @@ struct Cursor {
                 return out
             case UInt8(ascii: "("):
                 position += 1
-                out.append(.list(try values(depth: depth + 1)))
+                out.append(.list(try nested(depth: depth + 1)))
             case UInt8(ascii: "\""):
                 out.append(.string(try quoted()))
             case UInt8(ascii: "{"):
                 out.append(.string(try literal()))
             default:
                 out.append(.atom(try atom()))
+            }
+        }
+    }
+
+    /// The list whose `(` was just read. Deeper than the limit (a mail can nest its parts as deep
+    /// as it likes) it is read past and kept empty, so the rest of the response still counts.
+    private mutating func nested(depth: Int) throws(IMAPError) -> [IMAPValue] {
+        guard depth <= IMAPParser.maxDepth else {
+            try skipList()
+            return []
+        }
+        return try values(depth: depth)
+    }
+
+    /// Past the rest of a list whose `(` was just read, nested lists included, without recursion.
+    private mutating func skipList() throws(IMAPError) {
+        var open = 1
+        while open > 0 {
+            skipSpace()
+            guard let byte = current else {
+                throw .protocolViolation
+            }
+            switch byte {
+            case UInt8(ascii: "("):
+                position += 1
+                open += 1
+            case UInt8(ascii: ")"):
+                position += 1
+                open -= 1
+            case UInt8(ascii: "\""):
+                _ = try quoted()
+            case UInt8(ascii: "{"):
+                _ = try literal()
+            default:
+                _ = try atom()
             }
         }
     }

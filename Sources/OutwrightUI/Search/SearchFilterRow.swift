@@ -4,8 +4,8 @@
 import OutwrightStore
 import SwiftUI
 
-/// Over a list of mail in search: Filter (unread, flagged, attachments, any of them at once),
-/// Has attachments, and Older than 6 months.
+/// Over a list of mail in search: Filter (unread, flagged, any of them at once), Has attachments,
+/// and Older than 6 months.
 struct SearchFilterRow: View {
     @Bindable var model: SearchModel
 
@@ -13,11 +13,8 @@ struct SearchFilterRow: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 Menu {
-                    Toggle(isOn: $model.filter.unread) { ModuleLabel("Unread", systemImage: "envelope.badge") }
-                    Toggle(isOn: $model.filter.flagged) { ModuleLabel("Flagged", systemImage: "flag") }
-                    Toggle(isOn: $model.filter.attachments) {
-                        ModuleLabel("Has attachments", systemImage: Icons.attachment)
-                    }
+                    Toggle(isOn: $model.filter.unread) { ModuleLabel("Unread", systemImage: Icons.unread) }
+                    Toggle(isOn: $model.filter.flagged) { ModuleLabel("Flagged", systemImage: Icons.flagOutline) }
                 } label: {
                     HStack(spacing: 6) {
                         if model.filter.count > 0 {
@@ -58,7 +55,7 @@ private struct FilterCapsule: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(.body)
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(Theme.accent)
             .padding(.horizontal, 14)
             .padding(.vertical, 6)

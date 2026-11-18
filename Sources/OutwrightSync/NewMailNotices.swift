@@ -57,7 +57,21 @@ public enum NewMailPlan {
         return notices
     }
 
-    private static func sender(_ row: MessageRow, _ accountName: String) -> String {
+    /// What a new-mail notification carries for its tap: the account, and the message when it
+    /// names one (`MessageRequest(userInfo:)` reads it).
+    public static func userInfo(account: AccountID, message: MessageID?) -> [String: Any] {
+        var info: [String: Any] = ["account": account.raw.uuidString]
+        if let message { info["message"] = message.raw }
+        return info
+    }
+
+    /// Whether a tapped notification is about new mail: a local notice, or a push's (which carries
+    /// its subscription id, `s`).
+    public static func isNewMail(identifier: String, userInfo: [AnyHashable: Any]) -> Bool {
+        identifier.hasPrefix(identifierPrefix) || userInfo["s"] is String
+    }
+
+    static func sender(_ row: MessageRow, _ accountName: String) -> String {
         let name = (row.from.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !name.isEmpty { return name }
         let email = row.from.email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -68,6 +82,8 @@ public enum NewMailPlan {
 /// Where new-mail notices go: the phone's notifications.
 public protocol NewMailNotices: Sendable {
     func post(_ notices: [LocalMailNotice]) async
+    /// The number on the app icon.
+    func setBadge(_ count: Int) async
 }
 
 /// The notices as iOS local notifications, shown at once, in the order given. Outside an app bundle (a test run) there
@@ -85,10 +101,13 @@ public struct SystemNewMailNotices: NewMailNotices {
             // One sound for the lot: the last, newest notice's.
             if index == notices.count - 1 { content.sound = .default }
             content.threadIdentifier = notice.account.raw.uuidString
-            var info: [String: Any] = ["account": notice.account.raw.uuidString]
-            if let message = notice.message { info["message"] = message.raw }
-            content.userInfo = info
+            content.userInfo = NewMailPlan.userInfo(account: notice.account, message: notice.message)
             try? await center.add(UNNotificationRequest(identifier: notice.identifier, content: content, trigger: nil))
         }
+    }
+
+    public func setBadge(_ count: Int) async {
+        guard ["app", "appex"].contains(Bundle.main.bundleURL.pathExtension) else { return }
+        try? await UNUserNotificationCenter.current().setBadgeCount(count)
     }
 }

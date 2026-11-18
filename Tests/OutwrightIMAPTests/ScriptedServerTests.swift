@@ -51,11 +51,11 @@ private let quick = IMAPClient.Timing(perRead: .seconds(2), response: .seconds(2
         }
         defer { listener.stop() }
         let port = try await listener.start()
-        let start = ContinuousClock.now
+        let start = SuspendingClock.now
         await #expect(throws: IMAPError.net(.timeout)) {
             _ = try await IMAPClient.connect(endpoint(port), timing: IMAPClient.Timing(perRead: .seconds(5), response: .seconds(1)))
         }
-        #expect(ContinuousClock.now - start < .seconds(4))
+        #expect(SuspendingClock.now - start < .seconds(4))
     }
 
     @Test func protocolViolationBreaksTheClient() async throws {
@@ -120,11 +120,11 @@ private let quick = IMAPClient.Timing(perRead: .seconds(2), response: .seconds(2
         defer { listener.stop() }
         let client = try await IMAPClient.connect(endpoint(port), timing: quick)
         try await client.login(user: "jk@example.org", password: Secret("secret"))
-        let start = ContinuousClock.now
+        let start = SuspendingClock.now
         let idle = Task { try await client.idle(timeout: .seconds(60)) }
         idle.cancel()
         #expect(try await idle.value == false)
-        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(SuspendingClock.now - start < .seconds(5))
         await client.logout()
     }
 
@@ -139,10 +139,10 @@ private let quick = IMAPClient.Timing(perRead: .seconds(2), response: .seconds(2
         try await client.login(user: "jk@example.org", password: Secret("secret"))
         let idle = Task { try await client.idle(timeout: .seconds(60)) }
         try await Task.sleep(for: .milliseconds(300))
-        let start = ContinuousClock.now
+        let start = SuspendingClock.now
         idle.cancel()
         _ = await idle.result
-        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(SuspendingClock.now - start < .seconds(5))
         await #expect(throws: IMAPError.net(.closed)) { _ = try await client.listFolders() }
     }
 
@@ -170,9 +170,9 @@ private let quick = IMAPClient.Timing(perRead: .seconds(2), response: .seconds(2
         let timing = IMAPClient.Timing(perRead: .seconds(2), response: .seconds(2), idleGrace: .seconds(1))
         let client = try await IMAPClient.connect(endpoint(port), timing: timing)
         try await client.login(user: "jk@example.org", password: Secret("secret"))
-        let start = ContinuousClock.now
+        let start = SuspendingClock.now
         await #expect(throws: IMAPError.net(.timeout)) { _ = try await client.idle(timeout: .milliseconds(300)) }
-        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(SuspendingClock.now - start < .seconds(5))
     }
 
     /// What arrives during one IDLE is capped in total, as it is for any other command.
@@ -206,10 +206,10 @@ private let quick = IMAPClient.Timing(perRead: .seconds(2), response: .seconds(2
         try await client.login(user: "jk@example.org", password: Secret("secret"))
         let idle = Task { try await client.idle(timeout: .seconds(60)) }
         try await Task.sleep(for: .milliseconds(300))
-        let start = ContinuousClock.now
+        let start = SuspendingClock.now
         idle.cancel()
         _ = await idle.result
-        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(SuspendingClock.now - start < .seconds(5))
     }
 
     /// The two seconds after a cancel are for the answer to DONE: a server slow with its `+`
@@ -257,9 +257,9 @@ private let quick = IMAPClient.Timing(perRead: .seconds(2), response: .seconds(2
         defer { listener.stop() }
         let client = try await IMAPClient.connect(endpoint(port), timing: IMAPClient.Timing(perRead: .seconds(1)))
         try await client.login(user: "jk@example.org", password: Secret("secret"))
-        let start = ContinuousClock.now
+        let start = SuspendingClock.now
         await #expect(throws: IMAPError.self) { _ = try await client.idle(timeout: .seconds(60)) }
-        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(SuspendingClock.now - start < .seconds(5))
     }
 
     // MARK: - CONDSTORE and QRESYNC
@@ -408,6 +408,30 @@ private let quick = IMAPClient.Timing(perRead: .seconds(2), response: .seconds(2
         try await client.login(user: "jk@example.org", password: Secret("secret"))
         #expect(await client.resyncMode == ResyncMode.none)
         #expect(try await client.listFolders().isEmpty)
+        await client.logout()
+    }
+
+    // A mail can nest its parts deeper than any limit the parser keeps, and name many parts in
+    // literals: its summary still comes, and so do the others fetched with it.
+    @Test func aMessageWithAHugeBodyStructureDoesNotStopTheList() async throws {
+        let leaf = "(\"text\" \"plain\" NIL NIL NIL \"7bit\" 1 1)"
+        let deep = String(repeating: "(", count: 60) + leaf + String(repeating: " \"mixed\")", count: 60)
+        let named = (0..<200).map { _ in "(\"text\" \"plain\" (\"name\" {3}\r\nabc) NIL NIL \"7bit\" 1 1)" }
+        let wide = "(" + named.joined() + " \"mixed\")"
+        let (listener, port) = try await scripted(greeting: ["* OK [CAPABILITY IMAP4rev1] Ready"]) { tag, line in
+            guard line.contains("UID FETCH") else { return ["\(tag) OK done"] }
+            return [
+                "* 1 FETCH (UID 1 FLAGS () RFC822.SIZE 1 BODYSTRUCTURE \(deep) BODY[HEADER] \"Subject: a\")",
+                "* 2 FETCH (UID 2 FLAGS () RFC822.SIZE 1 BODYSTRUCTURE \(wide) BODY[HEADER] \"Subject: b\")",
+                "* 3 FETCH (UID 3 FLAGS () RFC822.SIZE 1 BODYSTRUCTURE \(leaf) BODY[HEADER] \"Subject: c\")",
+                "\(tag) OK fetched"
+            ]
+        }
+        defer { listener.stop() }
+        let client = try await IMAPClient.connect(endpoint(port), timing: quick)
+        try await client.login(user: "jk@example.org", password: Secret("secret"))
+        let summaries = try await client.summaries(uids: [1, 2, 3])
+        #expect(summaries.map(\.uid) == [1, 2, 3])
         await client.logout()
     }
 }

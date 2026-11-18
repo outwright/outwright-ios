@@ -15,16 +15,21 @@ public struct PushRegistration: Codable, Sendable {
     public var method: PushMethodKind
     /// The method's handle for the server side (a JMAP subscription id, a METADATA entry).
     public var handle: String
+    /// For an addressed method, the address its sender posts to.
+    public var address: URL?
 
-    public init(account: Account, relay: RelaySubscription, method: PushMethodKind, handle: String) {
+    public init(
+        account: Account, relay: RelaySubscription, method: PushMethodKind, handle: String, address: URL? = nil
+    ) {
         self.account = account
         self.relay = relay
         self.method = method
         self.handle = handle
+        self.address = address
     }
 
     private enum CodingKeys: String, CodingKey {
-        case account, relay, method, handle
+        case account, relay, method, handle, address
         /// What a registry written before push methods called the handle; those were all JMAP.
         case jmapID
     }
@@ -40,6 +45,7 @@ public struct PushRegistration: Codable, Sendable {
             method = .jmap
             handle = try container.decode(String.self, forKey: .jmapID)
         }
+        address = try container.decodeIfPresent(URL.self, forKey: .address)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -48,7 +54,17 @@ public struct PushRegistration: Codable, Sendable {
         try container.encode(relay, forKey: .relay)
         try container.encode(method, forKey: .method)
         try container.encode(handle, forKey: .handle)
+        try container.encodeIfPresent(address, forKey: .address)
     }
+}
+
+/// An address handed out for an account and not yet checked: its relay subscription is pending.
+/// Kept in the vault until the check passes, the address is removed or the account goes.
+public struct PushIssued: Codable, Sendable {
+    public var account: Account
+    public var relay: RelaySubscription
+    public var method: PushMethodKind
+    public var address: PushAddress
 }
 
 /// The relay device and the APNs token it was last given. Kept only in the vault.
@@ -122,6 +138,47 @@ public final class PushRegistry: Sendable {
     func remove(subscriptionID: String) throws(SyncError) {
         try vault.remove(Self.keysKey(subscriptionID))
         try coordinated(writing: true) { $0[subscriptionID] = nil }
+    }
+
+    /// The address issued for the account and not yet checked.
+    func issued(for account: AccountID) -> PushIssued? {
+        guard let data = try? vault.data(for: Self.issuedKey(account)) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(PushIssued.self, from: data)
+    }
+
+    func saveIssued(_ issued: PushIssued) throws(SyncError) {
+        guard let data = try? JSONEncoder().encode(issued) else {
+            throw .store("The push address could not be written")
+        }
+        try vault.set(data, for: Self.issuedKey(issued.account.id))
+    }
+
+    func removeIssued(for account: AccountID) throws(SyncError) {
+        try vault.remove(Self.issuedKey(account))
+    }
+
+    /// Whether the account's address was dropped since it was last handed out (its channel or
+    /// subscription is gone): the settings say so.
+    func isDropped(_ account: AccountID) -> Bool {
+        ((try? vault.data(for: Self.droppedKey(account))) ?? nil) != nil
+    }
+
+    func setDropped(_ dropped: Bool, for account: AccountID) throws(SyncError) {
+        if dropped {
+            try vault.set(Data([1]), for: Self.droppedKey(account))
+        } else {
+            try vault.remove(Self.droppedKey(account))
+        }
+    }
+
+    private static func droppedKey(_ account: AccountID) -> String {
+        "dropped.\(account.raw.uuidString)"
+    }
+
+    private static func issuedKey(_ account: AccountID) -> String {
+        "issued.\(account.raw.uuidString)"
     }
 
     func device() throws(SyncError) -> PushDeviceRecord? {

@@ -17,10 +17,15 @@ enum Conversation {
     static func apply(
         _ rows: [MessageRow], store: MailStore, _ action: (MessageID) -> MailAction
     ) throws(StoreError) {
+        try apply(rows.map { action($0.id) }, store: store)
+    }
+
+    /// Applies each action; every one is tried, and the first failure is thrown after.
+    static func apply(_ actions: [MailAction], store: MailStore) throws(StoreError) {
         var firstError: StoreError?
-        for row in rows {
+        for action in actions {
             do {
-                try store.apply(action(row.id))
+                try store.apply(action)
             } catch {
                 firstError = firstError ?? error
             }

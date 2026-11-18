@@ -236,6 +236,47 @@ extension MailStore {
         #expect(try f.store.contact(id)?.changeFailed == true)
     }
 
+    /// A change given up starts its count of tries again, so what is sent next gets all of them.
+    @Test func failedChangeStartsTheCountAgain() throws {
+        let f = try ContactFixture()
+        let id = try f.store.createContact(details("Ny", "Person"), in: f.book.id)
+        let rev = try #require(try f.store.pendingContactChanges(f.account).first?.revision)
+        for _ in 0..<3 { _ = try f.store.contactChangeAttempted(id, revision: rev) }
+        try f.store.contactChangeFailed(id, revision: rev)
+        #expect(try f.store.contactChangeAttempted(id, revision: rev) == 1)
+    }
+
+    /// Apply again on a conflict sends a photo the server did not take again: it is the owner's
+    /// still, and a photo read from the server doesn't replace it.
+    @Test func applyAgainSendsAGivenUpPhotoAgain() throws {
+        let f = try ContactFixture()
+        try f.remote("/1", details("Bo", "Berg"))
+        let id = try #require(try f.store.contacts(in: nil, matching: nil).first?.id)
+        let mine = Data([1, 2, 3])
+        try f.store.updateContact(id, details("Bo", "Own"), photo: mine)
+        let rev = try #require(try f.store.pendingContactChanges(f.account).first?.revision)
+        try f.store.photoGivenUp(id, revision: rev)
+        try f.store.contactChangeConflicted(
+            id, server: (etag: "e7", vcard: Data("s".utf8), details: details("Bo", "Server")))
+        try f.store.applyConflictAgain(id)
+        #expect(try f.store.contact(id)?.photoFailed == false)
+        try f.store.setServerPhoto(id, Data([9]))
+        #expect(try f.store.contact(id)?.photo == mine)
+    }
+
+    /// A deleted contact's photo no longer matters: a failed delete shows as one, not as a photo.
+    @Test func aFailedDeleteIsNoPhotoFailure() throws {
+        let f = try ContactFixture()
+        let id = try sent(f)
+        let rev = try #require(try f.store.pendingContactChanges(f.account).first?.revision)
+        try f.store.photoGivenUp(id, revision: rev)
+        try f.store.deleteContact(id)
+        let delete = try #require(try f.store.pendingContactChanges(f.account).first?.revision)
+        try f.store.contactChangeFailed(id, revision: delete)
+        let contact = try #require(try f.store.contact(id))
+        #expect(contact.changeFailed && !contact.photoFailed)
+    }
+
     @Test func removedBookKeepsContactsWithQueuedChanges() throws {
         let f = try ContactFixture()
         try f.remote("/book/a.vcf", details("Bo", "Berg"))

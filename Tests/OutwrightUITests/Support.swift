@@ -6,6 +6,7 @@ import OutwrightMIME
 import OutwrightModel
 import OutwrightStore
 import OutwrightSync
+@testable import OutwrightUI
 
 /// An in-memory store with accounts and their standard folders, and a way to add synthetic mail.
 struct Mailbox {
@@ -111,17 +112,28 @@ func message(subject: String, text: String) throws -> Data {
         includeBcc: false)
 }
 
-/// Reminders that go nowhere; the last set handed over is kept, and the permission questions counted.
+/// Reminders that go nowhere; the last set handed over is kept, and the handovers and permission
+/// questions counted.
 actor KeptReminders: Reminders {
     private(set) var last: [PlannedReminder] = []
     private(set) var questions = 0
+    /// How many times a set was handed over.
+    private(set) var handovers = 0
+    private let allowed: Bool
 
-    func authorization() async -> Bool { true }
+    init(allowed: Bool = true) {
+        self.allowed = allowed
+    }
+
+    func authorization() async -> Bool { allowed }
     func requestAuthorization() async -> Bool {
         questions += 1
-        return true
+        return allowed
     }
-    func replace(_ planned: [PlannedReminder]) async { last = planned }
+    func replace(_ planned: [PlannedReminder]) async {
+        last = planned
+        handovers += 1
+    }
 }
 
 /// The only way the UI tests build a coordinator: discovery asks a resolver with no answers and (unless
@@ -130,10 +142,15 @@ func offlineSync(
     store: MailStore, secrets: any SecretStore,
     backoff: ClosedRange<Duration> = .seconds(2) ... .seconds(60), resolver: any DoHResolving = FixedDoH(answers: [:]),
     probe: @escaping @Sendable (URL) async -> URL? = { _ in nil }, phoneContacts: (any PhoneContacts)? = nil,
-    reminders: KeptReminders = KeptReminders()
+    reminders: KeptReminders = KeptReminders(), available: Set<ProviderID>? = nil
 ) -> SyncCoordinator {
     SyncCoordinator(
-        store: store, secrets: secrets, backoff: backoff, resolver: resolver,
+        store: store, secrets: secrets, available: available, backoff: backoff, resolver: resolver,
         davSession: URLSession(configuration: .ephemeral), probe: probe, phoneContacts: phoneContacts,
         reminders: reminders)
+}
+
+/// What a message being written shows: the body, and the quoted original under it.
+@MainActor func shownText(_ model: ComposeModel) -> String {
+    String(model.body.characters) + (model.quoted?.shown ?? "")
 }

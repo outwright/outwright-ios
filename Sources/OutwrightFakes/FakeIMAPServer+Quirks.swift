@@ -28,6 +28,13 @@ extension FakeIMAPServer {
         refusesStores = true
     }
 
+    /// The message `uid` in `path` is never sent whole (its header and summary still are).
+    public func withholdBody(of uid: UInt32, in path: String) {
+        let key = Self.key(path)
+        guard let index = folders[key]?.messages.firstIndex(where: { $0.uid == uid }) else { return }
+        folders[key]?.messages[index].bodyWithheld = true
+    }
+
     /// From now on SELECT leaves out `OK [UIDNEXT n]`.
     public func omitUIDNext() {
         omitsUIDNext = true
@@ -42,6 +49,28 @@ extension FakeIMAPServer {
         if loginDelay > .zero, text.contains(" LOGIN ") {
             try? await Task.sleep(for: loginDelay)
         }
+        while selectIsHeld(text), !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    /// From now on a SELECT or EXAMINE of `path` is not answered until `releaseSelects` (a folder
+    /// so large its sync takes as long as a test likes).
+    public func holdSelects(of path: String) {
+        heldSelects.insert(path.uppercased())
+    }
+
+    /// The held SELECTs are answered, and later ones at once.
+    public func releaseSelects() {
+        heldSelects = []
+    }
+
+    /// Whether `text`, a command in capitals, selects a folder held by `holdSelects`.
+    private func selectIsHeld(_ text: String) -> Bool {
+        let words = text.split(separator: " ", maxSplits: 3).map(String.init)
+        guard words.count >= 3, words[1] == "SELECT" || words[1] == "EXAMINE" else { return false }
+        let path = String(words[2].filter { $0 != "\"" })
+        return heldSelects.contains(path)
     }
 
     /// SELECT and EXAMINE, with or without UIDNEXT.

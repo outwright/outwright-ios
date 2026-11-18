@@ -14,7 +14,7 @@ import OutwrightMIME
 public actor IMAPClient {
     static let maxResponse = 72 << 20
     static let maxCommandTotal = 128 << 20
-    static let maxLiterals = 64
+    static let maxLiterals = 1024
     static let maxUntagged = 200_000
     static let fetchChunk = 100
     static let storeChunk = 500
@@ -164,13 +164,17 @@ public actor IMAPClient {
         }
     }
 
+    /// What a folder list fetches of each message (BODYSTRUCTURE for the calendar parts it names).
+    static let summaryItems =
+        "(UID FLAGS INTERNALDATE RFC822.SIZE BODYSTRUCTURE BODY.PEEK[HEADER] BODY.PEEK[TEXT]<0.4096>)"
+
     public func summaries(uids: [UInt32]) async throws(IMAPError) -> [MessageSummary] {
         try await perform { () async throws(IMAPError) in
             var found: [UInt32: MessageSummary] = [:]
             for chunk in Self.chunks(uids, size: Self.fetchChunk) {
                 let completion = try await run([
                     .word("UID FETCH"), .word(Self.set(chunk)),
-                    .word("(UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER] BODY.PEEK[TEXT]<0.4096>)")
+                    .word(Self.summaryItems)
                 ])
                 let wanted = Set(chunk)
                 for items in Self.fetched(completion.untagged) {

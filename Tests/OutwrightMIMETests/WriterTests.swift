@@ -23,6 +23,28 @@ import Testing
             messageID: "out1@example.org")
     }
 
+    /// Pictures the HTML shows by `cid:` travel with it in `multipart/related` (RFC 2387); files stay
+    /// attachments beside it.
+    @Test func inlinePicturesGoWithTheHTMLInARelatedPart() throws {
+        var message = outgoing()
+        message.htmlBody = "<p>Se <img src=\"cid:pic@example.org\"></p>"
+        message.attachments.append(
+            Attachment(filename: "pic.png", mimeType: "image/png", contentID: "pic@example.org", isInline: true,
+                       data: Data([1, 2, 3])))
+        let data = try MIMEWriter.write(message, includeBcc: false)
+        let written = String(bytes: data, encoding: .utf8) ?? ""
+        let related = try #require(written.range(of: "Content-Type: multipart/related"))
+        let picture = try #require(written.range(of: "Content-ID: <pic@example.org>"))
+        let file = try #require(written.range(of: "Content-Disposition: attachment"))
+        #expect(written.hasPrefix("Date:") && written.contains("Content-Type: multipart/mixed"))
+        #expect(related.upperBound < picture.lowerBound)
+        #expect(picture.upperBound < file.lowerBound)
+        let read = try MIMEParser.parse(data)
+        #expect(read.htmlBody?.contains("cid:pic@example.org") == true)
+        #expect(read.attachments.map(\.filename).sorted() == ["pic.png", "räkning.pdf"])
+        #expect(read.attachments.first { $0.contentID == "pic@example.org" }?.isInline == true)
+    }
+
     /// A text attachment says its charset, so its UTF-8 arrives as written (RFC 2046 4.1.2).
     @Test func aUTF8TextAttachmentSaysItsCharset() throws {
         var message = outgoing()

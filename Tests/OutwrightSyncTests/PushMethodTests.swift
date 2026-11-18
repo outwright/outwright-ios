@@ -150,14 +150,6 @@ private func withMethods(
         }
     }
 
-    @Test func theProbeSignsInWithTheProvidersTokens() async throws {
-        let offering = StandInMethod(kind: PushMethodKind(rawValue: "only"), offering: true)
-        try await withMethods([offering], oauth: true) { controller, registry, account in
-            try await controller.enable(account)
-            #expect(registry.registration(for: account.id) != nil)
-        }
-    }
-
     @Test func noMethodOffersMeansNoPush() async throws {
         let refusing = StandInMethod(kind: PushMethodKind(rawValue: "first"), offering: false)
         try await withMethods([refusing]) { controller, registry, account in

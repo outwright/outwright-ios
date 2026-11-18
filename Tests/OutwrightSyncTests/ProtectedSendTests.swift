@@ -52,6 +52,21 @@ private func syncer(_ h: Harness, _ protections: [any MailProtection]) -> Accoun
         return id
     }
 
+    /// A send refused while it is made ready is noted by its refusal, never as sent.
+    @Test func aRefusalWhileMakingReadyIsNoted() async throws {
+        try await withHarness { h in
+            let journal = DiagnosticsJournal(fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("outwright-protected-\(UUID().uuidString).json"))
+            let s = AccountSyncer(
+                account: h.account, store: h.store, credentials: CredentialProvider(secrets: h.secrets),
+                now: { fixedNow }, journal: journal)
+            try await s.syncFolders()
+            _ = try queued(h, requirement())
+            try? await s.runActions()
+            #expect(journal.entries().map(\.event) == [.send(account: h.account.id, code: "send.protectionUnavailable")])
+        }
+    }
+
     @Test func queuedProtectedDraftWithoutHookIsRefused() async throws {
         try await withHarness { h in
             let s = syncer(h, [])
@@ -309,6 +324,24 @@ private func syncer(_ h: Harness, _ protections: [any MailProtection]) -> Accoun
             let saved = try #require(await server.messages(in: "Drafts").first)
             #expect(saved.data == Data("X".utf8))
             #expect(try h.store.body(id) == data)
+        }
+    }
+
+    @Test func encryptUnsignedDraftIsSavedProtected() async throws {
+        var hook = FakeProtection()
+        hook.draft = Data("X".utf8)
+        let server = await standardServer()
+        try await withHarness(server) { h in
+            let s = syncer(h, [hook])
+            try await s.syncFolders()
+            let id = try localDraft(h, uid: 0, data: try draftData())
+            var unsigned = requirement()
+            unsigned.kind = .encryptUnsigned
+            try h.store.setProtection(unsigned, for: id)
+            try h.store.apply(.saveDraft(id))
+            try await s.runActions()
+            let saved = try #require(await server.messages(in: "Drafts").first)
+            #expect(saved.data == Data("X".utf8))
         }
     }
 

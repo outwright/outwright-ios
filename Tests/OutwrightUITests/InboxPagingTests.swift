@@ -21,7 +21,7 @@ import Testing
             _ = try box.add(anna, uid: UInt32(uid), date: Date(timeIntervalSince1970: 1_800_000_000 - Double(uid) * 60))
         }
         var asked = 0
-        let model = InboxModel(store: box.store, scope: .allAccounts, olderFetcher: { _ in asked += 1; return true })
+        let model = InboxModel(store: box.store, scope: .allAccounts, olderFetcher: { _ in asked += 1; return .more })
         #expect(count(model) == InboxModel.page)
         await model.loadMore()
         #expect(count(model) == InboxModel.page + 50)
@@ -46,7 +46,7 @@ import Testing
                 hasBody: false, threadCount: 1)
             _ = try? store.upsert([row])
             older -= 1
-            return older > 7
+            return older > 7 ? .more : .noneLeft
         })
         await model.loadMore()
         #expect(count(model) == 2)
@@ -62,12 +62,24 @@ import Testing
         var box = try Mailbox()
         let anna = try box.addAccount("anna@example.org")
         var asked = 0
-        let model = InboxModel(store: box.store, scope: .allAccounts, olderFetcher: { _ in asked += 1; return false })
+        let model = InboxModel(store: box.store, scope: .allAccounts, olderFetcher: { _ in asked += 1; return .noneLeft })
         await model.loadMore()
         await model.loadMore()
         #expect(asked == 1)
         model.scope = .folder(try box.folder(anna, .sent).id)
         await model.loadMore()
         #expect(asked == 2, "a new list may have older mail again")
+    }
+
+    @Test func aFailedFetchIsNotAskedAgainUntilTheEndIsReachedAgain() async throws {
+        var box = try Mailbox()
+        _ = try box.addAccount("anna@example.org")
+        var asked = 0
+        let model = InboxModel(store: box.store, scope: .allAccounts, olderFetcher: { _ in asked += 1; return .failed })
+        await model.loadMore()
+        #expect(asked == 1)
+        #expect(model.limit == InboxModel.page, "no page more, so the end of the list does not ask again by itself")
+        await model.loadMore()
+        #expect(asked == 2, "reached again, the end asks again")
     }
 }

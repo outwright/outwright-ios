@@ -8,18 +8,71 @@ import SwiftUI
 /// The formatting the composer offers (bold, italic, underline, links) as HTML and back.
 /// Bold and italic are kept as `inlinePresentationIntent`, underline as `underlineStyle`.
 enum RichText {
-    /// HTML for a body with any formatting; nil for plain text (sent as text alone).
-    static func html(_ text: AttributedString) -> String? {
+    /// HTML for a body with any formatting (bulleted and numbered lines as `<ul>` and `<ol>`); nil
+    /// for plain text (sent as text alone) unless `always`.
+    static func html(_ text: AttributedString, always: Bool = false) -> String? {
+        let lines = lineRanges(text)
         let formatted = text.runs.contains { run in
             run.inlinePresentationIntent != nil || run.underlineStyle != nil || run.link != nil
-        }
-        guard formatted else { return nil }
+        } || lines.contains { ListEditing.marker(of: String(text[$0].characters)) != nil }
+        guard formatted || always else { return nil }
         var out = "<div>"
+        var list: ListEditing.Kind?
+        var afterLine = false
+        for range in lines {
+            let line = text[range]
+            if let mark = ListEditing.marker(of: String(line.characters)) {
+                if list != mark.kind {
+                    out += list.map(closing) ?? ""
+                    out += mark.kind == .bullet ? "<ul>" : mark.number == 1 ? "<ol>" : "<ol start=\"\(mark.number)\">"
+                    list = mark.kind
+                }
+                let chars = line.characters
+                let start =
+                    chars.index(chars.startIndex, offsetBy: mark.length, limitedBy: chars.endIndex) ?? chars.endIndex
+                out += "<li>" + inline(AttributedString(line[start...])) + "</li>"
+                afterLine = false
+            } else {
+                if let open = list {
+                    out += closing(open)
+                    list = nil
+                } else if afterLine {
+                    out += "<br>"
+                }
+                out += inline(AttributedString(line))
+                afterLine = true
+            }
+        }
+        return out + (list.map(closing) ?? "") + "</div>"
+    }
+
+    private static func closing(_ kind: ListEditing.Kind) -> String {
+        kind == .bullet ? "</ul>" : "</ol>"
+    }
+
+    /// The ranges of the text's lines, without their line breaks (at least one, maybe empty).
+    private static func lineRanges(_ text: AttributedString) -> [Range<AttributedString.Index>] {
+        var ranges: [Range<AttributedString.Index>] = []
+        var start = text.startIndex
+        var index = text.startIndex
+        let chars = text.characters
+        while index < chars.endIndex {
+            if chars[index] == "\n" {
+                ranges.append(start..<index)
+                start = chars.index(after: index)
+            }
+            index = chars.index(after: index)
+        }
+        ranges.append(start..<text.endIndex)
+        return ranges
+    }
+
+    /// One line's runs as HTML: bold, italic, underline and links.
+    private static func inline(_ text: AttributedString) -> String {
+        var out = ""
         for run in text.runs {
             // Repeated spaces would be collapsed by a reader; every second one is a no-break space.
-            var piece = escape(String(text[run.range].characters))
-                .replacingOccurrences(of: "  ", with: " &nbsp;")
-                .replacingOccurrences(of: "\n", with: "<br>")
+            var piece = escape(String(text[run.range].characters)).replacingOccurrences(of: "  ", with: " &nbsp;")
             if let intent = run.inlinePresentationIntent {
                 if intent.contains(.stronglyEmphasized) { piece = "<b>\(piece)</b>" }
                 if intent.contains(.emphasized) { piece = "<i>\(piece)</i>" }
@@ -30,7 +83,7 @@ enum RichText {
             }
             out += piece
         }
-        return out + "</div>"
+        return out
     }
 
     static func escape(_ text: String) -> String {
@@ -69,15 +122,33 @@ enum RichText {
         var result = AttributedString()
         var style = Style()
         var rest = Substring(html.prefix(1_000_000))
+        // After a list a line break is owed, given only when text follows.
+        var owesBreak = false
+        func add(_ piece: AttributedString) {
+            guard !piece.characters.isEmpty else { return }
+            if owesBreak { result += AttributedString("\n") }
+            owesBreak = false
+            result += piece
+        }
         while !rest.isEmpty {
             guard let open = rest.firstIndex(of: "<") else {
-                result += style.piece(rest)
+                add(style.piece(rest))
                 break
             }
-            result += style.piece(rest[..<open])
+            add(style.piece(rest[..<open]))
             guard let close = rest[open...].firstIndex(of: ">") else { break }
-            if style.apply(String(rest[rest.index(after: open)..<close])) {
+            switch style.apply(String(rest[rest.index(after: open)..<close])) {
+            case .none:
+                break
+            case .lineBreak:
                 result += AttributedString("\n")
+                owesBreak = false
+            case .item(let mark):
+                if let last = result.characters.last, last != "\n" { result += AttributedString("\n") }
+                owesBreak = false
+                result += AttributedString(mark)
+            case .listEnd:
+                owesBreak = true
             }
             rest = rest[rest.index(after: close)...]
         }
@@ -94,14 +165,42 @@ enum RichText {
         var italic = 0
         var underline = 0
         var link: URL?
+        /// The lists open, innermost last: numbered ones with their next number. At most 8 deep.
+        var lists: [Int?] = []
 
-        /// Takes a tag in; true when it breaks the line.
-        mutating func apply(_ raw: String) -> Bool {
+        /// Takes a tag in, and says what it adds to the text.
+        mutating func apply(_ raw: String) -> TagEffect {
             let tag = raw.lowercased()
             if tag.hasPrefix("a ") {
                 link = Self.href(raw)
-                return false
+                return .none
             }
+            if tag == "ul" || tag == "ol" || tag.hasPrefix("ol ") {
+                guard lists.count < 8 else { return .none }
+                lists.append(tag == "ul" ? nil : Self.start(tag))
+                return .none
+            }
+            if tag == "/ul" || tag == "/ol" {
+                return lists.popLast() == nil ? .none : .listEnd
+            }
+            if tag == "li" || tag.hasPrefix("li ") {
+                guard let last = lists.indices.last else { return .item(ListEditing.bullet) }
+                guard let number = lists[last] else { return .item(ListEditing.bullet) }
+                lists[last] = number + 1
+                return .item("\(number). ")
+            }
+            return plain(tag) ? .lineBreak : .none
+        }
+
+        /// The number an `<ol>` starts at.
+        static func start(_ tag: String) -> Int {
+            guard let found = tag.range(of: "start=\"") else { return 1 }
+            let digits = tag[found.upperBound...].prefix { $0.isASCII && $0.isNumber }.prefix(3)
+            return Int(digits) ?? 1
+        }
+
+        /// Takes a formatting tag in; true when it breaks the line.
+        private mutating func plain(_ tag: String) -> Bool {
             switch tag {
             case "b", "strong": bold += 1
             case "/b", "/strong": bold = max(0, bold - 1)
@@ -138,4 +237,9 @@ enum RichText {
             return url
         }
     }
+}
+
+/// What a tag read back from a draft's HTML adds to the text.
+private enum TagEffect {
+    case none, lineBreak, item(String), listEnd
 }

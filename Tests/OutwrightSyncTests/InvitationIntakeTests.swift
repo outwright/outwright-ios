@@ -192,6 +192,38 @@ private func withIntake(
         }
     }
 
+    @Test func anUpdateThatArrivesWithASyncOfTheInboxIsTakenInUnopened() async throws {
+        try await withIntake { h, _ in
+            try await h.receive(invitationMail(invite()))
+            try await h.cal.syncer().runChanges()
+            await h.mail.imap.deliver(
+                invitationMail(invite(sequence: 1, hours: 48, stamp: "20261102T080000Z")), to: "INBOX")
+            let inbox = try #require(try h.store.folders(h.account.id).first { $0.kind == .inbox })
+            try await h.syncer().sync(inbox.id)
+            let events = try h.events()
+            #expect(events.count == 1)
+            #expect(events.first?.occurrence.start == fixedNow.addingTimeInterval(48 * 3_600), "the meeting moved")
+        }
+    }
+
+    // An invitation whose body the server never sends holds back neither the older ones nor the
+    // sync: the update behind it still reaches the calendar, and the sync of the Inbox succeeds.
+    @Test func anInvitationWhoseBodyNeverComesHoldsBackNeitherTheOthersNorTheSync() async throws {
+        try await withIntake { h, _ in
+            try await h.receive(invitationMail(invite()))
+            try await h.cal.syncer().runChanges()
+            await h.mail.imap.deliver(
+                invitationMail(invite(sequence: 1, hours: 48, stamp: "20261102T080000Z")), to: "INBOX")
+            let broken = await h.mail.imap.deliver(
+                invitationMail(invite(sequence: 2, hours: 72, stamp: "20261103T080000Z")), to: "INBOX")
+            await h.mail.imap.withholdBody(of: broken, in: "INBOX")
+            let inbox = try #require(try h.store.folders(h.account.id).first { $0.kind == .inbox })
+            try await h.syncer().sync(inbox.id)
+            let events = try h.events()
+            #expect(events.first?.occurrence.start == fixedNow.addingTimeInterval(48 * 3_600), "the meeting moved")
+        }
+    }
+
     @Test func anUpdateRecordsWhetherTheTimeMoved() async throws {
         try await withIntake { h, _ in
             let first = try await h.receive(invitationMail(invite()))
@@ -595,8 +627,6 @@ private func withIntake(
     @Test func headerResyncKeepsTheInvitationFlag() async throws {
         try await withIntake(calendars: []) { h, _ in
             let row = try await h.receive(invitationMail(invite()))
-            // The headers alone do not show the multipart's calendar part; the whole body did.
-            #expect(row.isInvitation == false)
             #expect(try h.store.message(row.id)?.isInvitation == true)
             var headers = try #require(try h.store.message(row.id))
             headers.isInvitation = false

@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-/// The text a new-mail notification shows once a probe has found the mail: one message by its
-/// sender and subject, several by their count and the newest.
+public import OutwrightModel
+
+/// The text a push's new-mail notification shows: one message by its sender and subject, several
+/// by their count and the newest.
 public struct NewMailNotice: Sendable, Equatable {
     public var title: String
     public var body: String
@@ -12,22 +14,21 @@ public struct NewMailNotice: Sendable, Equatable {
         self.body = body
     }
 
-    /// Nil when the probe found nothing to show: the notification keeps its generic text.
-    /// `accountName` stands in for a sender without a name; `many` words "N new messages";
-    /// `protectedBody` is what a protected message shows in place of its subject.
+    /// The words for the rows a push's Inbox update brought; nil for none. The newest (highest
+    /// UID) speaks for several. A protected message's subject is never shown: `protectedBody` is.
     public init?(
-        _ result: ProbeResult, accountName: String, protectedBody: String = NewMailPlan.encryptedBody,
+        _ rows: [MessageRow], accountName: String, protectedBody: String = NewMailPlan.encryptedBody,
         many: (Int) -> String
     ) {
-        guard case .mail(let mail, let count) = result, let newest = mail.first, count > 0 else {
+        guard let newest = rows.max(by: { $0.uid < $1.uid }) else {
             return nil
         }
-        let sender = newest.sender.isEmpty ? accountName : newest.sender
+        let sender = NewMailPlan.sender(newest, accountName)
         let subject = newest.isProtected ? protectedBody : newest.subject
-        if count == 1 {
+        if rows.count == 1 {
             self.init(title: sender, body: subject)
         } else {
-            self.init(title: many(count), body: "\(sender): \(subject)")
+            self.init(title: many(rows.count), body: "\(sender): \(subject)")
         }
     }
 }

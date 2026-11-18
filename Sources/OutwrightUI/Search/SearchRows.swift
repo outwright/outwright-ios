@@ -7,6 +7,7 @@ import SwiftUI
 
 /// A person in the results: avatar, name (matches in bold), address or phone, and the card button.
 struct SearchPersonRow: View {
+    @ScaledMetric(relativeTo: .title3) private var cardButton: CGFloat = 44
     let person: SearchPerson
     let query: String
     let choose: () -> Void
@@ -27,10 +28,10 @@ struct SearchPersonRow: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("search.result")
             Button(action: openCard) {
-                Image(systemName: "person.text.rectangle")
+                Image(systemName: Icons.personCard)
                     .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
+                    .foregroundStyle(Theme.secondaryText)
+                    .frame(width: cardButton, height: cardButton)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(ui: "Contact card"))
@@ -41,6 +42,7 @@ struct SearchPersonRow: View {
 
 /// An event in the results: calendar mark, title (matches in bold), day and time.
 struct SearchEventRow: View {
+    @ScaledMetric(relativeTo: .title3) private var badge: CGFloat = 44
     let event: CalendarEvent
     let query: String
 
@@ -48,8 +50,8 @@ struct SearchEventRow: View {
         HStack(spacing: 16) {
             Circle()
                 .fill(Theme.accent)
-                .frame(width: 44, height: 44)
-                .overlay { Image(systemName: "calendar").foregroundStyle(Theme.onAccent) }
+                .frame(width: badge, height: badge)
+                .overlay { Image(systemName: Icons.calendar).foregroundStyle(Theme.onAccent) }
                 .accessibilityHidden(true)
             SearchTwoLines(
                 first: SearchModel.highlighted(event.occurrence.details.title, query: query),
@@ -89,16 +91,17 @@ struct SearchEventRow: View {
 
 /// A completion of what was typed: a magnifier and the words, the typed part in bold.
 struct SearchSuggestionRow: View {
+    @ScaledMetric(relativeTo: .title3) private var iconWidth: CGFloat = 40
     let text: String
     let query: String
 
     var body: some View {
         HStack(spacing: 22) {
             Image(systemName: Icons.search)
-                .foregroundStyle(.secondary)
-                .frame(width: 40)
+                .foregroundStyle(Theme.secondaryText)
+                .frame(width: iconWidth)
             Text(SearchModel.highlighted(text, query: query))
-                .font(.title3)
+                .font(.body)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }
@@ -115,13 +118,13 @@ struct SearchTwoLines: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(first)
-                .font(.title3)
+                .font(.body)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             if let second {
                 second
-                    .font(.body)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.secondaryText)
                     .lineLimit(1)
             }
         }
@@ -141,7 +144,7 @@ struct SearchToken: View {
                 .lineLimit(1)
                 .foregroundStyle(Theme.headerText)
             Button(action: remove) {
-                Image(systemName: "xmark")
+                Image(systemName: Icons.close)
                     .font(.footnote.bold())
                     .foregroundStyle(Theme.headerText.opacity(0.7))
             }

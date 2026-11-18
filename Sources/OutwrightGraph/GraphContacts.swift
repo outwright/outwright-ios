@@ -46,6 +46,7 @@ public struct GraphContactFields: Sendable, Equatable {
     public var surname: String
     public var displayName: String
     public var companyName: String
+    public var jobTitle: String
     public var personalNotes: String
     /// At most three: what Graph holds.
     public var emails: [String]
@@ -61,7 +62,8 @@ public struct GraphContactFields: Sendable, Equatable {
 
     public init(
         givenName: String = "", surname: String = "", displayName: String = "", companyName: String = "",
-        personalNotes: String = "", emails: [String] = [], mobilePhone: String = "", businessPhones: [String] = [],
+        jobTitle: String = "", personalNotes: String = "", emails: [String] = [], mobilePhone: String = "",
+        businessPhones: [String] = [],
         homePhones: [String] = [], home: GraphAddress? = nil, business: GraphAddress? = nil,
         other: GraphAddress? = nil
     ) {
@@ -69,6 +71,7 @@ public struct GraphContactFields: Sendable, Equatable {
         self.surname = surname
         self.displayName = displayName
         self.companyName = companyName
+        self.jobTitle = jobTitle
         self.personalNotes = personalNotes
         self.emails = emails
         self.mobilePhone = mobilePhone
@@ -96,10 +99,13 @@ public enum GraphContacts {
     public static let createMarkerID = "String {13650EE9-7D0A-4EF4-B1D7-CBC2351E215F} Name OutwrightCreateID"
     /// The properties Outwright writes (and selects when reading).
     public static let ownProperties: Set<String> = [
-        "givenName", "surname", "displayName", "companyName", "personalNotes", "emailAddresses", "mobilePhone",
+        "givenName", "surname", "displayName", "companyName", "jobTitle", "personalNotes", "emailAddresses",
+        "mobilePhone",
         "businessPhones", "homePhones", "homeAddress", "businessAddress", "otherAddress"
     ]
     static let maxString = 64 * 1024
+    /// A contact's photo is read only up to this size; a larger one is not shown.
+    public static let maxPhotoBytes = 512 * 1024
     static let maxList = 50
     static let maxEmails = 3
     static let pageSize = 500
@@ -177,7 +183,8 @@ public enum GraphContacts {
         var fields = GraphContactFields(
             givenName: string(object, "givenName"), surname: string(object, "surname"),
             displayName: string(object, "displayName"), companyName: string(object, "companyName"),
-            personalNotes: string(object, "personalNotes"), emails: Array(emails.prefix(maxEmails)),
+            jobTitle: string(object, "jobTitle"), personalNotes: string(object, "personalNotes"),
+            emails: Array(emails.prefix(maxEmails)),
             mobilePhone: string(object, "mobilePhone"), businessPhones: strings(object, "businessPhones"),
             homePhones: strings(object, "homePhones"), home: address(object, "homeAddress"),
             business: address(object, "businessAddress"), other: address(object, "otherAddress"))
@@ -219,7 +226,7 @@ public enum GraphContacts {
         }
         var object: [String: Any] = [
             "givenName": fields.givenName, "surname": fields.surname, "displayName": fields.displayName,
-            "companyName": fields.companyName, "personalNotes": fields.personalNotes,
+            "companyName": fields.companyName, "jobTitle": fields.jobTitle, "personalNotes": fields.personalNotes,
             "emailAddresses": fields.emails.prefix(maxEmails).map { address in
                 fields.emailNames[address.lowercased()].map { ["address": address, "name": $0] } ?? ["address": address]
             },
@@ -323,6 +330,28 @@ extension GraphClient {
         }
         guard let fresh = try await contact(id: id) else { throw .notFound }
         return fresh
+    }
+
+    /// The contact's photo, nil when it has none or one past `GraphContacts.maxPhotoBytes`.
+    public func photo(id: String) async throws(GraphError) -> Data? {
+        do throws(GraphError) {
+            let data = try await send(
+                "GET", url("me/contacts/" + GraphContacts.segment(id) + "/photo/$value"), accept: "image/*",
+                limit: GraphContacts.maxPhotoBytes)
+            return data.isEmpty || data.count > GraphContacts.maxPhotoBytes ? nil : data
+        } catch .notFound {
+            return nil
+        } catch .tooLarge {
+            return nil
+        }
+    }
+
+    /// Gives the contact `jpeg` as its photo.
+    public func setPhoto(id: String, _ jpeg: Data) async throws(GraphError) {
+        guard jpeg.count <= GraphContacts.maxPhotoBytes else { throw .tooLarge }
+        _ = try await send(
+            "PUT", url("me/contacts/" + GraphContacts.segment(id) + "/photo/$value"), body: jpeg,
+            contentType: "image/jpeg")
     }
 
     /// Deletes the contact, if its ETag is still `ifMatch`; one already gone counts as deleted.

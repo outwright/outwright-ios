@@ -9,8 +9,10 @@ options:
     iOS: "26.0"
 settings:
   base:
-    # The default for a build of one's own; an upload sets version.txt.
-    MARKETING_VERSION: "0.0.0"
+    # The defaults for a build of one's own; an upload sets them from version.txt X.Y.Z: the
+    # version is X.Y, the build number X.Y.Z, so a patch release is a new build of the same version.
+    MARKETING_VERSION: "0.0"
+    CURRENT_PROJECT_VERSION: "0.0.0"
 packages:
   Outwright:
     path: ..
@@ -31,16 +33,19 @@ targets:
       path: Info.generated.plist
       properties:
         CFBundleDisplayName: Outwright
-        # One number: version.txt, a new patch at least for every upload, set by the upload as
-        # MARKETING_VERSION and used as the build number too.
+        # The version X.Y and the build number X.Y.Z, set by the upload from version.txt.
         CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(MARKETING_VERSION)
-        # Only TLS and the system's own encryption leave the app, so no export compliance
-        # question per upload.
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # The open build encrypts only with TLS through the system, which is exempt; a build that
+        # adds its own encryption declares it in its own spec.
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        # iPad multitasking needs every orientation.
+        UISupportedInterfaceOrientations~ipad:
+          [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown,
+           UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UIBackgroundModes: [fetch, remote-notification]
         BGTaskSchedulerPermittedIdentifiers: [com.10boring.outwright.refresh]
         CFBundleLocalizations: [en, sv]
@@ -51,18 +56,45 @@ targets:
         NSContactsUsageDescription: >-
           Outwright saves a copy of an account's contacts in Contacts when you turn that on, so calls
           show who is calling.
+        NSCameraUsageDescription: >-
+          Outwright uses the camera when you take a photo to attach to a message, and when you scan the
+          code of your other device to move your setup to it.
+        NSFaceIDUsageDescription: >-
+          Outwright asks for Face ID before it puts your passwords and keys in a setup file.
+        # Moving the setup straight to another device (Settings › Back up and move): the receiving
+        # device advertises this service on the local network, and the sending one finds it.
+        NSLocalNetworkUsageDescription: >-
+          Outwright finds your other device on the local network when you move your setup to it.
+        NSBonjourServices: [_outwright-setup._tcp]
+        # The setup file (Settings › Back up and move): an encrypted file Outwright opens to restore
+        # accounts and keys. Opened in place, so tapping one in Files opens Outwright: a file in Files is
+        # read where it is and never removed; one from AirDrop or a mail is a copy in Documents/Inbox,
+        # removed once restored.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: app.outwright.setup
+            UTTypeDescription: Outwright setup
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [outwright-setup]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Outwright setup
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            LSItemContentTypes: [app.outwright.setup]
+        LSSupportsOpeningDocumentsInPlace: YES
     settings:
       base:
         SWIFT_VERSION: "6.0"
-        TARGETED_DEVICE_FAMILY: "1" # iPhone only in the alpha
+        TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: NO
         PRODUCT_BUNDLE_IDENTIFIER: $(OUTWRIGHT_BUNDLE_ID)
         CODE_SIGN_ENTITLEMENTS: Outwright.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     scheme: {}
-  # Puts the sender and subject of new mail into a push's generic notification (it carries
-  # only the subscription id). Shares the keychain group and the app group with the app.
+  # Updates the pushed account's Inbox in the store it shares with the app and puts the sender and
+  # subject of what came into a push's generic notification (the push carries only the
+  # subscription id). Shares the keychain group and the app group with the app.
   OutwrightNotificationService:
     type: app-extension
     platform: iOS
@@ -70,12 +102,16 @@ targets:
     dependencies:
       - package: Outwright
         product: OutwrightSync
+      - package: Outwright
+        product: OutwrightStore
+      - package: Outwright
+        product: OutwrightModel
     info:
       path: NotificationService/Info.generated.plist
       properties:
         CFBundleDisplayName: Outwright
         CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleLocalizations: [en, sv]
         OutwrightAppGroup: $(OUTWRIGHT_APP_GROUP)
         OutwrightRelay: $(OUTWRIGHT_RELAY)
@@ -85,7 +121,7 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "6.0"
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: NO
         PRODUCT_BUNDLE_IDENTIFIER: $(OUTWRIGHT_BUNDLE_ID).notifications
         CODE_SIGN_ENTITLEMENTS: NotificationService/NotificationService.entitlements

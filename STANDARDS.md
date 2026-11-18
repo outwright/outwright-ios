@@ -66,13 +66,13 @@ Not read: RFC 6764's TXT `path=` records, Mozilla's autoconfig XML, Microsoft's 
 
 | Spec | What Outwright does |
 |---|---|
-| RFC 5545 | iCalendar events, read and written; RRULE expansion (SECONDLY and MINUTELY refused). A published calendar (one file) subscribed to, read-only. |
+| RFC 5545 | iCalendar events, read and written; RRULE expansion (SECONDLY and MINUTELY refused). Show as is TRANSP, with the vendor property `X-MICROSOFT-CDO-BUSYSTATUS` for tentative and away; Private is `CLASS:PRIVATE`. A published calendar (one file) subscribed to, read-only. |
 | RFC 7529 | RSCALE and SKIP in recurrence rules. |
 | RFC 4791 | CalDAV: calendar-query, multiget, writes with preconditions. |
 | RFC 6578 | WebDAV sync-collection, for calendars and address books. |
 | RFC 4918 | WebDAV multistatus. |
 | RFC 6638 | CalDAV scheduling: `calendar-auto-schedule`, `Schedule-Tag`, `Schedule-Reply`, `SCHEDULE-AGENT`. A server that says it schedules sends the owner's answer; the app mails it when the server does not schedule, or the copy's ORGANIZER says `SCHEDULE-AGENT=CLIENT` (set when an answer goes without a response). The owner's own meetings likewise: the app mails their invitations and cancellations to the guests the server does not schedule for. The organiser's update or cancellation that came by mail is written to the owner's copy (› 3.2.2.2); a server that refuses it (› 3.2.2.1) keeps its copy and the phone shows the update. |
-| RFC 5546 | iTIP: REQUEST, ADD, CANCEL and REPLY are acted on; any other method is an ordinary attachment. |
+| RFC 5546 | iTIP: REQUEST, ADD, CANCEL and REPLY are acted on; any other method is an ordinary attachment. A REPLY carries the owner's comment as COMMENT. |
 | RFC 6047 | iMIP: invitations read from mail and answers sent as mail; where the server does not schedule, the owner's invitations and cancellations sent as mail and guests' answers by mail written to the owner's meeting. |
 | RFC 9110 › 13 | Subscribed calendars: fetched with `If-None-Match` / `If-Modified-Since` when the last answer gave an ETag or Last-Modified; 304 keeps what is held. |
 | `webcal` (IANA provisional URI scheme) | A pasted `webcal://` address is read as `https://`. |
@@ -92,6 +92,24 @@ Not read: RFC 6764's TXT `path=` records, Mozilla's autoconfig XML, Microsoft's 
 |---|---|
 | RFC 8620 › 7.2, RFC 8621 | JMAP push subscriptions of type `EmailDelivery`, through Outwright's push relay. The session comes from `/.well-known/jmap`. |
 | RFC 8291, RFC 8188 | Web Push message encryption (`aes128gcm`), decrypted on the phone. |
+
+## Setup file
+
+The file that carries the owner's accounts and keys between devices, and the direct transfer between two devices at hand ([SETUP_FILE.md](SETUP_FILE.md)).
+
+| Spec | What Outwright does |
+|---|---|
+| RFC 9580 | The file is one OpenPGP message encrypted with a passphrase: a version 6 SKESK packet (§5.3.2) and a version 2 SEIPD packet (§5.13.2), AES-256 with GCM, holding a Literal Data packet. Keys inside it are armored transferable keys (§6, §10). |
+| RFC 9106 | Argon2id, the string-to-key of the SKESK packet (3 passes, 4 lanes, 64 MiB; a file's own parameters are read, within limits). |
+| RFC 7693 | BLAKE2b, which Argon2 is built on. |
+| RFC 5869 | HKDF with SHA-256: the key that wraps the session key, and the message keys. |
+| Noise Protocol Framework, revision 34 | The direct transfer: `Noise_NNpsk0_25519_ChaChaPoly_SHA256`, keyed by the secret in the pairing code, with the code as its prologue. |
+| RFC 7748 | X25519, the Noise handshake's key agreement. |
+| RFC 8439 | ChaCha20-Poly1305, which seals each message of the direct transfer. |
+| RFC 2104 | HMAC (with SHA-256), inside the Noise handshake's HKDF. |
+| RFC 6763 | DNS-SD: the device that shows the pairing code advertises `_outwright-setup._tcp` under the code's service name, and the scanning device browses for it. |
+| RFC 4648 | Base64, for a part's content inside the bundle. |
+| EFF large word list | The six-word passphrase is chosen from it (CC BY 3.0 US, see `ATTRIBUTION.md`). |
 
 ## Not yet
 

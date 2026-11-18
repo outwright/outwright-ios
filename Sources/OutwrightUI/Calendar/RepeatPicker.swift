@@ -5,18 +5,23 @@ import Foundation
 import OutwrightModel
 import SwiftUI
 
-/// What the repeat picker offers. `custom` is a rule the picker cannot show: it is shown, never chosen.
+/// What the repeat picker offers. `custom` is any other rule: choosing it opens the custom repeat
+/// screen, and it is never itself a rule.
 enum RepeatChoice: Hashable, CaseIterable {
-    case never, daily, weekly, everyTwoWeeks, monthly, yearly, custom
+    case never, daily, weekdays, weekly, everyTwoWeeks, monthly, yearly, custom
 
-    /// The choices a person can pick.
-    static let offered: [RepeatChoice] = [.never, .daily, .weekly, .everyTwoWeeks, .monthly, .yearly]
+    /// The presets a person can pick.
+    static let offered: [RepeatChoice] = [.never, .daily, .weekdays, .weekly, .everyTwoWeeks, .monthly, .yearly]
+
+    /// Monday to Friday.
+    static let workWeek = (1...5).map { WeekdayNum(weekday: $0) }
 
     /// The rule for a choice, repeating from the start's weekday, day or date (nil for never and custom).
     var rule: RecurrenceRule? {
         switch self {
         case .never, .custom: nil
         case .daily: RecurrenceRule(freq: .daily)
+        case .weekdays: RecurrenceRule(freq: .weekly, byDay: Self.workWeek)
         case .weekly: RecurrenceRule(freq: .weekly)
         case .everyTwoWeeks: RecurrenceRule(freq: .weekly, interval: 2)
         case .monthly: RecurrenceRule(freq: .monthly)
@@ -42,6 +47,9 @@ enum RepeatChoice: Hashable, CaseIterable {
         switch (rule.freq, rule.interval) {
         case (.daily, 1) where rule.byDay.isEmpty && rule.byMonthDay.isEmpty && rule.byMonth.isEmpty:
             return .daily
+        case (.weekly, 1) where rule.byDay.count == 5 && Set(rule.byDay.map(\.weekday)) == Set(1...5)
+            && rule.byDay.allSatisfy({ $0.ordinal == 0 }) && rule.byMonthDay.isEmpty && rule.byMonth.isEmpty:
+            return .weekdays
         case (.weekly, 1) where onStartWeekday && rule.byMonthDay.isEmpty && rule.byMonth.isEmpty:
             return .weekly
         case (.weekly, 2) where onStartWeekday && rule.byMonthDay.isEmpty && rule.byMonth.isEmpty:
@@ -59,6 +67,7 @@ enum RepeatChoice: Hashable, CaseIterable {
         switch self {
         case .never: "Never"
         case .daily: "Every day"
+        case .weekdays: "Every weekday"
         case .weekly: "Every week"
         case .everyTwoWeeks: "Every two weeks"
         case .monthly: "Every month"
@@ -68,14 +77,19 @@ enum RepeatChoice: Hashable, CaseIterable {
     }
 }
 
-/// The repeat row: the choices, and "Custom" while the event keeps a rule the picker cannot show.
+/// The repeat row: the presets and Custom, which opens the custom repeat screen (`opensCustom`) when
+/// the rule is one it can show; a rule it can't stays "Custom", kept as it is.
 struct RepeatPicker: View {
     @Binding var choice: RepeatChoice
-    let showsCustom: Bool
+    /// The custom screen can show the rule (or there is none yet).
+    let canOpenCustom: Bool
+    let opensCustom: () -> Void
 
     var body: some View {
-        Picker(selection: $choice) {
-            ForEach(RepeatChoice.offered + (showsCustom ? [.custom] : []), id: \.self) { item in
+        Picker(selection: Binding(get: { choice }, set: { picked in
+            if picked == .custom, canOpenCustom { opensCustom() } else { choice = picked }
+        })) {
+            ForEach(RepeatChoice.offered + [.custom], id: \.self) { item in
                 Text(ui: item.title).tag(item)
             }
         } label: {

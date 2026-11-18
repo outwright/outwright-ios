@@ -94,7 +94,7 @@ extension SearchModel {
             return
         }
         guard !text.isEmpty else {
-            results = []
+            allResults = []
             return
         }
         let (store, chip, filter, instant) = (store, chip, filter, now())
@@ -110,12 +110,12 @@ extension SearchModel {
         found.events = local.events
         found.suggestions = local.suggestions
         // Mail first, files as soon as they are read.
-        results = compose(found)
+        allResults = compose(found)
         guard chip == .all || chip == .files else { return }
         let all = local.unfiltered.map { withServerHits($0, filter: SearchFilter()) { _ in true } } ?? found.messages
         guard let files = await files(of: all, wanted) else { return }
         found.files = files
-        results = compose(found)
+        allResults = compose(found)
     }
 
     /// The person's mail (From or To), narrowed by the words and the filter: all of it under All
@@ -141,14 +141,16 @@ extension SearchModel {
         }
         switch chip {
         case .all, .mail:
-            results = withServerHits(filtered, filter: filter, admitting: isTheirs).map(SearchResult.message)
+            allResults = withServerHits(filtered, filter: filter, admitting: isTheirs).map(SearchResult.message)
         case .people:
-            results = [.person(person)]
+            allResults = [.person(person)]
+        case .events:
+            allResults = []
         case .files:
-            results = []
+            allResults = []
             let all = withServerHits(unfiltered ?? filtered, filter: SearchFilter(), admitting: isTheirs)
             guard let files = await files(of: all, wanted) else { return }
-            results = files.map(SearchResult.file)
+            allResults = files.map(SearchResult.file)
         }
     }
 
@@ -177,8 +179,12 @@ extension SearchModel {
                 .map(SearchPerson.init(contact:))
         }
         if chip == .all {
-            local.events = (try? store.searchEvents(text, now: now, limit: allLimit)) ?? []
-            local.suggestions = suggestions(text, in: store)
+            // One more than shown, to know whether there is more.
+            local.events = (try? store.searchEvents(text, now: now, limit: allLimit + 1)) ?? []
+            local.suggestions = suggestions(text, in: store, limit: allLimit + 1)
+        }
+        if chip == .events {
+            local.events = (try? store.searchEvents(text, now: now, limit: peopleLimit)) ?? []
         }
         return local
     }
@@ -207,15 +213,24 @@ extension SearchModel {
     private func compose(_ found: SearchFound) -> [SearchResult] {
         switch chip {
         case .all:
-            Array(found.people.prefix(Self.allLimit)).map(SearchResult.person)
-                + found.events.map(SearchResult.event) + found.files.map(SearchResult.file)
-                + found.messages.map(SearchResult.message) + found.suggestions.map(SearchResult.suggestion)
+            var more = Set<SearchSection.Kind>()
+            if found.people.count > Self.allLimit { more.insert(.people) }
+            if found.events.count > Self.allLimit { more.insert(.events) }
+            if found.suggestions.count > Self.allLimit { more.insert(.suggestions) }
+            moreFound = more
+            return Array(found.suggestions.prefix(Self.allLimit)).map(SearchResult.suggestion)
+                + Array(found.people.prefix(Self.allLimit)).map(SearchResult.person)
+                + found.messages.map(SearchResult.message)
+                + Array(found.events.prefix(Self.allLimit)).map(SearchResult.event)
+                + found.files.map(SearchResult.file)
         case .mail:
-            found.messages.map(SearchResult.message)
+            return found.messages.map(SearchResult.message)
         case .people:
-            found.people.map(SearchResult.person)
+            return found.people.map(SearchResult.person)
+        case .events:
+            return found.events.map(SearchResult.event)
         case .files:
-            found.files.map(SearchResult.file)
+            return found.files.map(SearchResult.file)
         }
     }
 
@@ -223,8 +238,14 @@ extension SearchModel {
     /// then (under People) the senders of the mail found; one row per person, never the owner.
     private func persons(_ text: String, contacts: [SearchPerson], senders: [MessageRow]) -> [SearchPerson] {
         var seen = Set(contacts.flatMap(\.emails)).union(ownAddresses)
-        // The owner's own card is no one to find.
-        var found = contacts.filter { person in person.emails.allSatisfy { !ownAddresses.contains($0) } }
+        // The owner's own card is no one to find; a person in two address books is one row.
+        var known = Set<String>()
+        var found: [SearchPerson] = []
+        for person in contacts where person.emails.allSatisfy({ !ownAddresses.contains($0) }) {
+            guard person.emails.isEmpty || known.isDisjoint(with: person.emails) else { continue }
+            known.formUnion(person.emails)
+            found.append(person)
+        }
         let others = people.filter { PeopleIndex.matches($0, text) } + senders.map(\.from)
         for address in others where found.count < Self.peopleLimit {
             let key = address.email.lowercased()
@@ -236,7 +257,7 @@ extension SearchModel {
 
     /// Completions of the word being typed (the letters and digits at the end of `text`), with all
     /// that comes before it kept as typed. None once the text ends in anything else.
-    nonisolated static func suggestions(_ text: String, in store: MailStore) -> [String] {
+    nonisolated static func suggestions(_ text: String, in store: MailStore, limit: Int = allLimit) -> [String] {
         var start = text.endIndex
         var count = 0
         while start > text.startIndex, count < 64 {
@@ -248,7 +269,7 @@ extension SearchModel {
         guard start < text.endIndex else { return [] }
         let lead = String(text[..<start])
         let word = String(text[start...])
-        return ((try? store.suggestedWords(startingWith: word, limit: allLimit)) ?? []).map { lead + $0 }
+        return ((try? store.suggestedWords(startingWith: word, limit: limit)) ?? []).map { lead + $0 }
     }
 
     /// The attachments of the messages whose bodies are on the phone (read and parsed: run it off

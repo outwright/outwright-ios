@@ -58,7 +58,8 @@ struct FetchItems {
             internalDate: date,
             size: size,
             headers: section("BODY[HEADER]") ?? Data(),
-            partialText: section("BODY[TEXT]") ?? Data()
+            partialText: section("BODY[TEXT]") ?? Data(),
+            calendarParts: BodyOutline.calendarParts(items["BODYSTRUCTURE"])
         )
     }
 }

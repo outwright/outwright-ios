@@ -28,6 +28,7 @@ import Testing
             let fields = contact.fields
             #expect(fields.givenName == "Maja" && fields.surname == "Ek" && fields.displayName == "Maja Ek")
             #expect(fields.companyName == "Ek AB" && fields.personalNotes == "Met in Lund")
+            #expect(fields.jobTitle == "Chief")
             #expect(fields.emails == ["maja@example.org", "ek@example.org"])
             #expect(fields.mobilePhone == "+46 70 111")
             #expect(fields.businessPhones == ["+46 8 222"] && fields.homePhones == ["+46 8 333", "+46 8 444"])
@@ -109,7 +110,41 @@ import Testing
             #expect(Set(body.keys).isSubset(of: GraphContacts.ownProperties))
             let stored = try #require(await server.contactsJSON().first)
             let object = try #require(try JSONSerialization.jsonObject(with: stored) as? [String: Any])
-            #expect(object["jobTitle"] as? String == "Chief")
+            #expect(object["nickName"] as? String == "Majsan")
+        }
+    }
+
+    @Test func jobTitleIsWritten() async throws {
+        try await withGraph { server, client, _ in
+            let id = await server.put(json(fullContact))
+            let updated = try await client.update(
+                id: id, GraphContactFields(givenName: "Maja", jobTitle: "Kock"), ifMatch: #"W/"1""#)
+            #expect(updated.fields.jobTitle == "Kock")
+        }
+    }
+
+    @Test func photoIsPutAsAJPEGAndReadBack() async throws {
+        try await withGraph { server, client, _ in
+            let id = await server.put(json(fullContact))
+            let none = try await client.photo(id: id)
+            #expect(none == nil, "none yet")
+            let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3])
+            try await client.setPhoto(id: id, jpeg)
+            let put = try #require(await server.requests.last)
+            #expect(put.method == "PUT" && put.path.hasSuffix("/me/contacts/\(id)/photo/$value"))
+            #expect(put.headers["content-type"] == "image/jpeg")
+            #expect(put.body == jpeg)
+            let read = try await client.photo(id: id)
+            #expect(read == jpeg)
+        }
+    }
+
+    @Test func aPhotoPastTheCapIsNotRead() async throws {
+        try await withGraph { server, client, _ in
+            let id = await server.put(json(fullContact))
+            await server.setPhoto(id, Data(count: GraphContacts.maxPhotoBytes + 1))
+            let capped = try await client.photo(id: id)
+            #expect(capped == nil)
         }
     }
 

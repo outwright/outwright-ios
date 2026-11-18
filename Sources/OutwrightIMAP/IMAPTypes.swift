@@ -76,7 +76,8 @@ public struct ResyncChanges: Sendable, Equatable {
     }
 }
 
-/// The parts of a message a folder list needs: its header block and the first 4 KiB of text.
+/// The parts of a message a folder list needs: its header block, the first 4 KiB of text, and the
+/// calendar parts its structure names (an invitation in a multipart mail is not in its headers).
 public struct MessageSummary: Sendable, Equatable {
     public var uid: UInt32
     public var flags: Set<String>
@@ -84,14 +85,19 @@ public struct MessageSummary: Sendable, Equatable {
     public var size: Int
     public var headers: Data
     public var partialText: Data
+    public var calendarParts: [CalendarPartOutline]
 
-    public init(uid: UInt32, flags: Set<String>, internalDate: Date, size: Int, headers: Data, partialText: Data) {
+    public init(
+        uid: UInt32, flags: Set<String>, internalDate: Date, size: Int, headers: Data, partialText: Data,
+        calendarParts: [CalendarPartOutline] = []
+    ) {
         self.uid = uid
         self.flags = flags
         self.internalDate = internalDate
         self.size = size
         self.headers = headers
         self.partialText = partialText
+        self.calendarParts = calendarParts
     }
 }
 

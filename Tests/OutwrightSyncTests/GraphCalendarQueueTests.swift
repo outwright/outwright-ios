@@ -358,6 +358,21 @@ private func newEvent(_ title: String) -> EventDetails {
         }
     }
 
+    @Test func anAnswersCommentGoesToGraph() async throws {
+        try await withGraphContacts { h in
+            let home = await h.graph.addCalendar("Calendar")
+            _ = await h.graph.putEvent(h.invitation(), in: home)
+            let syncer = h.calendarSyncer()
+            try await syncer.sync()
+            try h.store.respond(
+                try h.heldEvent("Review").id, .tentative, scope: .event, sendReply: true, comment: "Maybe\nlate")
+            try await syncer.sync()
+            let post = try #require(await h.graph.requests.last { $0.method == "POST" })
+            let comment = try #require(try object(post.body)["comment"] as? String)
+            #expect(comment.contains("Maybe") && comment.contains("late") && !comment.contains("\n"))
+        }
+    }
+
     @Test func aDeclineWithoutAReplyTellsGraphNotToSendOne() async throws {
         try await withGraphContacts { h in
             let home = await h.graph.addCalendar("Calendar")

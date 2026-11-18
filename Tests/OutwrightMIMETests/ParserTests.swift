@@ -183,9 +183,9 @@ import Testing
     @Test func longAddressInputIsLinear() throws {
         let value = String(repeating: "a", count: 500_000) + "@" + String(repeating: ":", count: 500_000)
         let raw = Data(("From: " + value + "\r\n\r\n").utf8)
-        let start = ContinuousClock.now
+        let start = SuspendingClock.now
         _ = try MIMEParser.parseHeaders(raw)
-        #expect(ContinuousClock.now - start < .seconds(2))
+        #expect(SuspendingClock.now - start < .seconds(2))
     }
 
     @Test func addressEmailIsCaseInsensitive() {

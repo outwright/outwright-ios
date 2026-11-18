@@ -50,7 +50,8 @@ enum AppPush {
                     ?? false
             },
             registerForRemote: { UIApplication.shared.registerForRemoteNotifications() },
-            setupGuide: { await controller.setupGuide(for: $0) })
+            setupGuide: { await controller.setupGuide(for: $0) },
+            dropped: { await controller.addressDropped($0) })
     }
 
     /// Checks push with the relay and moves the subscriptions' expiry on, at most every 12

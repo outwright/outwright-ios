@@ -59,23 +59,27 @@ public struct VCardFields: Sendable, Equatable {
     public var familyName: String
     public var formattedName: String
     public var organization: String
+    /// TITLE: the job title.
+    public var title: String
     public var note: String
     public var emails: [LabeledValue]
     public var phones: [LabeledValue]
     public var addresses: [VCardAddress]
-    /// An inline photo only; a photo given as a URI is never read, let alone fetched. Read-only:
-    /// `VCard.applying` leaves the PHOTO property as it is.
+    /// An inline photo only; a photo given as a URI is never read, let alone fetched. A changed
+    /// one is written inline (`VCard.applying`); a card's photo at a URI is left as it is until the
+    /// owner gives it another.
     public var photo: Data?
 
     public init(
         givenName: String = "", familyName: String = "", formattedName: String = "", organization: String = "",
-        note: String = "", emails: [LabeledValue] = [], phones: [LabeledValue] = [],
+        title: String = "", note: String = "", emails: [LabeledValue] = [], phones: [LabeledValue] = [],
         addresses: [VCardAddress] = [], photo: Data? = nil
     ) {
         self.givenName = givenName
         self.familyName = familyName
         self.formattedName = formattedName
         self.organization = organization
+        self.title = title
         self.note = note
         self.emails = emails
         self.phones = phones
@@ -149,6 +153,7 @@ extension VCard {
         }
         fields.formattedName = first("FN")?.value ?? ""
         if let org = first("ORG") { fields.organization = VCardText.component(VCardText.split(org.value), 0) }
+        fields.title = first("TITLE")?.value ?? ""
         fields.note = first("NOTE")?.value ?? ""
         for property in properties {
             switch property.name {
@@ -171,34 +176,13 @@ extension VCard {
         fields.photo = properties.lazy.filter { $0.name == "PHOTO" }.compactMap(Self.inlinePhoto).first
         return fields
     }
-
-    private static func inlinePhoto(_ property: VCardProperty) -> Data? {
-        let value = property.value
-        let payload: Substring
-        if value.prefix(5).lowercased() == "data:" {
-            guard let comma = value.firstIndex(of: ",") else { return nil }
-            guard value[..<comma].lowercased().contains(";base64") else { return nil }
-            payload = value[value.index(after: comma)...]
-        } else if property.parameters.contains(where: {
-            $0.name == "ENCODING" && $0.values.contains { ["b", "base64"].contains($0.lowercased()) }
-        }) {
-            payload = value[...]
-        } else {
-            return nil
-        }
-        guard payload.utf8.count <= DAVLimits.photoBytes / 3 * 4 + 16 else { return nil }
-        guard let data = Data(base64Encoded: String(payload), options: .ignoreUnknownCharacters),
-            data.count <= DAVLimits.photoBytes
-        else { return nil }
-        return data
-    }
 }
 
 // MARK: - Applying edits
 
 extension VCard {
-    /// The card with FN, N, ORG, EMAIL, TEL, ADR and NOTE brought to `fields`. A field that did
-    /// not change is left alone, and every other property stays as it came, in order.
+    /// The card with FN, N, ORG, TITLE, EMAIL, TEL, ADR, NOTE and PHOTO brought to `fields`. A field
+    /// that did not change is left alone, and every other property stays as it came, in order.
     public func applying(_ fields: VCardFields) -> VCard {
         let old = self.fields
         var props = properties
@@ -210,6 +194,10 @@ extension VCard {
         updateSingle("NOTE", &props, changed: old.note != fields.note) { existing in
             fields.note.isEmpty ? nil : Self.make(existing, "NOTE", ContentLine.clean(fields.note))
         }
+        updateSingle("TITLE", &props, changed: old.title != fields.title) { existing in
+            fields.title.isEmpty ? nil : Self.make(existing, "TITLE", ContentLine.clean(fields.title))
+        }
+        if old.photo != fields.photo { updatePhoto(fields.photo, &props) }
         updateSingle(
             "N", &props, changed: old.familyName != fields.familyName || old.givenName != fields.givenName
         ) { existing in

@@ -9,6 +9,20 @@ import Testing
 @testable import OutwrightUI
 
 @MainActor @Suite struct DrawerModelTests {
+    /// On an iPad the folders stay on screen: new mail's unread count shows without reopening anything.
+    @Test func watchingTheStoreKeepsUnreadCountsCurrent() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let inbox = try box.folder(anna, .inbox)
+        let model = DrawerModel(store: box.store, selected: anna.id)
+        let watching = Task { await model.observe() }
+        defer { watching.cancel() }
+        try box.add(anna, uid: 1)
+        func unread() -> Int? { model.sections.last?.folders.first { $0.id == inbox.id }?.unread }
+        for _ in 0..<100 where unread() != 1 { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(unread() == 1)
+    }
+
     @Test func favoritesFirstThenFolders() throws {
         var box = try Mailbox()
         let anna = try box.addAccount("anna@example.org", extraFolders: ["Receipts", "Clubs"])
@@ -102,5 +116,19 @@ import Testing
         model.reveal(deep.id)
         #expect(model.sections.last?.folders.contains { $0.path == chain[18] } == true)
         #expect(model.sections.last?.folders.contains { $0.path == chain[19] } == false)
+    }
+
+    @Test func favoritesWithTheSameNameNameTheirAccount() throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let bo = try box.addAccount("bo@example.org")
+        let model = DrawerModel(store: box.store, selected: nil)
+        let annaInbox = try box.folder(anna, .inbox)
+        let boInbox = try box.folder(bo, .inbox)
+        let sent = try box.folder(anna, .sent)
+        model.setFavorites([annaInbox.id, boInbox.id, sent.id])
+        #expect(model.accountNameBelow(annaInbox) == "anna@example.org")
+        #expect(model.accountNameBelow(boInbox) == "bo@example.org")
+        #expect(model.accountNameBelow(sent) == nil)
     }
 }

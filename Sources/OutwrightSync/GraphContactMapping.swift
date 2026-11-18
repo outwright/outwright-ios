@@ -19,7 +19,7 @@ public enum GraphContactMapping {
             .compactMap { label, address in address.map { postal(label, $0) } }
         return ContactDetails(
             givenName: fields.givenName, familyName: fields.surname, displayName: fields.displayName,
-            organization: fields.companyName, note: fields.personalNotes,
+            organization: fields.companyName, title: fields.jobTitle, note: fields.personalNotes,
             emails: fields.emails.map { Labeled(label: "other", value: $0) }, phones: phones, addresses: addresses)
     }
 
@@ -28,7 +28,7 @@ public enum GraphContactMapping {
     public static func fields(_ details: ContactDetails) -> GraphContactFields {
         var fields = GraphContactFields(
             givenName: details.givenName, surname: details.familyName, displayName: details.displayName,
-            companyName: details.organization, personalNotes: details.note,
+            companyName: details.organization, jobTitle: details.title, personalNotes: details.note,
             emails: Array(details.emails.map(\.value).filter { !$0.isEmpty }.prefix(3)))
         for phone in details.phones where !phone.value.isEmpty {
             switch phone.label {

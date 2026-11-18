@@ -29,11 +29,11 @@ extension CalendarSyncer {
         let route = ReplyRoute.route(calendar, serverSchedules: schedules)
         var recordedUpTo: Int?
         for (index, edit) in change.edits.enumerated() {
-            guard case let .respond(response, scope, sendReply) = edit else { continue }
+            guard case let .respond(response, scope, sendReply, comment) = edit else { continue }
             let revision = before + index + 1
             var reply: (row: MessageRow, body: Data)?
             if replies, sendReply, route == .app {
-                reply = replyDraft(calendar, response, scope)
+                reply = replyDraft(calendar, response, scope, comment: comment)
             }
             try stored {
                 try store.respondDone(
@@ -59,7 +59,7 @@ extension CalendarSyncer {
         _ change: QueuedEventChange, _ href: URL, _ client: CalDAVClient
     ) async throws(SyncError) -> String? {
         let withheld = change.edits.contains { edit in
-            if case .respond(_, _, false) = edit { return true }
+            if case .respond(_, _, false, _) = edit { return true }
             return false
         }
         guard withheld, try stored({ try store.scheduleTag(change.event) }) == nil,
@@ -70,14 +70,14 @@ extension CalendarSyncer {
 
     /// The REPLY mail for one answer, as a draft; nil when the object has nothing to reply to.
     private func replyDraft(
-        _ calendar: ICalComponent, _ response: Attendee.Response, _ scope: EditScope
+        _ calendar: ICalComponent, _ response: Attendee.Response, _ scope: EditScope, comment: String?
     ) -> (row: MessageRow, body: Data)? {
         var recurrenceID: EventTime?
         if case let .occurrence(time) = scope { recurrenceID = time }
         guard
             let message = InvitationReply.message(
                 calendar: calendar, response: response, recurrenceID: recurrenceID, account: account,
-                wording: meetingWording, now: now())
+                wording: meetingWording, now: now(), comment: comment)
         else { return nil }
         return InvitationReply.draft(message, account: account)
     }
@@ -132,7 +132,7 @@ extension CalendarSyncer {
     /// An answer among `edits` is one to go without a response.
     static func withholdsAny(_ edits: [EventEdit]) -> Bool {
         edits.contains { edit in
-            if case .respond(_, _, false) = edit { return true }
+            if case .respond(_, _, false, _) = edit { return true }
             return false
         }
     }

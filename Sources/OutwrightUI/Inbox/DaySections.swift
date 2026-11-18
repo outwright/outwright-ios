@@ -57,6 +57,18 @@ public enum DaySections {
         }
     }
 
+    /// What a message's header shows in the reading view: the time today, otherwise the date and the time.
+    public static func readingLabel(
+        _ date: Date, now: Date, calendar: Calendar = .autoupdatingCurrent
+    ) -> String {
+        if daysBefore(date, now: now, calendar: calendar) == 0 {
+            return format(date, "jmm", calendar: calendar)
+        }
+        // By template, as the rows: `.shortened` writes 9:20 where the locale says 09:20.
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
+        return format(date, sameYear ? "dMMMjmm" : "dMMMyjmm", calendar: calendar)
+    }
+
     /// Formatters by template, calendar, locale and time zone: making one is slow, a list asks often.
     private static let formatters = Mutex<[String: DateFormatter]>([:])
 

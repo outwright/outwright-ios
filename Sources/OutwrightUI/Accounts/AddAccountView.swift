@@ -5,13 +5,37 @@ import OutwrightModel
 import OutwrightSync
 import SwiftUI
 
+/// Where Add account stands, which decides how it is left.
+enum AddAccountPlacement {
+    /// A sheet from the drawer's plus or an empty screen: Cancel closes it.
+    case sheet
+    /// The first account: nothing to go back to, so no Cancel.
+    case firstRun
+    /// A page of Settings: the back button leaves it.
+    case pushed
+}
+
+/// Add account as a sheet or the first run's full screen, in a navigation stack of its own.
+struct AddAccountSheet: View {
+    let app: AppModel
+    let placement: AddAccountPlacement
+
+    var body: some View {
+        NavigationStack {
+            AddAccountView(app: app, placement: placement)
+        }
+        .interactiveDismissDisabled(placement == .firstRun && app.accounts.isEmpty)
+    }
+}
+
 /// Adding an account: the address first, which goes to the sign-in of a provider that claims it;
-/// otherwise name, password and the servers found, each editable; Connect signs in to both
-/// servers before anything is kept.
+/// otherwise name, password and user name, with the servers found behind "Server settings" (open
+/// when none was found); Connect signs in to both servers before anything is kept. The address stays
+/// editable, and editing it looks it up again. It ends on `AccountAddedView`.
 struct AddAccountView: View {
     let app: AppModel
+    let placement: AddAccountPlacement
     @State private var model: AddAccountModel
-    @State private var hasLookedUp = false
     /// Continue is under way: asking the providers whether the address is theirs, then their
     /// sign-in or the own server's lookup. Cancelled when the screen goes.
     @State private var lookup: Task<Void, Never>?
@@ -25,66 +49,95 @@ struct AddAccountView: View {
     /// The build's providers' sign-ins, in the composition's order.
     @State private var providers: [(provider: any AccountProvider, signIn: any ProviderSignIn)]
     @State private var providerFailure: String?
+    /// The account the flow ended with, and whether it was only signed in again.
+    @State private var outcome: AddAccountOutcome?
+    /// The pause on "Signed in again" before the screen closes.
+    @State private var closing: Task<Void, Never>?
+    @State private var showsServers = false
+    @State private var showsHelp = false
     @Environment(\.dismiss) private var dismiss
 
-    init(app: AppModel) {
+    init(app: AppModel, placement: AddAccountPlacement) {
         self.app = app
-        _model = State(
-            initialValue: AddAccountModel(
-                store: app.store, secrets: app.sync.secrets, resolver: CloudflareDoH(),
-                collections: { await DAVCollections.exist($0, at: $1, for: $2, password: $3) },
-                probe: DAVDiscovery.wellKnownProbe))
+        self.placement = placement
+        _model = State(initialValue: Self.newModel(app))
         _providers = State(initialValue: app.addableProviders)
     }
 
+    private static func newModel(_ app: AppModel) -> AddAccountModel {
+        AddAccountModel(
+            store: app.store, secrets: app.sync.secrets, resolver: CloudflareDoH(),
+            collections: { await DAVCollections.exist($0, at: $1, for: $2, password: $3) },
+            probe: DAVDiscovery.wellKnownProbe)
+    }
+
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    if hasLookedUp {
-                        LabeledField("Email address") {
-                            TextField(text: $model.email) { Text(verbatim: "") }
-                                .emailEntry()
-                                .accessibilityIdentifier("addAccount.email")
-                                .disabled(true)
-                        }
-                    } else {
-                        TextField(text: $model.email) { Text(ui: "Email address") }
-                            .emailEntry()
-                            .accessibilityIdentifier("addAccount.email")
-                            .disabled(isLookingUp)
-                    }
-                } footer: {
-                    if !hasLookedUp {
-                        Text(ui: "Only the address's domain is looked up, to find its mail servers.")
-                    }
-                }
-                if hasLookedUp {
-                    details
-                } else {
-                    if offersOwnServer {
-                        Section {
-                            Button { lookUpOwnServer() } label: { Text(ui: "Set up with the mail server instead") }
-                                .disabled(isSigningIn || isLookingUp)
-                                .accessibilityIdentifier("addAccount.ownServer")
-                        }
-                    }
-                    ForEach(providers.indices, id: \.self) { index in
-                        let entry = providers[index]
-                        Section {
-                            Button { add(with: entry.signIn) } label: { Text(entry.provider.addTitle) }
-                                .disabled(isSigningIn || isLookingUp)
-                                .accessibilityIdentifier(entry.provider.addIdentifier)
-                        } footer: {
-                            if let note = entry.provider.addNote {
-                                Text(note)
-                            }
-                        }
-                    }
+        Group {
+            if let outcome {
+                AccountAddedView(outcome: outcome, addAnother: addAnother, done: { dismiss() })
+            } else {
+                form
+            }
+        }
+        .navigationTitle(Text(ui: "Add account"))
+        .inlineNavigationTitle()
+        .navigationBarBackButtonHidden(outcome != nil)
+        .onChange(of: model.email) { offersOwnServer = false }
+        .onDisappear {
+            lookup?.cancel()
+            closing?.cancel()
+        }
+    }
+
+    private var form: some View {
+        Form {
+            Section {
+                TextField(text: $model.email) { Text(ui: "Email address") }
+                    .emailEntry()
+                    .accessibilityIdentifier("addAccount.email")
+                    .disabled(isLookingUp)
+            } footer: {
+                if model.hasLookedUp, model.discoveryFailed {
+                    Text(ui: "Couldn't find the servers for this address. Enter them below.")
+                } else if !model.hasLookedUp {
+                    Text(ui: "Only the address's domain is looked up, to find its mail servers.")
                 }
             }
-            .navigationTitle(Text(ui: "Add account"))
-            .toolbar {
+            if model.hasLookedUp {
+                details
+            } else {
+                if offersOwnServer {
+                    Section {
+                        Button { lookUpOwnServer() } label: { Text(ui: "Set up with the mail server instead") }
+                            .disabled(isSigningIn || isLookingUp)
+                            .accessibilityIdentifier("addAccount.ownServer")
+                    }
+                }
+                ForEach(providers.indices, id: \.self) { index in
+                    let entry = providers[index]
+                    Section {
+                        Button { add(with: entry.signIn) } label: { Text(entry.provider.addTitle) }
+                            .disabled(isSigningIn || isLookingUp)
+                            .accessibilityIdentifier(entry.provider.addIdentifier)
+                    } footer: {
+                        if let note = entry.provider.addNote {
+                            Text(note)
+                        }
+                    }
+                }
+                if placement == .firstRun { FirstRunRestoreSection(app: app) }
+            }
+        }
+        .toolbar {
+            if placement == .firstRun {
+                // No Cancel here, so Help is reached from this screen itself.
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { showsHelp = true } label: { Image(systemName: Icons.help) }
+                        .accessibilityLabel(Text(ui: "Help"))
+                        .accessibilityIdentifier("addAccount.help")
+                }
+            }
+            if placement == .sheet {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         lookup?.cancel()
@@ -93,63 +146,62 @@ struct AddAccountView: View {
                         Text(ui: "Cancel")
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isLookingUp || model.isDiscovering || model.isConnecting || isSigningIn {
-                        ProgressView()
-                    } else if hasLookedUp {
-                        Button {
-                            if model.needsServerConfirmation {
-                                isAskingToAllow = true
-                            } else {
-                                connect()
-                            }
-                        } label: {
-                            Text(ui: "Connect")
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                if isLookingUp || model.isDiscovering || model.isConnecting || isSigningIn {
+                    ProgressView()
+                } else if model.hasLookedUp {
+                    Button {
+                        if model.needsServerConfirmation {
+                            isAskingToAllow = true
+                        } else {
+                            connect()
                         }
-                        .disabled(model.password.isEmpty)
-                    } else {
-                        Button { lookUp() } label: {
-                            Text(ui: "Continue")
-                        }
-                        .disabled(!model.isAddressValid)
+                    } label: {
+                        Text(ui: "Connect")
                     }
+                    .disabled(model.password.isEmpty)
+                } else {
+                    Button { lookUp() } label: {
+                        Text(ui: "Continue")
+                    }
+                    .disabled(!model.isAddressValid)
                 }
-            }
-            .alert(
-                Text(ui: "Allow \(hostsToAllow)?"), isPresented: $isAskingToAllow
-            ) {
-                Button {
-                    model.confirmServers()
-                    connect()
-                } label: {
-                    Text(ui: "Allow")
-                }
-                Button(role: .cancel) {} label: { Text(ui: "Cancel") }
-            } message: {
-                Text(
-                    ui: """
-                        The servers for \(model.email) are at \(hostsToAllow), not at \(model.domain ?? ""). \
-                        Your password is sent there. Allow only servers you know.
-                        """)
-            }
-            .alert(
-                Text(ui: "The account was not added"), isPresented: Binding(presenting: $failure), presenting: failure
-            ) { _ in
-                Button { failure = nil } label: { Text(ui: "OK") }
-            } message: { error in
-                Text(ui: Self.explanation(error))
-            }
-            .alert(
-                Text(ui: "The account was not added"), isPresented: .constant(providerFailure != nil),
-                presenting: providerFailure
-            ) { _ in
-                Button { providerFailure = nil } label: { Text(ui: "OK") }
-            } message: { text in
-                Text(text)
             }
         }
-        .onChange(of: model.email) { offersOwnServer = false }
-        .onDisappear { lookup?.cancel() }
+        .sheet(isPresented: $showsHelp) { HelpView().presentationDetents([.medium, .large]) }
+        .alert(
+            Text(ui: "Allow \(hostsToAllow)?"), isPresented: $isAskingToAllow
+        ) {
+            Button {
+                model.confirmServers()
+                connect()
+            } label: {
+                Text(ui: "Allow")
+            }
+            Button(role: .cancel) {} label: { Text(ui: "Cancel") }
+        } message: {
+            Text(
+                ui: """
+                    The servers for \(model.email) are at \(hostsToAllow), not at \(model.domain ?? ""). \
+                    Your password is sent there. Allow only servers you know.
+                    """)
+        }
+        .alert(
+            Text(ui: "The account was not added"), isPresented: Binding(presenting: $failure), presenting: failure
+        ) { _ in
+            Button { failure = nil } label: { Text(ui: "OK") }
+        } message: { error in
+            Text(ui: Self.explanation(error))
+        }
+        .alert(
+            Text(ui: "The account was not added"), isPresented: .constant(providerFailure != nil),
+            presenting: providerFailure
+        ) { _ in
+            Button { providerFailure = nil } label: { Text(ui: "OK") }
+        } message: { text in
+            Text(text)
+        }
     }
 
     @ViewBuilder private var details: some View {
@@ -163,32 +215,6 @@ struct AddAccountView: View {
                     .textContentType(.password)
                     .accessibilityIdentifier("addAccount.password")
             }
-        }
-        EndpointSection(title: "Incoming mail (IMAP)", endpoint: $model.imap, defaultPort: 993, id: "imap")
-        EndpointSection(title: "Outgoing mail (SMTP)", endpoint: $model.smtp, defaultPort: 465, id: "smtp")
-        Section {
-            Toggle(isOn: $model.calendarOn) { Text(ui: "Sync calendar") }
-                .accessibilityIdentifier("addAccount.calendarOn")
-            if model.calendarOn {
-                TextField(text: $model.calDAV) { Text(ui: "CalDAV address") }
-                    .emailEntry()
-                    .accessibilityIdentifier("addAccount.calDAV")
-            }
-        } header: {
-            Text(ui: "Calendar")
-        }
-        Section {
-            Toggle(isOn: $model.contactsOn) { Text(ui: "Sync contacts") }
-                .accessibilityIdentifier("addAccount.contactsOn")
-            if model.contactsOn {
-                TextField(text: $model.cardDAV) { Text(ui: "CardDAV address") }
-                    .emailEntry()
-                    .accessibilityIdentifier("addAccount.cardDAV")
-            }
-        } header: {
-            Text(ui: "Contacts")
-        }
-        Section {
             LabeledField("User name") {
                 TextField(text: $model.user) { Text(verbatim: "") }
                     .emailEntry()
@@ -196,6 +222,42 @@ struct AddAccountView: View {
             }
         } footer: {
             Text(ui: "The password is checked with both servers and kept in the keychain only when both accept it.")
+        }
+        if model.discoveryFailed {
+            Section { serverRows }
+        } else {
+            Section {
+                DisclosureGroup(isExpanded: $showsServers) {
+                    serverRows
+                } label: {
+                    Text(ui: "Server settings")
+                }
+                .accessibilityIdentifier("addAccount.serverSettings")
+            }
+        }
+    }
+
+    /// The servers and the DAV addresses: shown open when none was found, else behind "Server settings".
+    @ViewBuilder private var serverRows: some View {
+        ServerGroup(title: "Incoming mail (IMAP)")
+        EndpointRows(endpoint: $model.imap, defaultPort: 993, id: "imap")
+        ServerGroup(title: "Outgoing mail (SMTP)")
+        EndpointRows(endpoint: $model.smtp, defaultPort: 465, id: "smtp")
+        ServerGroup(title: "Calendar")
+        Toggle(isOn: $model.calendarOn) { Text(ui: "Sync calendar") }
+            .accessibilityIdentifier("addAccount.calendarOn")
+        if model.calendarOn {
+            TextField(text: $model.calDAV) { Text(ui: "CalDAV address") }
+                .emailEntry()
+                .accessibilityIdentifier("addAccount.calDAV")
+        }
+        ServerGroup(title: "Contacts")
+        Toggle(isOn: $model.contactsOn) { Text(ui: "Sync contacts") }
+            .accessibilityIdentifier("addAccount.contactsOn")
+        if model.contactsOn {
+            TextField(text: $model.cardDAV) { Text(ui: "CardDAV address") }
+                .emailEntry()
+                .accessibilityIdentifier("addAccount.cardDAV")
         }
     }
 
@@ -206,27 +268,19 @@ struct AddAccountView: View {
 
     private func connect() {
         Task {
-            if let error = await attempt() {
+            let added: Account
+            do throws(AddAccountError) {
+                added = try await model.connect()
+            } catch {
                 failure = error
                 return
             }
-            app.reloadAccounts()
-            dismiss()
-            Task { await app.accountAdded() }
+            finish(added, signedInAgain: false)
         }
     }
 
     private var isSigningIn: Bool {
         providers.contains { $0.signIn.isSigningIn }
-    }
-
-    private func attempt() async -> AddAccountError? {
-        do {
-            _ = try await model.connect()
-            return nil
-        } catch {
-            return error
-        }
     }
 
     static func explanation(_ error: AddAccountError) -> LocalizedStringKey {
@@ -274,7 +328,6 @@ extension AddAccountView {
         await model.discover()
         guard !Task.isCancelled else { return }
         offersOwnServer = false
-        hasLookedUp = true
     }
 
     /// A provider's own button: no address goes with it, since none was claimed.
@@ -295,99 +348,41 @@ extension AddAccountView {
 
     /// Whether the sign-in added the account; the screen is closed when it did.
     private func addAccount(with signIn: any ProviderSignIn, hint: String?) async -> Bool {
+        let added: Account
         do throws(ProviderSignInError) {
-            _ = try await signIn.addAccount(hint: hint)
+            added = try await signIn.addAccount(hint: hint)
         } catch {
             if case let .failed(text) = error { providerFailure = text }
             return false
         }
-        app.reloadAccounts()
-        dismiss()
-        Task { await app.accountAdded() }
+        // A provider that already has the address only signs it in again.
+        finish(added, signedInAgain: app.accounts.contains { $0.id == added.id })
         return true
     }
-}
 
-/// Host, port and encryption of one server.
-private struct EndpointSection: View {
-    let title: LocalizedStringKey
-    @Binding var endpoint: MailEndpoint?
-    let defaultPort: UInt16
-    /// The accessibility identifiers' middle part ("imap" or "smtp").
-    let id: String
-
-    var body: some View {
-        Section {
-            LabeledField("Server") {
-                TextField(text: host) { Text(verbatim: "") }
-                    .emailEntry()
-                    .accessibilityIdentifier("addAccount.\(id).host")
+    /// The flow's end: the account is on the phone. A new one is told and its mail read; one signed
+    /// in again is told for a moment and the screen closes (its notifications stay as they were).
+    private func finish(_ account: Account, signedInAgain: Bool) {
+        app.reloadAccounts()
+        outcome = AddAccountOutcome(account: account, signedInAgain: signedInAgain)
+        if signedInAgain {
+            closing = Task {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                dismiss()
             }
-            LabeledField("Port") {
-                TextField(text: port) { Text(verbatim: "") }
-                    #if os(iOS)
-                    .keyboardType(.numberPad)
-                    #endif
-                    .accessibilityIdentifier("addAccount.\(id).port")
-            }
-            Picker(selection: security) {
-                Text(ui: "TLS").tag("tls")
-                Text(ui: "STARTTLS").tag("startTLS")
-            } label: {
-                Text(ui: "Encryption")
-            }
-            .accessibilityIdentifier("addAccount.\(id).security")
-        } header: {
-            Text(ui: title)
+            Task { await app.refresh() }
+        } else {
+            Task { await app.accountAdded(account) }
         }
     }
 
-    private var current: MailEndpoint {
-        endpoint ?? MailEndpoint(host: "", port: defaultPort, security: "tls")
-    }
-
-    private var host: Binding<String> {
-        Binding { current.host } set: { value in
-            var next = current
-            next.host = value.trimmingCharacters(in: .whitespaces).lowercased()
-            endpoint = next
-        }
-    }
-
-    private var port: Binding<String> {
-        Binding { String(current.port) } set: { value in
-            var next = current
-            next.port = UInt16(value.filter(\.isNumber).prefix(5)) ?? 0
-            endpoint = next
-        }
-    }
-
-    private var security: Binding<String> {
-        Binding { current.security } set: { value in
-            var next = current
-            next.security = value
-            endpoint = next
-        }
-    }
-}
-
-/// A row with its name before the field, so a filled-in field still says what it is (#59).
-private struct LabeledField<Field: View>: View {
-    let label: LocalizedStringKey
-    let field: Field
-
-    init(_ label: LocalizedStringKey, @ViewBuilder field: () -> Field) {
-        self.label = label
-        self.field = field()
-    }
-
-    var body: some View {
-        LabeledContent {
-            field
-                .multilineTextAlignment(.trailing)
-                .accessibilityLabel(Text(ui: label))
-        } label: {
-            Text(ui: label)
-        }
+    /// "Add another account": the form starts over.
+    private func addAnother() {
+        lookup?.cancel()
+        model = Self.newModel(app)
+        offersOwnServer = false
+        showsServers = false
+        outcome = nil
     }
 }

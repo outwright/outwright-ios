@@ -3,6 +3,7 @@
 
 public import Foundation
 import Observation
+import OutwrightMIME
 public import OutwrightModel
 import OutwrightStore
 import OutwrightSync
@@ -43,6 +44,10 @@ final class EventDetailsModel {
     private var withholdable = false
     /// The web links in the place and the notes, found once per load.
     private(set) var links: [URL] = []
+    /// The link that joins the meeting (`EventLinks.meeting`), one of `links`.
+    var meeting: URL? { EventLinks.meeting(in: links) }
+    /// The links but the meeting's, behind More links.
+    var otherLinks: [URL] { links.filter { $0 != meeting } }
     /// The store could not be read or watched: the sheet may be out of date, and says so.
     var failed: Bool { readFailed || watchFailed }
     private var readFailed = false
@@ -51,11 +56,17 @@ final class EventDetailsModel {
     @ObservationIgnored private let app: AppModel
     @ObservationIgnored let request: EventRequest
     @ObservationIgnored let phone: Calendar
+    /// Where the owner's calendar colours are kept (`CalendarColors`).
+    @ObservationIgnored private let defaults: UserDefaults
 
-    init(app: AppModel, request: EventRequest, calendar: Calendar = .autoupdatingCurrent) {
+    init(
+        app: AppModel, request: EventRequest, calendar: Calendar = .autoupdatingCurrent,
+        defaults: UserDefaults = .standard
+    ) {
         self.app = app
         self.request = request
         phone = calendar
+        self.defaults = defaults
         reload()
     }
 
@@ -95,6 +106,7 @@ final class EventDetailsModel {
             return
         }
         calendar = (try? app.store.allCalendars())?.first { $0.id == found.calendarID }
+            .map { CalendarColors.applied($0, CalendarColors.chosen(defaults)) }
         account = app.accounts.first { $0.id == found.accountID }
         series = try? app.store.series(found.id)
         withholdable = ReplyRoute.canWithholdReply(
@@ -147,8 +159,12 @@ final class EventDetailsModel {
     /// Delete on an invitation declines it.
     var canDecline: Bool { canAnswer }
 
-    /// "Don't send a response" is offered only where the app sends the reply itself.
-    var canWithholdReply: Bool { withholdable }
+    /// "Don't send a response" is offered where the app sends the reply itself, and over Graph, which
+    /// takes `sendResponse: false`.
+    var canWithholdReply: Bool { withholdable || account?.calendarVia == .graph }
+
+    /// A comment can go with the answer wherever the reply can be kept back: the app writes it, or Graph.
+    var canComment: Bool { canWithholdReply }
 
     /// The organiser called it off and the owner did not organise it: it can go from the calendar.
     var canRemoveCancelled: Bool { event?.isCancelled == true && !canEdit && isWritable }
@@ -158,11 +174,14 @@ final class EventDetailsModel {
 
     /// Answers the invitation, for this occurrence or the whole event. A reply always goes where the
     /// owner cannot keep it back (the server sends it).
-    func answer(_ response: Attendee.Response, sendReply: Bool, scope: EditScope) throws(InvitationError) {
+    /// The owner's `comment` goes with the reply.
+    func answer(
+        _ response: Attendee.Response, sendReply: Bool, scope: EditScope, comment: String? = nil
+    ) throws(InvitationError) {
         guard let id = event?.id else { return }
         let sends = sendReply || !canWithholdReply
         try invitationChange { () throws(StoreError) in
-            try app.store.respond(id, response, scope: scope, sendReply: sends)
+            try app.store.respond(id, response, scope: scope, sendReply: sends, comment: sends ? comment : nil)
         }
     }
 
@@ -248,6 +267,38 @@ final class EventDetailsModel {
         let line = details.attendees.first { $0.email.lowercased() == email.lowercased() }
         let name = line?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return name.isEmpty ? email : name
+    }
+
+    /// The organiser's address; nil when there is none.
+    var organizerAddress: Address? {
+        guard let details, let email = details.organizer else { return nil }
+        let line = details.attendees.first { $0.email.lowercased() == email.lowercased() }
+        return Self.address(email, name: line?.name)
+    }
+
+    /// Who Email attendees writes to: the organiser and everyone invited, each once, but the account.
+    var emailRecipients: [Address] {
+        guard let details else { return [] }
+        let own = account?.email.lowercased()
+        var seen: Set<String> = own.map { [$0] } ?? []
+        var result: [Address] = []
+        if let organizer = organizerAddress, seen.insert(organizer.email.lowercased()).inserted {
+            result.append(organizer)
+        }
+        for attendee in details.attendees where seen.insert(attendee.email.lowercased()).inserted {
+            result.append(Self.address(attendee.email, name: attendee.name))
+        }
+        return result
+    }
+
+    /// A person's card, opened over the account the event is in.
+    func person(_ address: Address) -> PersonRequest {
+        PersonRequest(address: address, account: event?.accountID)
+    }
+
+    static func address(_ email: String, name: String?) -> Address {
+        let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return Address(name: name.isEmpty ? nil : name, email: email)
     }
 
     /// Everyone invited but the organiser, with their answers.

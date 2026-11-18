@@ -18,7 +18,7 @@ struct Avatar: View {
             .overlay {
                 Text(Self.initials(name: name, email: email))
                     .font(.system(size: size * 0.38, weight: .regular))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.onSwatch)
             }
             .accessibilityHidden(true)
     }

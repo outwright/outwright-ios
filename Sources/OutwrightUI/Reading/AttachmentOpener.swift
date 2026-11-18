@@ -75,6 +75,7 @@ private struct AttachmentSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .navigationTitle(Text(verbatim: shown.attachment.filename))
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button { dismiss() } label: { Text(ui: "Done") }

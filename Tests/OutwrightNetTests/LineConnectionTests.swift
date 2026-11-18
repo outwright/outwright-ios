@@ -83,11 +83,11 @@ import Testing
         defer { listener.stop() }
         let port = try await listener.start()
         let conn = try await LineConnection.open(.init(host: "127.0.0.1", port: port, security: .plainLoopbackOnly))
-        let start = ContinuousClock.now
+        let start = SuspendingClock.now
         await #expect(throws: NetError.timeout) {
             _ = try await conn.readLine(deadline: .now + .seconds(1))
         }
-        #expect(ContinuousClock.now - start < .seconds(3))
+        #expect(SuspendingClock.now - start < .seconds(3))
         await conn.close()
     }
 

@@ -24,6 +24,8 @@ public enum PushError: Error, Sendable, Equatable, CustomStringConvertible {
     case serverRefused
     /// The mail server took the setup, but nothing came back from it: its push is not set up.
     case notSetUp
+    /// A push address that is not one of the relay's (pasted, or gone since).
+    case unknownAddress
 
     public var description: String {
         switch self {
@@ -42,6 +44,7 @@ public enum PushError: Error, Sendable, Equatable, CustomStringConvertible {
         case .unsupported: "no push for this mail server"
         case .serverRefused: "mail server refused push setup"
         case .notSetUp: "mail server not set up for push"
+        case .unknownAddress: "not a known push address"
         }
     }
 }

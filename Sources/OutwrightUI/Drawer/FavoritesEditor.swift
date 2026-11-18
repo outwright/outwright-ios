@@ -6,6 +6,7 @@ import SwiftUI
 
 /// Choose which folders are Favorites.
 struct FavoritesEditor: View {
+    @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = 28
     let model: DrawerModel
     @Environment(\.dismiss) private var dismiss
     @State private var chosen: Set<FolderID> = []
@@ -24,11 +25,11 @@ struct FavoritesEditor: View {
                                 }
                             } label: {
                                 HStack {
-                                    Image(systemName: Icons.folder(folder.kind)).frame(width: 28)
+                                    Image(systemName: Icons.folder(folder.kind)).frame(width: iconWidth)
                                     Text(FolderNames.name(folder))
                                     Spacer()
                                     if chosen.contains(folder.id) {
-                                        Image(systemName: "checkmark").foregroundStyle(Theme.accent)
+                                        Image(systemName: Icons.confirm).foregroundStyle(Theme.accent)
                                     }
                                 }
                                 .contentShape(Rectangle())
@@ -41,6 +42,7 @@ struct FavoritesEditor: View {
                 }
             }
             .navigationTitle(Text(ui: "Favorites"))
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Text(ui: "Cancel") }

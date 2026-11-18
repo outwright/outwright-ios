@@ -10,43 +10,85 @@ struct MonthView: View {
     let app: AppModel
     let model: CalendarModel
 
-    private var columns: [GridItem] { Array(repeating: GridItem(.flexible(), spacing: 0), count: 7) }
-
     var body: some View {
         VStack(spacing: 0) {
-            LazyVGrid(columns: columns, spacing: 0) {
-                ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
-                    Text(verbatim: symbol)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.secondaryText)
-                        .padding(.vertical, 6)
-                }
-                ForEach(model.days) { day in
-                    cell(day)
-                }
+            MonthGrid(model: model, days: model.days, month: model.anchorDay, chosen: model.anchorDay) { day in
+                withAnimation(.snappy) { model.anchorDay = day }
             }
-            .padding(.horizontal, 8)
+            // Seven days must fit across the phone, so the grid grows no further than the largest standard size.
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             Rectangle().fill(Theme.separator).frame(height: 1)
             chosenDay
         }
     }
 
+    @ViewBuilder private var chosenDay: some View {
+        if let day = model.chosenDay {
+            List {
+                Section {
+                    if day.isEmpty { Text(ui: "No events").foregroundStyle(Theme.secondaryText) }
+                    ForEach(day.allDay + day.timed.map(\.event), id: \.occurrenceKey) { event in
+                        AgendaRow(app: app, model: model, event: event, day: day.day)
+                    }
+                } header: {
+                    SectionHeader(
+                        verbatim: AgendaView.title(day.day, model: model),
+                        tint: model.isToday(day.day) ? Theme.accent : nil)
+                }
+            }
+            .listStyle(.plain)
+        } else {
+            Spacer()
+        }
+    }
+}
+
+/// A month's weeks: the weekdays' letters, then a cell per day with its number (today in the accent,
+/// the chosen day on it) and a dot per calendar with events that day. Month and the mini month share it.
+struct MonthGrid: View {
+    @ScaledMetric(relativeTo: .callout) private var dayCircle: CGFloat = 32
+    @ScaledMetric(relativeTo: .callout) private var cellHeight: CGFloat = 46
+    let model: CalendarModel
+    let days: [DayColumn]
+    /// A day in the month shown; the days around it are dimmed.
+    let month: Date
+    let chosen: Date
+    var compact = false
+    let choose: (Date) -> Void
+
+    private var columns: [GridItem] { Array(repeating: GridItem(.flexible(), spacing: 0), count: 7) }
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 0) {
+            ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
+                Text(verbatim: symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.secondaryText)
+                    .padding(.vertical, compact ? 2 : 6)
+            }
+            ForEach(days) { day in
+                cell(day)
+            }
+        }
+        .padding(.horizontal, 8)
+    }
+
     private func cell(_ day: DayColumn) -> some View {
         let calendar = model.calendar
-        let inMonth = calendar.isDate(day.day, equalTo: model.anchorDay, toGranularity: .month)
-        let isChosen = day.day == model.anchorDay
+        let inMonth = calendar.isDate(day.day, equalTo: month, toGranularity: .month)
+        let isChosen = day.day == chosen
         let isToday = model.isToday(day.day)
         return Button {
-            withAnimation(.snappy) { model.anchorDay = day.day }
+            choose(day.day)
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: compact ? 1 : 3) {
                 Text(verbatim: "\(calendar.component(.day, from: day.day))")
                     .font(.callout.weight(isToday || isChosen ? .bold : .regular))
                     .monospacedDigit()
                     .foregroundStyle(
                         isChosen ? Theme.onAccent
                             : isToday ? Theme.accent : inMonth ? Color.primary : Theme.secondaryText)
-                    .frame(width: 32, height: 32)
+                    .frame(width: dayCircle, height: dayCircle)
                     .background { if isChosen { Circle().fill(Theme.accent) } }
                 HStack(spacing: 3) {
                     ForEach(dots(day), id: \.self) { color in
@@ -55,7 +97,7 @@ struct MonthView: View {
                 }
                 .frame(height: 5)
             }
-            .frame(maxWidth: .infinity, minHeight: 46)
+            .frame(maxWidth: .infinity, minHeight: compact ? dayCircle + 9 : cellHeight)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -76,24 +118,5 @@ struct MonthView: View {
             if colors.count == 3 { break }
         }
         return colors
-    }
-
-    @ViewBuilder private var chosenDay: some View {
-        if let day = model.chosenDay {
-            List {
-                Section {
-                    if day.isEmpty { Text(ui: "No events").foregroundStyle(Theme.secondaryText) }
-                    ForEach(day.allDay + day.timed.map(\.event), id: \.occurrenceKey) { event in
-                        AgendaRow(app: app, model: model, event: event, day: day.day)
-                    }
-                } header: {
-                    Text(verbatim: AgendaView.title(day.day, model: model))
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
-            .listStyle(.plain)
-        } else {
-            Spacer()
-        }
     }
 }

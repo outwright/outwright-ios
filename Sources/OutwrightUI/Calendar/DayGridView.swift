@@ -4,87 +4,92 @@
 import OutwrightModel
 import SwiftUI
 
-/// Day, 3 Day and the week in landscape: each day's header with a plus, the all-day row, and a scrolling hour grid that
-/// opens at the current hour, with the now line on today.
+/// Day, 3 Day and the weeks: each day's header, the all-day band, and a scrolling hour grid that
+/// opens at the current hour, with the now line on today. Day and 3 Day page a day at a time under the
+/// finger, the headers and the all-day band moving with the hours, which keep their height from day to
+/// day. A tap on an empty slot opens a new event at that half hour.
 struct DayGridView: View {
     let app: AppModel
     @Bindable var model: CalendarModel
+    /// An empty slot was tapped: a new event at this time.
+    let addEvent: (Date) -> Void
 
-    static let hourHeight: CGFloat = 56
-    static let gutter: CGFloat = 46
-    static let allDayShown = 3
+    /// An hour's height and the time column's width grow with the text.
+    @ScaledMetric(relativeTo: .caption2) private var hourHeight: CGFloat = 56
+    @ScaledMetric(relativeTo: .caption2) private var gutter: CGFloat = 46
+
+    /// How far the paging days are scrolled, which the headers and the all-day band follow.
+    @State private var offset: CGFloat = 0
+    /// The day at the leading edge of the paging days.
+    @State private var position: Date?
+
+    /// The days laid out side by side: in Day and 3 Day a week more on each side to page into.
+    private var columns: [DayColumn] { model.pages ? model.pageDays : model.days }
+    private var shownCount: Int { model.pages ? model.pageWidth : max(model.days.count, 1) }
+    private var shownDays: Set<Date> { Set(model.days.map(\.day)) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            headers
-            if model.days.contains(where: { !$0.allDay.isEmpty }) { allDayRow }
-            Rectangle().fill(Theme.separator).frame(height: 1)
-            grid
+        GeometryReader { geometry in
+            let width = max((geometry.size.width - gutter) / CGFloat(shownCount), 1)
+            VStack(spacing: 0) {
+                band(width) { headers(width) }
+                    .padding(.vertical, 6)
+                if model.days.contains(where: { !$0.allDay.isEmpty }) {
+                    AllDayBand(
+                        app: app, model: model, columns: columns, shownDays: shownDays, width: width,
+                        shownCount: shownCount, offset: offset, gutter: gutter)
+                }
+                Rectangle().fill(Theme.separator).frame(height: 1)
+                grid(width)
+            }
+        }
+    }
+
+    /// A row beside the time column that moves with the paging days and is cut at the screen's edge.
+    private func band(_ width: CGFloat, @ViewBuilder content: () -> some View) -> some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: gutter, height: 1)
+            content()
+                .frame(width: width * CGFloat(columns.count), alignment: .leading)
+                .offset(x: -offset)
+                .frame(width: width * CGFloat(shownCount), alignment: .leading)
+                .clipped()
         }
     }
 
     // MARK: Headers
 
-    private var headers: some View {
+    private func headers(_ width: CGFloat) -> some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: Self.gutter, height: 1)
-            ForEach(model.days) { day in
-                DayHeader(
-                    day: day.day, isToday: model.isToday(day.day), calendar: model.calendar,
-                    canAdd: model.canAddEvents, add: { app.showNewEvent(day: day.day) })
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.vertical, 6)
-    }
-
-    private var allDayRow: some View {
-        HStack(alignment: .top, spacing: 0) {
-            Text(ui: "All day")
-                .font(.caption2)
-                .foregroundStyle(Theme.secondaryText)
-                .frame(width: Self.gutter, alignment: .center)
-                .padding(.top, 4)
-            ForEach(model.days) { day in
-                VStack(spacing: 2) {
-                    ForEach(day.allDay.prefix(Self.allDayShown), id: \.occurrenceKey) { event in
-                        Button { app.eventToShow = EventRequest(event) } label: {
-                            EventBlock(
-                                event: event, color: Color(calendar: model.color(of: event.calendarID)),
-                                calendar: model.calendar, showsPlace: false)
-                                .frame(height: 22)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    if day.allDay.count > Self.allDayShown {
-                        Text(ui: "+\(day.allDay.count - Self.allDayShown) more")
-                            .font(.caption2)
-                            .foregroundStyle(Theme.secondaryText)
-                    }
+            ForEach(columns) { day in
+                DayHeader(day: day.day, isToday: model.isToday(day.day), calendar: model.calendar) {
+                    withAnimation(.snappy) { model.openDay(day.day) }
                 }
-                .padding(.horizontal, 1)
-                .frame(maxWidth: .infinity, alignment: .top)
+                .frame(width: width)
+                .accessibilityHidden(!shownDays.contains(day.day))
             }
         }
-        .padding(.bottom, 4)
     }
 
     // MARK: The hours
 
-    private var grid: some View {
+    private func grid(_ width: CGFloat) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                ZStack(alignment: .topLeading) {
-                    hourLines
-                    HStack(spacing: 0) {
-                        Color.clear.frame(width: Self.gutter)
-                        ForEach(model.days) { day in
-                            DayColumnView(app: app, model: model, column: day)
-                                .frame(maxWidth: .infinity)
+                HStack(alignment: .top, spacing: 0) {
+                    Color.clear.frame(width: gutter)
+                    if model.pages {
+                        pager(width)
+                    } else {
+                        HStack(spacing: 0) {
+                            ForEach(model.days) { day in
+                                dayColumn(day).frame(width: width)
+                            }
                         }
                     }
                 }
-                .frame(height: Self.hourHeight * 24)
+                .frame(height: hourHeight * 24, alignment: .top)
+                .background(alignment: .topLeading) { hourLines }
                 .padding(.vertical, 8)
             }
             .onAppear { scrollToNow(proxy) }
@@ -92,6 +97,42 @@ struct DayGridView: View {
                 if model.isToday(model.anchorDay) { withAnimation { scrollToNow(proxy) } }
             }
         }
+    }
+
+    /// Day and 3 Day: the days in a row that pages a day at a time, inside the hours' scroll, so every
+    /// day shows the same hours.
+    private func pager(_ width: CGFloat) -> some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
+                ForEach(model.pageDays) { day in
+                    dayColumn(day)
+                        .frame(width: width, height: hourHeight * 24)
+                        .accessibilityHidden(!shownDays.contains(day.day))
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+        .scrollPosition(id: $position, anchor: .leading)
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.x + geometry.contentInsets.leading
+        } action: { _, new in
+            offset = new
+        }
+        .onScrollPhaseChange { _, phase in
+            // Once the days come to rest, the first one is the day in view.
+            if phase == .idle, let position, position != model.anchorDay { model.anchorDay = position }
+        }
+        .onAppear { position = model.anchorDay }
+        .onDisappear { offset = 0 }
+        .onChange(of: model.anchorDay) { _, day in
+            if position != day { position = day }
+        }
+    }
+
+    private func dayColumn(_ day: DayColumn) -> some View {
+        DayColumnView(app: app, model: model, column: day, tapSlot: addEvent)
     }
 
     private func scrollToNow(_ proxy: ScrollViewProxy) {
@@ -110,11 +151,11 @@ struct DayGridView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .foregroundStyle(Theme.secondaryText)
-                        .frame(width: Self.gutter - 6, alignment: .trailing)
+                        .frame(width: gutter - 6, alignment: .trailing)
                         .offset(y: -7)
                     Rectangle().fill(Theme.separator).frame(height: 1)
                 }
-                .frame(height: Self.hourHeight, alignment: .top)
+                .frame(height: hourHeight, alignment: .top)
                 .id(hour)
             }
         }
@@ -127,11 +168,20 @@ struct DayColumnView: View {
     let app: AppModel
     let model: CalendarModel
     let column: DayColumn
+    /// An empty slot was tapped: a new event at the start of its half hour.
+    let tapSlot: (Date) -> Void
+    @ScaledMetric(relativeTo: .caption2) private var hourHeight: CGFloat = 56
 
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
             ZStack(alignment: .topLeading) {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        tapSlot(model.slot(on: column.day, minute: Int(location.y / max(hourHeight, 1) * 60)))
+                    }
+                    .accessibilityHidden(true)
                 ForEach(column.timed) { placed in
                     let top = y(placed.startMinute)
                     let bottom = max(y(placed.endMinute), top + 18)
@@ -177,48 +227,44 @@ struct DayColumnView: View {
     /// The height of a wall-clock minute of the day (so a day with a clock change still puts 09:00 at
     /// the 9 line).
     private func y(_ minutes: Int) -> CGFloat {
-        CGFloat(minutes) / 60 * DayGridView.hourHeight
+        CGFloat(minutes) / 60 * hourHeight
     }
 }
 
-/// A day's name and number; today's number on the accent. The plus opens the new-event editor on
-/// that day.
+/// A day's name and number; today's number on the accent. A tap opens that day alone.
 struct DayHeader: View {
     let day: Date
     let isToday: Bool
     let calendar: Calendar
-    var canAdd = true
-    var add: () -> Void = {}
+    var open: () -> Void = {}
 
     private var style: Date.FormatStyle {
         Date.FormatStyle(locale: calendar.locale ?? .current, calendar: calendar, timeZone: calendar.timeZone)
     }
 
     var body: some View {
-        VStack(spacing: 2) {
-            Text(verbatim: day.formatted(style.weekday(.abbreviated)))
-                .font(.caption)
-                .foregroundStyle(isToday ? Theme.accent : Theme.secondaryText)
-                // Read with the number, as one element: "Sunday, November 8".
-                .accessibilityHidden(true)
-            HStack(spacing: 6) {
+        Button(action: open) {
+            VStack(spacing: 2) {
+                Text(verbatim: day.formatted(style.weekday(.abbreviated)))
+                    .font(.caption)
+                    .foregroundStyle(isToday ? Theme.accent : Theme.secondaryText)
                 Text(verbatim: "\(calendar.component(.day, from: day))")
                     .font(.headline)
                     .monospacedDigit()
                     .foregroundStyle(isToday ? Theme.onAccent : Color.primary)
                     .frame(minWidth: 30, minHeight: 30)
                     .background { if isToday { Circle().fill(Theme.accent) } }
-                    .accessibilityLabel(Text(verbatim: day.formatted(style.weekday(.wide).month(.wide).day())))
-                    .accessibilityAddTraits(isToday ? .isSelected : [])
-                    .accessibilityIdentifier(isToday ? "calendar.day.today" : "calendar.day")
-                Button(action: add) {
-                    Image(systemName: Icons.add).font(.caption.weight(.semibold))
-                }
-                .disabled(!canAdd)
-                .accessibilityLabel(Text(ui: "New event"))
             }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
-        .accessibilityElement(children: .contain)
+        .buttonStyle(.plain)
+        // Up to seven columns across the phone: grows no further than the largest standard size.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        // Read as one element: "Sunday, November 8".
+        .accessibilityLabel(Text(verbatim: day.formatted(style.weekday(.wide).month(.wide).day())))
+        .accessibilityAddTraits(isToday ? .isSelected : [])
+        .accessibilityIdentifier(isToday ? "calendar.day.today" : "calendar.day")
     }
 }
 

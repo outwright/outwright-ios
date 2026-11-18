@@ -115,6 +115,28 @@ import Testing
         #expect(model.results.map(\.fileName) == ["Lunch.pdf"])
     }
 
+    /// A message deleted or moved while its undo waits is left out of the results, mail and files
+    /// alike; undone, it comes back.
+    @Test func stagedMessagesAreLeftOut() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let id = try box.add(anna, uid: 1, subject: "Kallelse", body: try withAttachment(subject: "Kallelse", file: "Kallelse.pdf"))
+        var row = try #require(try box.store.message(id))
+        row.hasAttachment = true
+        _ = try box.store.upsert([row])
+        let pending = PendingMail(store: box.store)
+        let model = SearchModel(store: box.store, recents: recents(), debounce: .zero, staged: pending)
+        model.query = "kallelse"
+        await model.settled()
+        #expect(model.results.compactMap(\.message).map(\.id) == [id])
+        #expect(model.results.compactMap(\.fileName) == ["Kallelse.pdf"])
+        pending.stage([.delete(id)], hiding: [id], text: "Deleted")
+        #expect(model.results.compactMap(\.message).isEmpty)
+        #expect(model.results.compactMap(\.fileName).isEmpty)
+        pending.undo()
+        #expect(model.results.compactMap(\.message).map(\.id) == [id])
+    }
+
     @Test func typingWaitsForAPause() async throws {
         var box = try Mailbox()
         let anna = try box.addAccount("anna@example.org")
@@ -262,7 +284,7 @@ import Testing
         }
     }
 
-    @Test func allShowsPeopleEventsFilesMailThenSuggestionsInThatOrder() async throws {
+    @Test func suggestionsComeFirstThenGroupedSections() async throws {
         var box = try Mailbox()
         let anna = try box.addAccount("anna@example.org", cardDAV: true, calDAV: true)
         try box.addContact(anna, ContactDetails(givenName: "Persson", emails: [Labeled(label: "", value: "p@example.org")]))
@@ -276,8 +298,10 @@ import Testing
         let search = model(box)
         search.query = "per"
         await search.settled()
-        #expect(kinds(search.results) == [.person, .event, .file, .message, .message, .suggestion, .suggestion])
+        #expect(kinds(search.results) == [.suggestion, .suggestion, .person, .message, .message, .event, .file])
         #expect(search.results.compactMap(\.suggestion) == ["performance", "personal"])
+        #expect(search.sections.map(\.kind) == [.suggestions, .people, .messages, .events, .files])
+        #expect(search.sections.allSatisfy { !$0.hasMore })
     }
 
     @Test func allCapsPeopleEventsAndSuggestionsAtThree() async throws {
@@ -299,6 +323,70 @@ import Testing
         search.chip = .people
         await search.settled()
         #expect(search.results.compactMap(\.person).filter { $0.contact != nil }.count == 5)
+    }
+
+    @Test func allCapsEachSectionAndSaysThereIsMore() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org", cardDAV: true, calDAV: true)
+        for index in 1...5 {
+            try box.addContact(
+                anna,
+                ContactDetails(givenName: "Möte\(index)", emails: [Labeled(label: "", value: "m\(index)@example.org")]))
+            try box.addEvent(anna, event("Möte \(index)", inDays: Double(index)), now: Self.now)
+            try box.add(anna, uid: UInt32(index), subject: "möte\(index)ord")
+        }
+        try box.add(anna, uid: 9, subject: "möte9 ord")
+        let search = model(box)
+        search.query = "möte"
+        await search.settled()
+        let sections = search.sections
+        #expect(sections.allSatisfy { $0.results.count <= 3 })
+        #expect(sections.first { $0.kind == .messages }?.results.count == 3)
+        #expect(sections.filter { $0.kind != .suggestions }.allSatisfy { $0.hasMore })
+        search.chip = .events
+        await search.settled()
+        #expect(search.sections.map(\.kind) == [.events])
+        #expect(search.sections.first?.results.count == 5)
+        #expect(search.sections.first?.hasMore == false)
+    }
+
+    @Test func serverAnswerChangesTheEmptyState() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        try box.add(anna, uid: 1, subject: "Lunch")
+        let search = model(box)
+        search.query = "zzzz"
+        await search.settled()
+        #expect(search.emptyState == .pressSearch)
+        await search.submit()
+        #expect(search.emptyState == .nothingAnywhere)
+    }
+
+    @Test func sameContactInTwoAddressBooksIsOneRow() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org", cardDAV: true)
+        let bo = try box.addAccount("bo@example.org", cardDAV: true)
+        for account in [anna, bo] {
+            try box.addContact(
+                account, ContactDetails(givenName: "Maja", emails: [Labeled(label: "", value: "Maja@example.com")]))
+        }
+        let search = model(box)
+        search.query = "maja"
+        search.chip = .people
+        await search.settled()
+        #expect(search.results.compactMap(\.person).count == 1)
+    }
+
+    @Test func eventsChipGoesWhenAPersonIsChosen() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        try box.add(anna, uid: 1, from: "bo@example.org", subject: "Hej")
+        let search = model(box)
+        search.chip = .events
+        #expect(search.chip == .events)
+        #expect(search.choose(SearchPerson(address: Address(name: "Bo", email: "bo@example.org"))))
+        #expect(search.chip == .all)
+        #expect(!search.offeredChips.contains(.events))
     }
 
     @Test func contactWithoutAddressIsAPersonWithItsPhoneAsDetail() async throws {

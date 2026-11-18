@@ -306,12 +306,14 @@ extension FakeIMAPServer {
             Data("INTERNALDATE \"\(Self.internalDate(message.internalDate))\"".utf8)
         case "RFC822.SIZE":
             Data("RFC822.SIZE \(message.data.count)".utf8)
+        case "BODYSTRUCTURE":
+            Data("BODYSTRUCTURE \(FakeBodyStructure.of(message.data))".utf8)
         case "BODY.PEEK[HEADER]", "BODY[HEADER]":
             Self.literal("BODY[HEADER]", Self.split(message.data).0)
         case "BODY.PEEK[TEXT]<0.4096>", "BODY[TEXT]<0.4096>":
             Self.literal("BODY[TEXT]<0>", Self.split(message.data).1.prefix(4096))
         case "BODY.PEEK[]", "BODY[]":
-            Self.literal("BODY[]", message.data)
+            message.bodyWithheld ? nil : Self.literal("BODY[]", message.data)
         default:
             nil
         }

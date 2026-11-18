@@ -642,6 +642,23 @@ private struct InviteFixture {
         }
         #expect(details.start == .utc(utc(2026, 12, 12, 9)))
     }
+    @Test func anInvitationChangeWhileTheCreateIsUnderWayIsWrittenAfterIt() throws {
+        let f = try InviteFixture()
+        let id = try f.insert(EventSeries(uid: "inv-1", base: invited()))
+        let target = try #require(try f.store.eventCreateTarget(id))
+        let sending = try #require(try f.pending(id)).revision
+        try f.store.applyInvitationChange(
+            id, ics: Data("MOVED".utf8), series: EventSeries(uid: "inv-1", base: invited(day: 12, sequence: 1)),
+            window: window, phoneZone: utcZone)
+        // The create sent before the change came lands, as it was.
+        try f.store.eventChangeDone(
+            id, revision: sending, href: target.href, etag: "e1", ics: Data("FIRST".utf8),
+            series: EventSeries(uid: "inv-1", base: invited()), scheduleTag: nil)
+        #expect(try f.pending(id)?.edits == [.organiserChange], "the change is still to be written")
+        #expect(try f.store.eventObject(id) == Data("MOVED".utf8))
+        #expect(try f.theEvent().occurrence.start == utc(2026, 12, 12, 9), "and still shown")
+    }
+
     @Test func aRetriedDoneOfAnEarlierAnswerSendsNoSecondReply() throws {
         let f = try InviteFixture()
         let href = "https://dav.example.org/cal/work/a.ics"

@@ -46,3 +46,51 @@ enum DayLayout {
         return placed
     }
 }
+
+/// An all-day event drawn as one bar across the days it lasts (`first` to `last`, indexes into the
+/// days shown), in its lane: the row it takes in the all-day band.
+struct AllDayBar: Equatable, Identifiable {
+    var event: CalendarEvent
+    var first: Int
+    var last: Int
+    var lane: Int
+
+    var id: String { event.occurrenceKey }
+}
+
+/// Lays out the all-day band: each event once, across the days it lasts, the longer ones on top, each
+/// in the first lane that is free on all its days.
+enum AllDayLayout {
+    /// Only the events on a day `touching` accepts are laid out (the days on screen, for the band).
+    static func bars(_ days: [DayColumn], touching: (Int) -> Bool = { _ in true }) -> [AllDayBar] {
+        var spans: [String: AllDayBar] = [:]
+        for (index, day) in days.enumerated() {
+            for event in day.allDay {
+                let key = event.occurrenceKey
+                if var bar = spans[key] {
+                    bar.last = index
+                    spans[key] = bar
+                } else {
+                    spans[key] = AllDayBar(event: event, first: index, last: index, lane: 0)
+                }
+            }
+        }
+        let sorted = spans.values.filter { bar in (bar.first...bar.last).contains(where: touching) }.sorted {
+            ($0.first, $0.first - $0.last, $0.event.occurrence.details.title, $0.id)
+                < ($1.first, $1.first - $1.last, $1.event.occurrence.details.title, $1.id)
+        }
+        // For each lane, the last day it is taken on.
+        var laneEnds: [Int] = []
+        return sorted.map { bar in
+            var bar = bar
+            if let free = laneEnds.firstIndex(where: { $0 < bar.first }) {
+                laneEnds[free] = bar.last
+                bar.lane = free
+            } else {
+                laneEnds.append(bar.last)
+                bar.lane = laneEnds.count - 1
+            }
+            return bar
+        }
+    }
+}

@@ -115,6 +115,69 @@ final class RecordingSecrets: SecretStore {
         #expect(!elsewhere.needsServerConfirmation)
     }
 
+    @Test func editingTheAddressAfterLookupLooksItUpAgain() async throws {
+        let model = AddAccountModel(
+            store: try MailStore(path: nil), secrets: InMemorySecretStore(), resolver: FixedDoH(answers: [:]),
+            collections: found, probe: noProbe)
+        model.email = "jk@example.org"
+        #expect(!model.hasLookedUp)
+        await model.discover()
+        #expect(model.hasLookedUp)
+        model.email = "jk@example.org"
+        #expect(model.hasLookedUp)
+        model.email = "jk@example.net"
+        #expect(!model.hasLookedUp)
+    }
+
+    @Test func editingTheAddressTakesBackWhatWasFilledInForTheOldOne() async throws {
+        let resolver = FixedDoH(answers: [
+            "_imaps._tcp.example.org": [(target: "imap.elsewhere.example", port: 993, priority: 0)]
+        ])
+        let model = AddAccountModel(
+            store: try MailStore(path: nil), secrets: InMemorySecretStore(), resolver: resolver,
+            collections: found, probe: noProbe)
+        model.email = "a@example.org"
+        await model.discover()
+        model.confirmServers()
+        #expect(model.user == "a@example.org")
+        #expect(!model.confirmedHosts.isEmpty)
+        model.email = "b@example.net"
+        await model.discover()
+        #expect(model.user == "b@example.net")
+        #expect(model.confirmedHosts.isEmpty)
+    }
+
+    @Test func aUserNameTypedByTheOwnerSurvivesEditingTheAddress() async throws {
+        let model = AddAccountModel(
+            store: try MailStore(path: nil), secrets: InMemorySecretStore(), resolver: FixedDoH(answers: [:]),
+            collections: found, probe: noProbe)
+        model.email = "a@example.org"
+        model.user = "ann"
+        await model.discover()
+        model.email = "b@example.net"
+        await model.discover()
+        #expect(model.user == "ann")
+    }
+
+    @Test func discoveryFailureIsReported() async throws {
+        let silent = AddAccountModel(
+            store: try MailStore(path: nil), secrets: InMemorySecretStore(), resolver: FixedDoH(answers: [:]),
+            collections: found, probe: noProbe)
+        silent.email = "jk@example.org"
+        await silent.discover()
+        #expect(silent.discoveryFailed)
+        let named = AddAccountModel(
+            store: try MailStore(path: nil), secrets: InMemorySecretStore(),
+            resolver: FixedDoH(answers: [
+                "_imaps._tcp.example.org": [(target: "mail.example.org", port: 993, priority: 0)],
+                "_submissions._tcp.example.org": [(target: "smtp.example.org", port: 465, priority: 0)],
+            ]),
+            collections: found, probe: noProbe)
+        named.email = "jk@example.org"
+        await named.discover()
+        #expect(!named.discoveryFailed)
+    }
+
     @Test func wrongPasswordSavesNothing() async throws {
         try await withFakes { imapPort, smtpPort in
             let store = try MailStore(path: nil)

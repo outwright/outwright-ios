@@ -6,31 +6,51 @@ import SwiftUI
 
 /// Accept, Tentative and Decline for an invitation, the owner's current answer marked. One dialog
 /// then asks what is still open: for one occurrence of a series whether the answer is for that event
-/// or the whole series, and where the app sends the reply itself whether to send it. (One dialog, not
-/// two in a row: iOS can drop a second one presented while the first is going.)
+/// or the whole series, and where the app sends the reply itself whether to send it, or to add a
+/// comment first. The comment is written under the buttons, not in a second dialog (iOS can drop one
+/// presented while the first is going).
 struct RSVPControl: View {
     /// The owner's answer now; nil or NEEDS-ACTION when there is none.
     let response: Attendee.Response?
     /// The occurrence the answer may be for alone; nil answers the whole event at once.
     let occurrence: EditScope?
     let canWithholdReply: Bool
-    let answer: (Attendee.Response, _ sendReply: Bool, EditScope) -> Void
+    /// "Add a comment…" is offered: the reply that goes can carry one.
+    let canComment: Bool
+    let answer: (Attendee.Response, _ sendReply: Bool, EditScope, _ comment: String?) -> Void
 
     /// The answer tapped, waiting for the dialog.
     @State private var asked: Attendee.Response?
+    /// The answer a comment is being written for.
+    @State private var commenting: Attendee.Response?
+    @State private var comment = ""
+    @FocusState private var writes: Bool
 
     static let answers: [Attendee.Response] = [.accepted, .tentative, .declined]
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(Self.answers, id: \.self) { choice in
-                button(choice)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(Self.answers, id: \.self) { choice in
+                    button(choice)
+                }
             }
+            if let commenting { commentField(commenting) }
         }
         .confirmationDialog(title, isPresented: isAsking, titleVisibility: .visible, presenting: asked) { choice in
             ForEach(Array(choices.enumerated()), id: \.offset) { _, option in
-                Button { answer(choice, option.sends, option.scope) } label: { Text(ui: option.label) }
+                Button { answer(choice, option.sends, option.scope, nil) } label: { Text(ui: option.label) }
                     .accessibilityIdentifier("rsvp.\(option.identifier)")
+            }
+            if canComment {
+                Button {
+                    comment = ""
+                    commenting = choice
+                    writes = true
+                } label: {
+                    Text(ui: "Add a comment…")
+                }
+                .accessibilityIdentifier("rsvp.comment")
             }
             Button(role: .cancel) {} label: { Text(ui: "Cancel") }
         } message: { _ in
@@ -67,17 +87,61 @@ struct RSVPControl: View {
         case let (occurrence?, false):
             [Choice(label: "This event", identifier: "occurrence", scope: occurrence, sends: true),
              Choice(label: "All events in the series", identifier: "series", scope: .event, sends: true)]
-        case (nil, _):
+        case (nil, true):
             [Choice(label: "Send the response now", identifier: "send", scope: .event, sends: true),
              Choice(label: "Don't send a response", identifier: "dontSend", scope: .event, sends: false)]
+        case (nil, false):
+            [Choice(label: "Send the response now", identifier: "send", scope: .event, sends: true)]
         }
+    }
+
+    /// The comment to the organiser, sent with the answer: for one occurrence of a series, for it or
+    /// for the whole series.
+    private func commentField(_ response: Attendee.Response) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField(text: $comment, axis: .vertical) { Text(ui: "Add a comment…") }
+                .lineLimit(1...5)
+                .focused($writes)
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: Theme.cardRadius).fill(Theme.headerTrack))
+                .accessibilityIdentifier("rsvp.commentText")
+            HStack(spacing: 8) {
+                Button(role: .cancel) { commenting = nil } label: { Text(ui: "Cancel") }
+                    .buttonStyle(.bordered)
+                Spacer(minLength: 0)
+                if let occurrence {
+                    send(response, scope: occurrence, label: "This event", identifier: "occurrence")
+                    send(response, scope: .event, label: "All events", identifier: "series")
+                } else {
+                    send(response, scope: .event, label: "Send", identifier: "send")
+                }
+            }
+        }
+    }
+
+    private func send(
+        _ response: Attendee.Response, scope: EditScope, label: LocalizedStringKey, identifier: String
+    ) -> some View {
+        Button {
+            answer(response, true, scope, comment)
+            commenting = nil
+        } label: {
+            Text(ui: label)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Theme.accent)
+        .accessibilityIdentifier("rsvp.commentSend.\(identifier)")
     }
 
     private func button(_ choice: Attendee.Response) -> some View {
         let isCurrent = response == choice
         return Button {
-            // Nothing to ask: the whole event, and the server answers the organiser.
-            if occurrence == nil && !canWithholdReply { answer(choice, true, .event) } else { asked = choice }
+            // Nothing to ask: the whole event, and the server answers the organiser with no comment.
+            if occurrence == nil && !canWithholdReply && !canComment {
+                answer(choice, true, .event, nil)
+            } else {
+                asked = choice
+            }
         } label: {
             Label {
                 if let label = Self.label(choice, current: isCurrent) {
@@ -114,10 +178,10 @@ struct RSVPControl: View {
 
     static func icon(_ choice: Attendee.Response) -> String {
         switch choice {
-        case .accepted: "checkmark"
-        case .tentative: "questionmark"
-        case .declined: "xmark"
-        case .needsAction, .delegated: "circle"
+        case .accepted: Icons.confirm
+        case .tentative: Icons.unsure
+        case .declined: Icons.close
+        case .needsAction, .delegated: Icons.noAnswer
         }
     }
 

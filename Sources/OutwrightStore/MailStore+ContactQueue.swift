@@ -144,7 +144,10 @@ extension MailStore {
     public func contactChangeFailed(_ id: ContactID, revision: Int) throws(StoreError) {
         try write { database in
             try database.execute(
-                sql: "UPDATE contact SET pendingChange = NULL, changeFailed = 1 WHERE id = ? AND revision = ?",
+                sql: """
+                    UPDATE contact SET pendingChange = NULL, changeFailed = 1, attempts = 0
+                    WHERE id = ? AND revision = ?
+                    """,
                 arguments: [id.raw, revision])
         }
     }
@@ -164,7 +167,8 @@ extension MailStore {
     // MARK: Conflicts
 
     /// Queues the owner's version over the server's, which is now the one held. If the owner has
-    /// edited since the conflict, that edit is kept and the conflict copy dropped.
+    /// edited since the conflict, that edit is kept and the conflict copy dropped. Either way a photo
+    /// the server did not take goes again.
     public func applyConflictAgain(_ id: ContactID) throws(StoreError) {
         try write { database in
             let row = try Self.contactRow(database, id)
@@ -175,13 +179,17 @@ extension MailStore {
             else { return }
             if (row["pendingChange"] as String?) != nil {
                 try database.execute(
-                    sql: "UPDATE contact SET conflictJSON = NULL, changeFailed = 0 WHERE id = ?",
+                    sql: """
+                        UPDATE contact SET conflictJSON = NULL, changeFailed = 0,
+                            photoPending = MAX(photoPending, photoFailed), photoFailed = 0 WHERE id = ?
+                        """,
                     arguments: [id.raw])
                 return
             }
             try database.execute(
                 sql: """
                     UPDATE contact SET detailsJSON = ?, sortKey = ?, conflictJSON = NULL, changeFailed = 0,
+                        photoPending = MAX(photoPending, photoFailed), photoFailed = 0,
                         pendingChange = 'update', revision = revision + 1 WHERE id = ?
                     """, arguments: [ContactRecords.encode(own), own.sortKey, id.raw])
             try ContactRecords.reindex(database, id.raw, account: (row["accountId"] as String?) ?? "", own)
@@ -189,9 +197,12 @@ extension MailStore {
         try announce(contact: id)
     }
 
+    /// Keeps the server's version: the owner's, and a photo of theirs not on the server, go.
     public func discardConflict(_ id: ContactID) throws(StoreError) {
         try write { database in
-            try database.execute(sql: "UPDATE contact SET conflictJSON = NULL WHERE id = ?", arguments: [id.raw])
+            try database.execute(
+                sql: "UPDATE contact SET conflictJSON = NULL, photoPending = 0, photoFailed = 0 WHERE id = ?",
+                arguments: [id.raw])
         }
     }
 }

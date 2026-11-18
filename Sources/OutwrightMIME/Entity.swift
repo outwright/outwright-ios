@@ -29,6 +29,14 @@ extension MIMEParser {
         guard !entity.headers.isEmpty else { throw .notAMessage }
         return entity
     }
+
+    /// A structured header field's value (Content-Type's, Content-Disposition's), lower-cased, and
+    /// its parameters by lower-case name, as the parser reads them: quoted, and with RFC 2231's
+    /// continuations and charsets.
+    public static func structuredField(_ value: String) -> (value: String, parameters: [String: String]) {
+        let field = StructuredHeader.parse(value)
+        return (field.value.lowercased(), field.params)
+    }
 }
 
 enum EntityReader {

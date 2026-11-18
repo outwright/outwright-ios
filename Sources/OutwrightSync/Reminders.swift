@@ -95,17 +95,19 @@ public struct SystemReminders: Reminders {
 
     public func requestAuthorization() async -> Bool {
         guard let center else { return false }
-        return (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        return (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
     public func replace(_ planned: [PlannedReminder]) async {
         guard let center else { return }
+        let quiet = DoNotDisturbDefaults.load()
         let wanted = Dictionary(planned.map { ($0.identifier, $0) }, uniquingKeysWith: { first, _ in first })
         var kept: Set<String> = []
         var stale: [String] = []
         for request in await center.pendingNotificationRequests()
         where request.identifier.hasPrefix(ReminderPlan.identifierPrefix) {
-            if let reminder = wanted[request.identifier], Self.same(request, reminder) {
+            if let reminder = wanted[request.identifier],
+                Self.same(request, reminder, now: now(), doNotDisturb: quiet) {
                 kept.insert(request.identifier)
             } else {
                 stale.append(request.identifier)
@@ -113,23 +115,42 @@ public struct SystemReminders: Reminders {
         }
         center.removePendingNotificationRequests(withIdentifiers: stale)
         for reminder in planned where !kept.contains(reminder.identifier) {
-            try? await center.add(Self.request(reminder, now: now()))
+            try? await center.add(Self.request(reminder, now: now(), doNotDisturb: quiet))
         }
     }
 
     /// The fire instant is kept in the request (`fire`, seconds from 1970): a time-interval trigger
-    /// does not tell its own reliably.
-    private static func same(_ request: UNNotificationRequest, _ reminder: PlannedReminder) -> Bool {
+    /// does not tell its own reliably. A request quiet or loud other than Do Not Disturb would make it
+    /// now is not the same, so a replan after the bell changed quiets it or gives it its sound back.
+    static func same(
+        _ request: UNNotificationRequest, _ reminder: PlannedReminder, now: Date, doNotDisturb: DoNotDisturb
+    ) -> Bool {
         let fire = request.content.userInfo["fire"] as? Double
         return request.content.title == reminder.title && request.content.body == reminder.body
             && fire.map { abs($0 - reminder.fire.timeIntervalSince1970) < 1 } == true
+            && request.content.interruptionLevel == level(reminder, now: now, doNotDisturb: doNotDisturb)
     }
 
-    static func request(_ reminder: PlannedReminder, now: Date) -> UNNotificationRequest {
+    /// Quiet when Do Not Disturb is on now and still on when the reminder fires.
+    private static func level(
+        _ reminder: PlannedReminder, now: Date, doNotDisturb: DoNotDisturb
+    ) -> UNNotificationInterruptionLevel {
+        doNotDisturb.isActive(at: now) && doNotDisturb.isActive(at: reminder.fire) ? .passive : .active
+    }
+
+    /// A reminder planned while Do Not Disturb is active, and firing before it ends, is quiet: it
+    /// lands in Notification Centre without a sound.
+    static func request(
+        _ reminder: PlannedReminder, now: Date, doNotDisturb: DoNotDisturb = DoNotDisturb()
+    ) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
         content.title = reminder.title
         content.body = reminder.body
-        content.sound = .default
+        if level(reminder, now: now, doNotDisturb: doNotDisturb) == .passive {
+            content.interruptionLevel = .passive
+        } else {
+            content.sound = .default
+        }
         var info: [String: Any] = ["event": reminder.event.raw, "fire": reminder.fire.timeIntervalSince1970]
         if let occurrence = reminder.occurrence, let data = try? JSONEncoder().encode(occurrence),
             let text = String(bytes: data, encoding: .utf8) {

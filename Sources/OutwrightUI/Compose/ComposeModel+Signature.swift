@@ -53,4 +53,17 @@ extension ComposeModel {
             body.insert(Self.linked(after) + "\n", at: body.index(body.startIndex, offsetByCharacters: 2))
         }
     }
+
+    /// Where a diagnostics report goes: the project's support.
+    static let diagnosticsAddress = "support@10boring.com"
+
+    /// What a diagnostics mail says first, so the tester reads it before sending; the mail has no
+    /// signature, which can hold a name or a number, under a sentence saying there is none.
+    static var diagnosticsPromise: String {
+        String(
+            // One key, as Jörgen worded it: not split, so the translation stays whole.
+            // swiftlint:disable:next line_length
+            localized: "The information sent to Outwright contains no private information, no mail and no details of any account.",
+            bundle: .module)
+    }
 }

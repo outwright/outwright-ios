@@ -63,9 +63,9 @@ public enum GraphCalendars {
     /// The event properties the app reads.
     public static let eventProperties = [
         "id", "type", "subject", "body", "start", "end", "isAllDay", "location", "isReminderOn",
-        "reminderMinutesBeforeStart", "organizer", "attendees", "isCancelled", "showAs", "originalStartTimeZone",
-        "originalEndTimeZone", "originalStart", "seriesMasterId", "recurrence", "changeKey", "isOrganizer", "iCalUId",
-        "responseStatus", "responseRequested"
+        "reminderMinutesBeforeStart", "organizer", "attendees", "isCancelled", "showAs", "sensitivity",
+        "originalStartTimeZone", "originalEndTimeZone", "originalStart", "seriesMasterId", "recurrence", "changeKey",
+        "isOrganizer", "iCalUId", "responseStatus", "responseRequested"
     ]
     static let textBodies = #"outlook.body-content-type="text""#
     static let maxID = 1024
@@ -272,10 +272,14 @@ extension GraphClient {
     }
 
     /// Answers an invitation (the event, or one occurrence's instance); with `sendResponse`, Graph
-    /// tells the organiser. Graph answers 202 with no body.
-    public func respond(id: String, _ answer: GraphAnswer, sendResponse: Bool) async throws(GraphError) {
+    /// tells the organiser, with the owner's `comment` when there is one. Graph answers 202 with no body.
+    public func respond(
+        id: String, _ answer: GraphAnswer, sendResponse: Bool, comment: String? = nil
+    ) async throws(GraphError) {
         let target = try url("me/events/" + GraphContacts.segment(id) + "/" + answer.rawValue)
-        _ = try await send("POST", target, body: Self.json(["sendResponse": sendResponse]))
+        var body: [String: any Sendable] = ["sendResponse": sendResponse]
+        if let comment, !comment.isEmpty { body["comment"] = comment }
+        _ = try await send("POST", target, body: Self.json(body))
     }
 
     /// Deletes the event (if its ETag is still `ifMatch`, when given); one already gone counts as deleted.

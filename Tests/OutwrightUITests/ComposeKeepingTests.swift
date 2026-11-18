@@ -71,4 +71,135 @@ import Testing
         try model.keep()
         #expect(try box.store.message(draft.id)?.uid == 55)
     }
+
+    // MARK: - Closing with ✕
+
+    @Test func xWithChangesAsks() throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let model = ComposeModel(request: ComposeRequest(kind: .new), store: box.store, accounts: [anna])
+        #expect(model.closeChoice == .close)
+        model.subject = "Halvfärdigt"
+        #expect(model.closeChoice == .ask)
+    }
+
+    @Test func deleteDraftRemovesTheSavedDraft() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let first = ComposeModel(request: ComposeRequest(kind: .new), store: box.store, accounts: [anna])
+        first.subject = "Utkast"
+        try first.close()
+        let draft = try #require(try drafts(box, anna).first)
+
+        let reopened = await ComposeModel.make(
+            request: ComposeRequest(kind: .draft(draft.id)), store: box.store, accounts: [anna])
+        reopened.body = AttributedString("Ändrat")
+        try await reopened.discardDraft()
+        #expect(reopened.isFinished)
+        #expect(try drafts(box, anna).isEmpty)
+        #expect(try box.store.pendingActions().map(\.action).contains(.delete(draft.id)))
+
+        // A message never saved just closes: nothing is written or queued.
+        let fresh = ComposeModel(request: ComposeRequest(kind: .new), store: box.store, accounts: [anna])
+        fresh.subject = "Aldrig sparat"
+        let queued = try box.store.pendingActions().count
+        try await fresh.discardDraft()
+        #expect(fresh.isFinished)
+        #expect(try drafts(box, anna).isEmpty)
+        #expect(try box.store.pendingActions().count == queued)
+    }
+
+    // MARK: - Starting from a message whose body is not on the phone
+
+    private static let longText = (1...60).map { "Mening nummer \($0)." }.joined(separator: " ")
+
+    @Test func draftWithoutStoredBodyIsFetchedNotTruncated() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let id = try box.add(anna, .drafts, uid: 7, subject: "Utkast")
+        let full = try message(subject: "Utkast", text: Self.longText)
+        let store = box.store
+        let model = try #require(
+            await ComposeModel.start(
+                request: ComposeRequest(kind: .draft(id)), store: store, accounts: [anna]
+            ) { _ = try? store.setBody(full, for: $0) })
+        #expect(String(model.body.characters).contains("Mening nummer 60."))
+    }
+
+    @Test func unfetchableDraftDoesNotOpen() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let id = try box.add(anna, .drafts, uid: 7, subject: "Utkast")
+        var asked: [MessageID] = []
+        let model = await ComposeModel.start(
+            request: ComposeRequest(kind: .draft(id)), store: box.store, accounts: [anna]
+        ) { asked.append($0) }
+        #expect(model == nil)
+        #expect(asked == [id])
+    }
+
+    @Test func replyQuotesTheFullBody() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let id = try box.add(anna, uid: 3, subject: "Lång")
+        let full = try message(subject: "Lång", text: Self.longText)
+        let store = box.store
+        let model = try #require(
+            await ComposeModel.start(
+                request: ComposeRequest(kind: .reply(id)), store: store, accounts: [anna]
+            ) { _ = try? store.setBody(full, for: $0) })
+        #expect(shownText(model).contains("Mening nummer 60."))
+    }
+
+    /// A reply whose original can't be had opens all the same, without a quote, and says so. It still
+    /// answers the original: In-Reply-To and References name it.
+    @Test func unfetchableReplyOpensWithoutQuote() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let id = try box.add(anna, uid: 3, subject: "Lång")
+        var row = try #require(try box.store.message(id))
+        row.messageIDHeader = "orig@example.org"
+        _ = try box.store.upsert([row])
+        for kind in [ComposeRequest.Kind.reply(id), .replyAll(id)] {
+            let model = try #require(
+                await ComposeModel.start(
+                    request: ComposeRequest(kind: kind), store: box.store, accounts: [anna], fetchBody: { _ in }))
+            #expect(model.originalNotQuoted)
+            #expect(!shownText(model).contains("preview 3"))
+            #expect(model.subject.hasSuffix("Lång"))
+            #expect(model.to.map(\.email) == ["bo@example.org"])
+            try model.send()
+            let draft = try #require(model.draftID)
+            let sent = try MIMEParser.parse(try #require(try box.store.body(draft)))
+            #expect(sent.inReplyTo == ["orig@example.org"])
+            #expect(sent.references == ["orig@example.org"])
+        }
+    }
+
+    @Test func unfetchableForwardDoesNotOpen() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let id = try box.add(anna, uid: 3, subject: "Lång")
+        let model = await ComposeModel.start(
+            request: ComposeRequest(kind: .forward(id)), store: box.store, accounts: [anna], fetchBody: { _ in })
+        #expect(model == nil)
+    }
+
+    /// A refused delete leaves the message open, its draft kept, and says why.
+    @Test func refusedDraftDeleteKeepsTheSheetOpen() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let model = ComposeModel(request: ComposeRequest(kind: .new), store: box.store, accounts: [anna])
+        model.subject = "Utkast"
+        try model.keep()
+        let draft = try #require(model.draftID)
+        model.subject = "Utkast, ändrat"
+        try box.store.refuseQueuedActions(true)
+        await #expect(throws: ComposeError.store) { try await model.discardDraft() }
+        try box.store.refuseQueuedActions(false)
+        #expect(!model.isFinished)
+        #expect(model.closeChoice == .ask)
+        #expect(model.draftID == draft)
+        #expect(try drafts(box, anna).map(\.id) == [draft])
+    }
 }

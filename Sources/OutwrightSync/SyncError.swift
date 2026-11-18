@@ -50,6 +50,15 @@ extension SyncError {
         return nil
     }
 
+    /// Whether the account's sign-in does not work: the server refused it, or the owner has to
+    /// sign in again.
+    var refusesSignIn: Bool {
+        switch self {
+        case .needsSignIn, .imap(.authenticationFailed), .smtp(.authenticationFailed): true
+        default: false
+        }
+    }
+
     /// Whether the mail servers could not be reached (nothing was asked of them).
     var isUnreachable: Bool {
         switch self {

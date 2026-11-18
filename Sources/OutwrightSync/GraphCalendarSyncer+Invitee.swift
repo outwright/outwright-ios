@@ -14,14 +14,14 @@ extension GraphCalendarSyncer {
         _ edit: EventEdit, to target: inout Target, local: EventSeries, _ client: GraphClient
     ) async throws(SyncError) {
         switch edit {
-        case let .respond(response, scope, sendReply):
+        case let .respond(response, scope, sendReply, comment):
             // No action for it (no answer, delegated): refused, as Graph would a request it can't take.
             guard let answer = Self.answer(response) else { throw .graph(.status(400)) }
             let id = try await place(of: scope, in: target, local: local, client)
             // Graph refuses a response to a meeting whose organiser asked for none.
             let sends = sendReply && target.wantsResponse
             try await graph { () async throws(GraphError) in
-                try await client.respond(id: id, answer, sendResponse: sends)
+                try await client.respond(id: id, answer, sendResponse: sends, comment: sends ? comment : nil)
             }
         case let .ownReminder(minutes, scope):
             var body: [String: any Sendable] = ["isReminderOn": minutes != nil]
@@ -64,7 +64,7 @@ extension GraphCalendarSyncer {
 extension EventEdit {
     /// A decline, of the whole event or of one occurrence.
     var declines: Bool {
-        if case .respond(.declined, _, _) = self { return true }
+        if case .respond(.declined, _, _, _) = self { return true }
         return false
     }
 }

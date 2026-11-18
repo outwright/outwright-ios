@@ -83,13 +83,17 @@ struct SeededGenerator: RandomNumberGenerator {
             fields.familyName = text()
             fields.formattedName = text()
             fields.organization = text()
+            fields.title = text()
             fields.note = text()
+            fields.photo = Bool.random(using: &rng)
+                ? Data((0..<Int.random(in: 1...300, using: &rng)).map { _ in UInt8.random(in: 0...255, using: &rng) })
+                : nil
             fields.emails = (0..<Int.random(in: 0...3, using: &rng)).map { _ in LabeledValue(label: label(), value: text()) }
             fields.phones = (0..<Int.random(in: 0...3, using: &rng)).map { _ in LabeledValue(label: label(), value: text()) }
             fields.addresses = (0..<Int.random(in: 0...2, using: &rng)).map { _ in
                 VCardAddress(label: label(), street: text(), locality: text(), region: text(), postalCode: text(), country: text())
             }
-            let base = try firstCard(vcf(["UID:x"]))
+            let base = try firstCard(vcf(["UID:x"], version: Bool.random(using: &rng) ? "4.0" : "3.0"))
             let written = VCardWriter.write(base.applying(fields))
             let first = try firstCard(written)
             let back = first.fields
@@ -98,6 +102,8 @@ struct SeededGenerator: RandomNumberGenerator {
             #expect(back.formattedName == clean(fields.formattedName))
             #expect(back.organization == clean(fields.organization))
             #expect(back.note == clean(fields.note))
+            #expect(back.title == clean(fields.title))
+            #expect(back.photo == fields.photo)
             #expect(back.emails.map(\.value) == fields.emails.map { clean($0.value) })
             #expect(back.phones.map(\.label) == fields.phones.map(\.label))
             #expect(back.addresses.map(\.street) == fields.addresses.map { clean($0.street) })

@@ -35,6 +35,7 @@ extension ActionRunner {
             prepared = value
         case let .refused(refusal):
             try stored { try store.refuseSend(pending.id, draft: draftID, reason: refusal) }
+            sendRefusalCode = "send." + refusal.rawValue
             return true
         }
         guard let endpoint = AccountSyncer.endpoint(account.smtp) else {
@@ -66,6 +67,7 @@ extension ActionRunner {
                 }
                 try stored { try store.refuseSend(pending.id, draft: draftID, reason: refusal) }
                 refusedSend = refusedSend ?? error
+                sendRefusalCode = errorCode(error)
                 return true
             }
             try stored { try store.addSubmitted(submission.recipients, to: draftID) }
@@ -313,7 +315,9 @@ extension ActionRunner {
     private func keptForm(
         _ raw: Data, _ draftID: MessageID, _ pending: PendingAction
     ) async throws(SyncError) -> KeptForm {
-        guard let requirement = try stored({ try store.protection(of: draftID) }), requirement.kind == .encrypt else {
+        guard let requirement = try stored({ try store.protection(of: draftID) }),
+              requirement.kind == .encrypt || requirement.kind == .encryptUnsigned
+        else {
             return .bytes(raw)
         }
         if let protected = await protections[requirement.protection]?.protectDraft(raw, account: account) {

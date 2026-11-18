@@ -56,8 +56,8 @@ extension ProblemBanner where Accessory == EmptyView {
 extension ProblemBanner {
     private var line: some View {
         HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(Theme.flag)
+            Image(systemName: Icons.warningFilled)
+                .foregroundStyle(Theme.warning)
             Text(text)
                 .font(.subheadline)
                 .lineLimit(2)

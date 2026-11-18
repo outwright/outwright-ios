@@ -10,7 +10,7 @@ public enum ContactMapping {
     public static func details(_ fields: VCardFields) -> ContactDetails {
         ContactDetails(
             givenName: fields.givenName, familyName: fields.familyName, displayName: fields.formattedName,
-            organization: fields.organization, note: fields.note,
+            organization: fields.organization, title: fields.title, note: fields.note,
             emails: fields.emails.map { Labeled(label: $0.label, value: $0.value, origin: $0.origin) },
             phones: fields.phones.map { Labeled(label: $0.label, value: $0.value, origin: $0.origin) },
             addresses: fields.addresses.map {
@@ -23,7 +23,7 @@ public enum ContactMapping {
     public static func fields(_ details: ContactDetails, photo: Data?) -> VCardFields {
         VCardFields(
             givenName: details.givenName, familyName: details.familyName, formattedName: details.displayName,
-            organization: details.organization, note: details.note,
+            organization: details.organization, title: details.title, note: details.note,
             emails: details.emails.map { LabeledValue(label: $0.label, value: $0.value, origin: $0.origin) },
             phones: details.phones.map { LabeledValue(label: $0.label, value: $0.value, origin: $0.origin) },
             addresses: details.addresses.map {
@@ -64,7 +64,9 @@ public enum ContactMapping {
         take(\.familyName)
         take(\.formattedName)
         take(\.organization)
+        take(\.title)
         take(\.note)
+        take(\.photo)
         takeList(\.emails, &result, base: base, ours: ours, server: server)
         takeList(\.phones, &result, base: base, ours: ours, server: server)
         takeList(\.addresses, &result, base: base, ours: ours, server: server)

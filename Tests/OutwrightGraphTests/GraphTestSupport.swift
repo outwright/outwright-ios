@@ -39,11 +39,11 @@ func json(_ object: [String: Any]) -> Data {
     (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
 }
 
-/// A Graph contact with every property the app maps, plus one it does not (`jobTitle`).
+/// A Graph contact with every property the app maps, plus one it does not (`nickName`).
 var fullContact: [String: Any] {
     [
     "givenName": "Maja", "surname": "Ek", "displayName": "Maja Ek", "companyName": "Ek AB",
-    "personalNotes": "Met in Lund", "jobTitle": "Chief",
+    "personalNotes": "Met in Lund", "jobTitle": "Chief", "nickName": "Majsan",
     "emailAddresses": [["name": "Maja", "address": "maja@example.org"], ["address": "ek@example.org"]],
     "mobilePhone": "+46 70 111", "businessPhones": ["+46 8 222"], "homePhones": ["+46 8 333", "+46 8 444"],
     "homeAddress": ["street": "Storgatan 1", "city": "Lund", "state": "", "postalCode": "222 22",

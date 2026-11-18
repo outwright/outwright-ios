@@ -53,14 +53,17 @@ public struct PushSetup: Sendable {
     public let keepSecret: @Sendable (Data) throws(PushError) -> Void
     /// The relay as this subscription's device.
     public let relay: RelayAccess
+    /// For an addressed method: the address the owner's sender posts to, which `subscribe` checks.
+    public let address: PushAddress?
 
     public init(
         account: Account, subscription: RelaySubscription, deviceClientID: String, until: Date,
         awaitHeld: @escaping HeldBodyWait,
         keepSecret: @escaping @Sendable (Data) throws(PushError) -> Void,
-        relay: RelayAccess
+        relay: RelayAccess, address: PushAddress? = nil
     ) {
         self.relay = relay
+        self.address = address
         self.account = account
         self.subscription = subscription
         self.deviceClientID = deviceClientID
@@ -97,4 +100,28 @@ public protocol PushMethod: Sendable {
     func renew(_ handle: String, account: Account, until: Date, relay: RelayAccess?) async -> PushRenewal
     /// Removes the server side; called while the relay subscription still exists.
     func remove(_ handle: String, account: Account, relay: RelayAccess?) async throws(PushError)
+}
+
+/// An address a sender of the owner's posts to, and the method's handle for it.
+public struct PushAddress: Codable, Sendable, Equatable {
+    public let handle: String
+    public let url: URL
+
+    public init(handle: String, url: URL) {
+        self.handle = handle
+        self.url = url
+    }
+}
+
+/// A push method whose server side is a sender the owner sets up with an address the app shows.
+/// Never chosen automatically: the owner asks for an address first, and `subscribe` (with
+/// `PushSetup.address`) checks that the sender posts to it.
+public protocol AddressedPushMethod: PushMethod {
+    /// Whether `url` is an address this method hands out on the relay at `relayBase`; asked
+    /// before anything is made at the relay, so text that is not one is refused at once.
+    func recognizes(_ url: URL, relayBase: URL) -> Bool
+    /// Makes a new address for the subscription.
+    func issue(relay: RelayAccess) async throws(PushError) -> PushAddress
+    /// Joins the subscription to an address a sender already posts to; nil when it is not one.
+    func join(_ url: URL, relay: RelayAccess) async throws(PushError) -> PushAddress?
 }

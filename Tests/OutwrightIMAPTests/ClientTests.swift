@@ -355,9 +355,9 @@ private func utc(_ year: Int, _ month: Int, _ day: Int) throws -> Date {
                 await server.waitUntilIdling()
                 _ = await server.deliver(message("fresh"), to: "INBOX")
             }
-            let start = ContinuousClock.now
+            let start = SuspendingClock.now
             #expect(try await client.idle(timeout: .seconds(20)) == true)
-            #expect(ContinuousClock.now - start < .seconds(10))
+            #expect(SuspendingClock.now - start < .seconds(10))
             await delivery.value
 
             #expect(try await client.idle(timeout: .milliseconds(300)) == false)
@@ -375,10 +375,10 @@ private func utc(_ year: Int, _ month: Int, _ day: Int) throws -> Date {
             let idling = Task { try await client.idle(timeout: .seconds(600)) }
             await server.waitUntilIdling()
             await server.stopAnswering()
-            let start = ContinuousClock.now
+            let start = SuspendingClock.now
             await client.close()
             await #expect(throws: IMAPError.self) { _ = try await idling.value }
-            #expect(ContinuousClock.now - start < .seconds(5))
+            #expect(SuspendingClock.now - start < .seconds(5))
             await #expect(throws: IMAPError.net(.closed)) { _ = try await client.listFolders() }
         }
     }
@@ -389,10 +389,10 @@ private func utc(_ year: Int, _ month: Int, _ day: Int) throws -> Date {
             _ = try await client.select("INBOX")
             let idle = Task { try await client.idle(timeout: .seconds(60)) }
             await server.waitUntilIdling()
-            let start = ContinuousClock.now
+            let start = SuspendingClock.now
             idle.cancel()
             #expect(try await idle.value == false)
-            #expect(ContinuousClock.now - start < .seconds(5))
+            #expect(SuspendingClock.now - start < .seconds(5))
             #expect(try await client.select("INBOX").exists == 0)
         }
     }
@@ -411,12 +411,12 @@ private func utc(_ year: Int, _ month: Int, _ day: Int) throws -> Date {
             try await Task.sleep(for: .milliseconds(200))
             let idle = Task { try await client.idle(timeout: .seconds(60)) }
             try await Task.sleep(for: .milliseconds(200))
-            let start = ContinuousClock.now
+            let start = SuspendingClock.now
             idle.cancel()
             #expect(try await idle.value == false)
             // Ended while the command ahead of it still ran, not once it was done.
             #expect(!slowDone.withLock { $0 })
-            #expect(ContinuousClock.now - start < .seconds(1))
+            #expect(SuspendingClock.now - start < .seconds(1))
             _ = try await slow.value
         }
     }
@@ -435,14 +435,14 @@ private func utc(_ year: Int, _ month: Int, _ day: Int) throws -> Date {
             try await Task.sleep(for: .milliseconds(200))
             let waiting = Task { try await client.listFolders() }
             try await Task.sleep(for: .milliseconds(200))
-            let start = ContinuousClock.now
+            let start = SuspendingClock.now
             waiting.cancel()
             await #expect(throws: IMAPError.cancelled) {
                 _ = try await waiting.value
             }
             // Ended while the command ahead of it still ran, not once it was done.
             #expect(!slowDone.withLock { $0 })
-            #expect(ContinuousClock.now - start < .seconds(1))
+            #expect(SuspendingClock.now - start < .seconds(1))
             _ = try await slow.value
             #expect(try await client.select("INBOX").exists == 1)
         }

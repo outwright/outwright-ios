@@ -67,6 +67,10 @@ extension PushController {
     /// dropped once that worked or was refused for good; after a passing failure (or a cancel)
     /// it stays, so the account shows on and the next run tries again.
     func reestablish(_ registration: PushRegistration, token: Data) async {
+        if let addressed = method(registration.method) as? any AddressedPushMethod {
+            await rejoin(registration, method: addressed, token: token)
+            return
+        }
         let method = method(registration.method)
         let device = try? registry.device()?.device
         if let method {
@@ -91,7 +95,7 @@ extension PushController {
     /// A failure that trying again will not mend: the relay or the mail server said no.
     static func isRefusal(_ error: PushError) -> Bool {
         switch error {
-        case .limit, .attest, .jmap, .noDeviceToken, .unsupported, .serverRefused, .notSetUp:
+        case .limit, .attest, .jmap, .noDeviceToken, .unsupported, .serverRefused, .notSetUp, .unknownAddress:
             true
         case .http(let status):
             (400..<500).contains(status) && status != 408

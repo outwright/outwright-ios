@@ -56,7 +56,7 @@ enum EventEditing {
     /// `.respond` sets.
     static func apply(_ edit: EventEdit, to series: EventSeries, email: String) -> EventSeries? {
         switch edit {
-        case let .respond(response, scope, _):
+        case let .respond(response, scope, _, _):
             return changing(series, scope, everyOverride: true) {
                 EventOwnership.answering($0, response, accountEmail: email)
             }
@@ -238,7 +238,7 @@ extension MailStore {
     ) throws {
         // A newer answer (or the event going) replaces an older one whose reply could not be queued.
         switch edit {
-        case let .respond(_, scope, _):
+        case let .respond(_, scope, _, _):
             try clearFailedReply(database, row.id, coveredBy: scope)
             try clearServerReplied(database, row.id, coveredBy: scope)
         case .delete(scope: .event): try clearFailedReply(database, row.id, coveredBy: nil)

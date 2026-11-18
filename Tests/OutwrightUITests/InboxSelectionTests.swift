@@ -10,6 +10,10 @@ import Testing
 
 /// The message shown beside the list on a wide phone, as the list changes under it.
 @MainActor @Suite struct InboxSelectionTests {
+    private func defaults() throws -> UserDefaults {
+        try #require(UserDefaults(suiteName: "selection-\(UUID().uuidString)"))
+    }
+
     /// Three messages, newest first in the list: `first`, `middle`, `last`.
     private struct Three {
         var box: Mailbox
@@ -30,18 +34,37 @@ import Testing
 
     @Test func deletingTheSelectedMessageSelectsTheNext() throws {
         let three = try Three()
-        let model = InboxModel(store: three.box.store, scope: .allAccounts)
+        let model = InboxModel(store: three.box.store, scope: .allAccounts, defaults: try defaults())
         model.selected = three.middle
-        model.swipeLeft(three.middle)
+        model.swipe(.trailing, on: three.middle)
         #expect(model.selected == three.last)
     }
 
     @Test func deletingTheLastSelectsThePrevious() throws {
         let three = try Three()
-        let model = InboxModel(store: three.box.store, scope: .allAccounts)
+        let model = InboxModel(store: three.box.store, scope: .allAccounts, defaults: try defaults())
         model.selected = three.last
-        model.swipeLeft(three.last)
+        model.swipe(.trailing, on: three.last)
         #expect(model.selected == three.middle)
+    }
+
+    @Test func selectAllThenArchiveMovesEveryRow() async throws {
+        var three = try Three()
+        let bert = try three.box.addAccount("bert@example.org")
+        let fourth = try three.box.add(bert, uid: 1)
+        let model = InboxModel(store: three.box.store, scope: .allAccounts, defaults: try defaults())
+        model.beginSelecting(three.middle)
+        #expect(model.selection == [three.middle])
+        model.selectAll()
+        #expect(model.selection == [three.first, three.middle, three.last, fourth])
+        model.archiveSelected()
+        #expect(model.selection.isEmpty)
+        #expect(model.sections.isEmpty)
+        await model.pending.commit()
+        for id in [three.first, three.middle, three.last] {
+            #expect(try three.box.store.message(id)?.folderID == three.box.folder(three.account, .archive).id)
+        }
+        #expect(try three.box.store.message(fourth)?.folderID == three.box.folder(bert, .archive).id)
     }
 
     @Test func aFilterThatHidesTheSelectionMovesIt() throws {
@@ -111,7 +134,8 @@ import Testing
         init() throws {
             var box = try Mailbox()
             account = try box.addAccount("anna@example.org")
-            next = try box.add(account, uid: 1, from: "cia@example.org", date: Date(timeIntervalSince1970: 1_800_000_000))
+            next = try box.add(
+                account, uid: 1, from: "cia@example.org", date: Date(timeIntervalSince1970: 1_800_000_000))
             open = try box.add(account, uid: 2, date: Date(timeIntervalSince1970: 1_800_000_060))
             let defaults = try #require(UserDefaults(suiteName: "kept-\(UUID().uuidString)"))
             model = InboxModel(store: box.store, scope: .allAccounts, defaults: defaults)

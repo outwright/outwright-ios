@@ -11,11 +11,14 @@ public struct DiscoveredServers: Sendable, Equatable {
     /// A server is outside the address's domain (another company's host, or somebody who took
     /// over the DNS records): ask the owner before a password goes there.
     public var offDomain: Bool
+    /// No SRV record named a server: the usual names for the domain are only a guess.
+    public var guessed: Bool
 
-    public init(imap: MailEndpoint, smtp: MailEndpoint, offDomain: Bool) {
+    public init(imap: MailEndpoint, smtp: MailEndpoint, offDomain: Bool, guessed: Bool = false) {
         self.imap = imap
         self.smtp = smtp
         self.offDomain = offDomain
+        self.guessed = guessed
     }
 }
 
@@ -29,15 +32,16 @@ public enum Discovery {
             return nil
         }
         let tls = TransportSecurity.tls.rawValue
-        let imap = await best(resolver.srv("_imaps._tcp." + domain), security: tls)
-            ?? MailEndpoint(host: "imap." + domain, port: 993, security: tls)
+        let foundIMAP = await best(resolver.srv("_imaps._tcp." + domain), security: tls)
+        let imap = foundIMAP ?? MailEndpoint(host: "imap." + domain, port: 993, security: tls)
         var smtp = await best(resolver.srv("_submissions._tcp." + domain), security: tls)
         if smtp == nil {
             smtp = await best(resolver.srv("_submission._tcp." + domain), security: TransportSecurity.startTLS.rawValue)
         }
         let submission = smtp ?? MailEndpoint(host: "smtp." + domain, port: 465, security: tls)
         let outside = [imap.host, submission.host].contains { $0 != domain && !$0.hasSuffix("." + domain) }
-        return DiscoveredServers(imap: imap, smtp: submission, offDomain: outside)
+        let guessed = foundIMAP == nil || smtp == nil
+        return DiscoveredServers(imap: imap, smtp: submission, offDomain: outside, guessed: guessed)
     }
 
     /// The lower-case domain after the last `@`, when it is a plausible host name of two or more labels.

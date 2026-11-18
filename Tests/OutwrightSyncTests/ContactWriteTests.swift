@@ -32,6 +32,26 @@ private func serverCard(_ h: ContactHarness, _ book: URL, _ uid: String) async t
         }
     }
 
+    @Test func createdContactCarriesItsTitleAndPhoto() async throws {
+        try await withContacts { h in
+            let book = await h.server.addBook("Work")
+            let syncer = h.syncer()
+            try await syncer.sync()
+            let stored = try #require(try h.store.addressBooks(h.account.id).first)
+            let photo = Data([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3])
+            _ = try h.store.createContact(
+                ContactDetails(givenName: "Ny", familyName: "Person", title: "Chef"), photo: photo, in: stored.id)
+
+            try await syncer.runChanges()
+
+            let (uid, _) = try #require(await h.server.cards(in: book).first)
+            let card = try await serverCard(h, book, uid)
+            #expect(card.fields.title == "Chef")
+            #expect(card.fields.photo == photo)
+            #expect(try h.store.photosToSend(h.account.id).isEmpty, "a card carries its photo: none waits apart")
+        }
+    }
+
     @Test func renamedContactKeepsFNOnServer() async throws {
         try await withContacts { h in
             let book = await h.server.addBook("Work")

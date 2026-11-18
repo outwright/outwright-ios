@@ -10,7 +10,16 @@ public import OutwrightSync
 
 /// The chips under the search field.
 public enum SearchChip: CaseIterable, Sendable {
-    case all, mail, people, files
+    case all, mail, people, events, files
+}
+
+/// One group of the results.
+public struct SearchSection: Identifiable, Sendable {
+    public enum Kind: Hashable, Sendable { case suggestions, people, messages, events, files }
+    public let kind: Kind
+    public let results: [SearchResult]
+    public let hasMore: Bool
+    public var id: Kind { kind }
 }
 
 /// The last searches the owner made and the messages opened from search, newest first, kept on
@@ -109,7 +118,19 @@ public final class SearchModel {
     public private(set) var recentSearches: [String]
     public private(set) var recentItems: [MessageRow] = []
     public private(set) var frequentPeople: [Address]
-    public internal(set) var results: [SearchResult] = []
+    /// Everything found, staged messages too.
+    var allResults: [SearchResult] = []
+    /// What was found, without the messages (and their files) waiting out an undo.
+    public var results: [SearchResult] {
+        let hidden = staged?.hidden ?? []
+        guard !hidden.isEmpty else { return allResults }
+        return allResults.filter { result in
+            guard let message = result.message?.id ?? result.file?.message.id else { return true }
+            return !hidden.contains(message)
+        }
+    }
+    /// Kinds that have more than the three shown under All.
+    var moreFound: Set<SearchSection.Kind> = []
     public internal(set) var isAskingServers = false
 
     @ObservationIgnored let store: MailStore
@@ -118,6 +139,8 @@ public final class SearchModel {
     @ObservationIgnored let scanFiles: FileScan
     @ObservationIgnored let searchServer: ServerSearch?
     @ObservationIgnored let now: @Sendable () -> Date
+    /// The deletes and moves waiting out their undo; their messages are left out.
+    @ObservationIgnored let staged: PendingMail?
     @ObservationIgnored let people: [Address]
     @ObservationIgnored let ownAddresses: Set<String>
     @ObservationIgnored var serverHits: [ServerQuery: [MessageID]] = [:]
@@ -131,19 +154,23 @@ public final class SearchModel {
     @ObservationIgnored private var folderNames: [FolderID: String] = [:]
     @ObservationIgnored var generation = 0
 
-    public convenience init(store: MailStore, sync: SyncCoordinator?, recents: RecentSearches = RecentSearches()) {
+    public convenience init(
+        store: MailStore, sync: SyncCoordinator?, recents: RecentSearches = RecentSearches(), staged: PendingMail? = nil
+    ) {
         var server: ServerSearch?
         if let sync {
             server = { query in await sync.searchServer(query) }
         }
-        self.init(store: store, recents: recents, searchServer: server)
+        self.init(store: store, recents: recents, searchServer: server, staged: staged)
     }
 
     init(
         store: MailStore, recents: RecentSearches = RecentSearches(), debounce: Duration = .milliseconds(250),
         scanFiles: @escaping FileScan = { store, rows in SearchModel.attachmentFiles(store, rows) },
-        searchServer: ServerSearch? = nil, now: @escaping @Sendable () -> Date = { Date() }
+        searchServer: ServerSearch? = nil, now: @escaping @Sendable () -> Date = { Date() },
+        staged: PendingMail? = nil
     ) {
+        self.staged = staged
         self.store = store
         self.recents = recents
         self.debounce = debounce
@@ -157,6 +184,33 @@ public final class SearchModel {
         recentSearches = recents.all
         recentItems = []
         reloadRecentItems()
+    }
+
+    /// The chips offered: a person's mail has no events.
+    public var offeredChips: [SearchChip] {
+        SearchChip.allCases.filter { token == nil || $0 != .events }
+    }
+
+    /// The results as groups, in the order suggestions, people, mail, events, files. Under All each
+    /// group is cut to three rows and says whether there is more; under a chip it is whole.
+    public var sections: [SearchSection] {
+        let order: [SearchSection.Kind] = [.suggestions, .people, .messages, .events, .files]
+        let capped = chip == .all && token == nil
+        return order.compactMap { kind in
+            let rows = results.filter { $0.kind == kind }
+            guard !rows.isEmpty else { return nil }
+            let shown = capped ? Array(rows.prefix(Self.allLimit)) : rows
+            let more = capped && (rows.count > Self.allLimit || moreFound.contains(kind))
+            return SearchSection(kind: kind, results: shown, hasMore: more && kind != .suggestions)
+        }
+    }
+
+    /// What the list says when it has nothing to show.
+    public enum EmptyState: Sendable { case hasResults, pressSearch, nothingAnywhere }
+
+    public var emptyState: EmptyState {
+        guard results.isEmpty, !isAskingServers else { return .hasResults }
+        return submitted ? .nothingAnywhere : .pressSearch
     }
 
     /// The name of a folder, for the rows of a person's mail.
@@ -236,6 +290,7 @@ public final class SearchModel {
         guard !person.emails.isEmpty else { return false }
         token = person
         direction = .from
+        if chip == .events { chip = .all }
         changedAsking()
         return true
     }

@@ -97,13 +97,25 @@ import Testing
             await coordinator.refreshAll()
             #expect(try h.rows(.inbox).isEmpty)
             let more = await coordinator.fetchOlder(.allAccounts, atLeast: 10)
-            #expect(!more)
+            #expect(more == .noneLeft)
             #expect(try h.rows(.inbox).map(\.subject) == ["old"])
             #expect(try h.rows(.sent).isEmpty, "only the Inboxes are in that list")
             let sent = try h.folder(.sent).id
             let moreSent = await coordinator.fetchOlder(.folder(sent), atLeast: 10)
-            #expect(!moreSent)
+            #expect(moreSent == .noneLeft)
             #expect(try h.rows(.sent).map(\.subject) == ["old sent"])
+        }
+    }
+
+    @Test func anAccountWithNoPasswordFailsRatherThanHavingMore() async throws {
+        let server = await standardServer()
+        await server.deliver(mail("old", date: daysAgo(150)), to: "INBOX")
+        try await withHarness(server) { h in
+            await offlineCoordinator(store: h.store, secrets: h.secrets, now: { fixedNow }).refreshAll()
+            // The password is gone from the phone since.
+            let coordinator = offlineCoordinator(store: h.store, secrets: InMemorySecretStore(), now: { fixedNow })
+            #expect(await coordinator.fetchOlder(.allAccounts, atLeast: 10) == .failed)
+            #expect(await coordinator.lastErrors[h.account.id] == .noPassword)
         }
     }
 }

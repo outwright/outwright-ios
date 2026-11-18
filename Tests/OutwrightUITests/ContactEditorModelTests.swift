@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import Foundation
+import ImageIO
 import OutwrightFakes
 import OutwrightMIME
 import OutwrightModel
@@ -80,6 +81,61 @@ import Testing
         #expect(model.details.familyName == "Berg")
         let bare = ContactEditorModel(app: f.app, editing: nil, prefill: Address(name: nil, email: "x@example.org"))
         #expect(bare.details.givenName.isEmpty && bare.details.emails.first?.value == "x@example.org")
+    }
+
+    @Test func jobTitleAndPhotoAreSaved() throws {
+        let f = try fixture()
+        let photo = Data([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3])
+        let model = ContactEditorModel(app: f.app, editing: nil, prefill: nil)
+        model.details.givenName = "Maja"
+        model.details.title = "  Chef "
+        model.photo = photo
+        let id = try model.save()
+        let saved = try #require(try f.box.store.contact(id))
+        #expect(saved.details.title == "Chef")
+        #expect(saved.photo == photo)
+        let edit = ContactEditorModel(app: f.app, editing: id, prefill: nil)
+        #expect(edit.photo == photo)
+        edit.photo = nil
+        #expect(edit.hasChanges)
+        _ = try edit.save()
+        #expect(try f.box.store.contact(id)?.photo == nil, "a removed photo goes")
+        #expect(try f.box.store.contact(id)?.details.title == "Chef")
+    }
+
+    @Test func pickedPhotoIsScaledDownToAJPEG() throws {
+        let big = try #require(testPNG(width: 1_200, height: 900))
+        let prepared = try #require(ContactPhotos.prepared(big))
+        #expect(prepared.starts(with: [0xFF, 0xD8]), "a JPEG")
+        let source = try #require(CGImageSourceCreateWithData(prepared as CFData, nil))
+        let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        let width = try #require((properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue)
+        let height = try #require((properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue)
+        #expect(max(width, height) == 512)
+        #expect(ContactPhotos.prepared(Data("not a picture".utf8)) == nil)
+    }
+
+    @Test func anOddEmailIsFlaggedButStillSaved() throws {
+        #expect(!ContactEditorModel.looksWrong(email: "maja@example.org"))
+        #expect(!ContactEditorModel.looksWrong(email: ""))
+        for odd in ["maja", "maja@", "@example.org", "maja@example", "ma ja@example.org", "a@b@example.org"] {
+            #expect(ContactEditorModel.looksWrong(email: odd), "\(odd)")
+        }
+        let f = try fixture()
+        let model = ContactEditorModel(app: f.app, editing: nil, prefill: nil)
+        model.details.emails = [Labeled(label: "work", value: "maja")]
+        #expect(model.canSave)
+        let id = try model.save()
+        #expect(try f.box.store.contact(id)?.details.emails.map(\.value) == ["maja"])
+    }
+
+    @Test func editorSaysWhenThereIsNoBook() throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org", cardDAV: true)
+        try box.store.replaceAddressBooks([("/shared/", "Shared", true)], for: anna.id)
+        let app = AppModel(store: box.store, sync: offlineSync(store: box.store, secrets: InMemorySecretStore()))
+        let model = ContactEditorModel(app: app, editing: nil, prefill: nil)
+        #expect(model.hasNoBook)
     }
 
     @Test func emptyContactCannotBeSaved() throws {
@@ -211,9 +267,8 @@ import Testing
     @Test func deleteQueuesAndHides() throws {
         let f = try fixture()
         let id = try put(f, in: f.books[0])
-        let card = PersonCardModel(app: f.app, request: PersonRequest(contact: id))
-        card.reload()
-        try card.delete()
+        let editor = ContactEditorModel(app: f.app, editing: id, prefill: nil)
+        try editor.delete()
         #expect(try f.box.store.contacts(in: nil, matching: nil).isEmpty)
         #expect(try f.box.store.pendingContactChanges(f.accounts[0].id).map(\.change) == [.delete])
     }
@@ -276,6 +331,20 @@ import Testing
 
         #expect(!card.changeFailed)
         #expect(card.name == "Maja Ek")
+    }
+
+    @Test func aRefusedPhotoOnTheCardCanBeTriedAgain() throws {
+        let f = try fixture()
+        let id = try put(f, in: f.books[0])
+        let sent = try #require(try f.box.store.pendingContactChanges(f.accounts[0].id).first)
+        try f.box.store.photoGivenUp(id, revision: sent.revision)
+        let card = PersonCardModel(app: f.app, request: PersonRequest(contact: id))
+        card.reload()
+        #expect(card.changeFailed && card.photoFailed)
+
+        try card.retryPhoto()
+
+        #expect(!card.changeFailed && !card.photoFailed)
     }
 
     @Test func cardRefreshesWhenMailArrives() async throws {
@@ -373,6 +442,15 @@ import Testing
         #expect(model.addressLabels(for: 0) == ["home", "work", "other"])
     }
 
+    /// A CardDAV contact takes a phone with no label, or one of its own: it is saved as it is.
+    @Test func ownServerTakesAPhoneWithoutALabel() throws {
+        let f = try fixture()
+        let model = ContactEditorModel(app: f.app, editing: nil, prefill: nil)
+        model.details.givenName = "Sari"
+        model.details.phones = [Labeled(label: "", value: "0700000000"), Labeled(label: "fax", value: "1")]
+        #expect(!model.isOverLimits && model.canSave)
+    }
+
     /// Rows typed for an own-server book that Graph cannot hold keep a Microsoft book from saving
     /// until they fit: nothing is dropped on the way.
     @Test func switchingToAMicrosoftBookOverItsLimitsBlocksSaving() throws {
@@ -403,4 +481,21 @@ import Testing
         model.details.addresses = [PostalAddress(label: "home", street: "A"), PostalAddress(label: "home", street: "B")]
         #expect(model.isOverLimits)
     }
+}
+
+/// A PNG of one colour, of the size given.
+func testPNG(width: Int, height: Int) -> Data? {
+    guard let context = CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return nil }
+    context.setFillColor(red: 0.2, green: 0.5, blue: 0.8, alpha: 1)
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    guard let image = context.makeImage() else { return nil }
+    let data = NSMutableData()
+    guard let destination = CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil) else {
+        return nil
+    }
+    CGImageDestinationAddImage(destination, image, nil)
+    return CGImageDestinationFinalize(destination) ? data as Data : nil
 }

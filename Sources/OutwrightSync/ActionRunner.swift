@@ -50,6 +50,8 @@ struct ActionRunner {
     var renumbered: Set<FolderID> = []
     /// The first message the server refused for good in this run: done with, but the owner hears.
     var refusedSend: SyncError?
+    /// The refusal of the send just run, by code, for the journal; cleared once noted.
+    var sendRefusalCode: String?
     /// A change given up in this run because its message was never found.
     var abandoned: SyncError?
     /// This runner's syncer was replaced: nothing more is done.
@@ -64,6 +66,8 @@ struct ActionRunner {
     let mayContinue: @Sendable () async -> Bool
     /// The protections the build carries, by id.
     let protections: [ProtectionID: any MailProtection]
+    /// Where each send's outcome is noted, by code (nil: nowhere).
+    var journal: DiagnosticsJournal?
 
     init(
         account: Account, store: MailStore, client: IMAPClient, credentials: CredentialProvider, now: Date,
@@ -80,16 +84,6 @@ struct ActionRunner {
         self.folders = folders
     }
 
-    init(
-        account: Account, store: MailStore, client: IMAPClient, secrets: any SecretStore, now: Date,
-        folders: [Folder], protections: [any MailProtection] = [],
-        mayContinue: @escaping @Sendable () async -> Bool = { true }
-    ) {
-        self.init(
-            account: account, store: store, client: client, credentials: CredentialProvider(secrets: secrets),
-            now: now, folders: folders, protections: protections, mayContinue: mayContinue)
-    }
-
     /// Runs `queue` in order. A broken connection is thrown at once; any other failure leaves
     /// that action, and every later one for the same message, queued, and the first such
     /// failure is returned.
@@ -102,7 +96,10 @@ struct ActionRunner {
                 continue
             }
             do {
-                if try await perform(pending) {
+                sendRefusalCode = nil
+                let done = try await perform(pending)
+                noteSend(pending, done: done)
+                if done {
                     try stored { try store.completeAction(pending.id) }
                 } else if stopped {
                     blocked.insert(target)
@@ -113,6 +110,7 @@ struct ActionRunner {
                     try missed(pending)
                 }
             } catch {
+                noteSend(pending, failed: error)
                 if error.breaksConnection {
                     throw error
                 }

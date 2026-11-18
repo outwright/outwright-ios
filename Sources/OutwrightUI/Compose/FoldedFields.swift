@@ -16,9 +16,9 @@ struct FoldedFields: View {
             HStack(spacing: 6) {
                 Text(verbatim: Self.names(recipients))
                     .foregroundStyle(.primary)
-                Text(verbatim: subject).foregroundStyle(.secondary)
+                Text(verbatim: subject).foregroundStyle(Theme.secondaryText)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.down").foregroundStyle(.secondary)
+                Image(systemName: Icons.unfolded).foregroundStyle(Theme.secondaryText)
             }
             .lineLimit(1)
             .font(.subheadline)

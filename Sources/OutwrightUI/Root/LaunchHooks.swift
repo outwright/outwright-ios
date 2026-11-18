@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 public import Foundation
+public import OutwrightStore
 
 /// What a test build hooks into the app at launch: a clock that runs ahead, a sample in place of
 /// the real model, providers pointed at fake servers. A shipped build has none: hooks are classes
@@ -19,6 +20,11 @@ public protocol LaunchHooks: AnyObject {
     func providers(_ providers: [any AccountProvider]) -> [any AccountProvider]
     /// The sample model is made: a hook may add to it (a provider's sample account).
     func sampleStarted(_ model: AppModel)
+    /// Before the app's own store opens in `folder`: a hook may clear what an earlier run left.
+    func prepare(storeFolder folder: URL)
+    /// The app's own store is open and nothing has read it yet: a hook may add to it (a test's
+    /// accounts).
+    func storeOpened(_ store: MailStore)
 }
 
 extension LaunchHooks {
@@ -27,6 +33,8 @@ extension LaunchHooks {
     public func sampleModel() -> AppModel? { nil }
     public func providers(_ providers: [any AccountProvider]) -> [any AccountProvider] { providers }
     public func sampleStarted(_ model: AppModel) {}
+    public func prepare(storeFolder folder: URL) {}
+    public func storeOpened(_ store: MailStore) {}
 }
 
 /// The hooks a build names, found by their Objective-C class names; a name that is no hook is
@@ -60,5 +68,13 @@ public struct LaunchHookSet {
 
     public func providers(_ providers: [any AccountProvider]) -> [any AccountProvider] {
         hooks.reduce(providers) { $1.providers($0) }
+    }
+
+    public func prepare(storeFolder folder: URL) {
+        for hook in hooks { hook.prepare(storeFolder: folder) }
+    }
+
+    public func storeOpened(_ store: MailStore) {
+        for hook in hooks { hook.storeOpened(store) }
     }
 }

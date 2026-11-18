@@ -2,43 +2,37 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 public import Foundation
+public import OutwrightSync
 import OSLog
-import OutwrightModel
+public import OutwrightModel
 
 /// Where a diagnostics report reads what the phone kept: MetricKit payloads and recent log lines.
 /// The app shell fills it in; tests and the sample give their own.
 public struct DiagnosticsSource: Sendable {
     public var payloads: @Sendable () -> [Data]
     public var log: @Sendable () -> [String]
+    /// The diagnostics journal, oldest first.
+    public var journal: @Sendable () -> [JournalEntry]
+    /// Each account's push subscription fingerprint, where push is on.
+    public var pushFingerprints: @Sendable () -> [AccountID: String]
 
-    public init(payloads: @escaping @Sendable () -> [Data], log: @escaping @Sendable () -> [String]) {
+    public init(
+        payloads: @escaping @Sendable () -> [Data], log: @escaping @Sendable () -> [String],
+        journal: @escaping @Sendable () -> [JournalEntry] = { [] },
+        pushFingerprints: @escaping @Sendable () -> [AccountID: String] = { [:] }
+    ) {
         self.payloads = payloads
         self.log = log
+        self.journal = journal
+        self.pushFingerprints = pushFingerprints
     }
 
     public static let empty = DiagnosticsSource(payloads: { [] }, log: { [] })
 }
 
-/// This process's own log lines, from the unified log.
+/// What the diagnostics note in the unified log (for development; reports read the journal).
 public enum DiagnosticsLog {
     private static let logger = Logger(subsystem: logSubsystem, category: "ui")
-
-    /// The app's newest log lines since `date` (as many as a report holds), oldest first; empty
-    /// when the log can't be read. Values logged as private stay redacted here.
-    public static func recent(since date: Date) -> [String] {
-        guard let store = try? OSLogStore(scope: .currentProcessIdentifier),
-            let entries = try? store.getEntries(
-                at: store.position(date: date),
-                matching: NSPredicate(format: "subsystem == %@", logSubsystem))
-        else { return [] }
-        let keep = DiagnosticsReport.logLines
-        var lines: [String] = []
-        for entry in entries {
-            lines.append("\(entry.date.ISO8601Format()) \(entry.composedMessage)")
-            if lines.count >= keep * 2 { lines.removeFirst(keep) }
-        }
-        return Array(lines.suffix(keep))
-    }
 
     /// Notes in the log that a report was built, with how many payloads it holds and nothing else.
     static func reportBuilt(payloads: Int) {

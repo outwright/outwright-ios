@@ -102,7 +102,7 @@ extension MailStore {
     // swiftlint:disable:next function_parameter_count
     public func upsertRemote(
         href: String, etag: String, vcard: Data, details: ContactDetails, photo: Data?,
-        in book: AddressBookID
+        keepsPhoto: Bool = false, in book: AddressBookID
     ) throws(StoreError) -> Bool {
         try write { database in
             guard
@@ -121,9 +121,10 @@ extension MailStore {
                 if ((existing["changeFailed"] as Int?) ?? 0) != 0 { return false }
                 try database.execute(
                     sql: """
-                        UPDATE contact SET etag = ?, vcard = ?, detailsJSON = ?, sortKey = ?, photo = ?
+                        UPDATE contact SET etag = ?, vcard = ?, detailsJSON = ?, sortKey = ?,
+                            photo = CASE WHEN ? THEN photo ELSE ? END
                         WHERE id = ?
-                        """, arguments: [etag, vcard, json, details.sortKey, photo, id])
+                        """, arguments: [etag, vcard, json, details.sortKey, keepsPhoto, photo, id])
                 try ContactRecords.reindex(database, id, account: account, details)
                 return true
             }
@@ -153,16 +154,18 @@ extension MailStore {
 
     // MARK: Reading
 
-    /// The first value is now; another follows each change to the stored contacts or address books
-    /// (and, with `includingMail`, to the mail). Only the newest unseen change is kept. If the
-    /// database can't be watched any more, the stream ends with that error.
-    public func observeContacts(includingMail: Bool = false) -> AsyncThrowingStream<Void, any Error> {
-        let observation = ValueObservation.tracking { database in
-            let contacts = try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM contact") ?? 0
-            let books = try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM address_book") ?? 0
-            let mail = includingMail ? try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM message") ?? 0 : 0
-            return [contacts, books, mail]
-        }
+    /// The first value is now; another follows each change to the stored contacts, address books or
+    /// accounts (and, with `includingMail`, to the mail, with `includingEvents` to the events): any
+    /// write to those tables, not only one that changes how many rows they hold. Only the newest
+    /// unseen change is kept. If the database can't be watched any more, the stream ends with that
+    /// error.
+    public func observeContacts(
+        includingMail: Bool = false, includingEvents: Bool = false
+    ) -> AsyncThrowingStream<Void, any Error> {
+        var tables = ["contact", "address_book", "account"]
+        if includingMail { tables.append("message") }
+        if includingEvents { tables.append("event") }
+        let observation = ValueObservation.tracking(regions: tables.map { Table($0) }) { _ in () }
         let queue = queue
         return AsyncThrowingStream(Void.self, bufferingPolicy: .bufferingNewest(1)) { continuation in
             let task = Task {
@@ -206,6 +209,23 @@ extension MailStore {
         }
     }
 
+    /// Where the server keeps the contact; nil before its first send.
+    public func contactHref(_ id: ContactID) throws(StoreError) -> String? {
+        try read { database in
+            try String.fetchOne(database, sql: "SELECT href FROM contact WHERE id = ?", arguments: [id.raw])
+        }
+    }
+
+    /// The contact is held and not waiting to be deleted.
+    public func contactIsShown(_ id: ContactID) throws(StoreError) -> Bool {
+        try read { database in
+            try Bool.fetchOne(
+                database, sql: """
+                    SELECT 1 FROM contact WHERE id = ? AND (pendingChange IS NULL OR pendingChange != 'delete')
+                    """, arguments: [id.raw]) ?? false
+        }
+    }
+
     public func contacts(withEmail email: String) throws(StoreError) -> [Contact] {
         try read { database in
             try Row.fetchAll(
@@ -231,71 +251,6 @@ extension MailStore {
                         WHERE e.accountId = ? AND (c.pendingChange IS NULL OR c.pendingChange != 'delete')
                         """, arguments: [account.raw.uuidString]))
         }
-    }
-
-    // MARK: The owner's edits
-
-    public func createContact(
-        _ details: ContactDetails, in book: AddressBookID
-    ) throws(StoreError) -> ContactID {
-        let id: ContactID = try write { database in
-            guard
-                let account = try String.fetchOne(
-                    database, sql: "SELECT accountId FROM address_book WHERE id = ?", arguments: [book.raw])
-            else { throw StoreError.noSuchAddressBook }
-            try Self.requireCardDAV(database, account: account)
-            try Self.requireWritable(database, book: book.raw)
-            try database.execute(
-                sql: """
-                    INSERT INTO contact (accountId, addressBookId, detailsJSON, sortKey, pendingChange, revision)
-                    VALUES (?, ?, ?, ?, 'create', 1)
-                    """, arguments: [account, book.raw, ContactRecords.encode(details), details.sortKey])
-            let id = database.lastInsertedRowID
-            try ContactRecords.reindex(database, id, account: account, details)
-            return ContactID(raw: id)
-        }
-        try announce(contact: id)
-        return id
-    }
-
-    public func updateContact(_ id: ContactID, _ details: ContactDetails) throws(StoreError) {
-        try write { database in
-            let row = try Self.contactRow(database, id)
-            try Self.requireCardDAV(database, account: (row["accountId"] as String?) ?? "")
-            try Self.requireWritable(database, contact: id.raw)
-            try Self.requireReadable(database, id)
-            let kind = (row["href"] as String?) == nil ? "create" : "update"
-            // A fresh edit supersedes a held conflict.
-            try database.execute(
-                sql: """
-                    UPDATE contact SET detailsJSON = ?, sortKey = ?, pendingChange = ?, changeFailed = 0,
-                        conflictJSON = NULL, attempts = 0, revision = revision + 1 WHERE id = ?
-                    """,
-                arguments: [ContactRecords.encode(details), details.sortKey, kind, id.raw])
-            try ContactRecords.reindex(
-                database, id.raw, account: (row["accountId"] as String?) ?? "", details)
-        }
-        try announce(contact: id)
-    }
-
-    /// The contact is hidden until the delete is sent. One the server never got stays a queued
-    /// delete too (its create may be on the way): the sync drops it without a request, or sends
-    /// the delete once the create's answer gives it an address.
-    public func deleteContact(_ id: ContactID) throws(StoreError) {
-        let account: String = try write { database in
-            let row = try Self.contactRow(database, id)
-            try Self.requireCardDAV(database, account: (row["accountId"] as String?) ?? "")
-            try Self.requireWritable(database, contact: id.raw)
-            try database.execute(
-                sql: """
-                    UPDATE contact SET pendingChange = 'delete', changeFailed = 0, attempts = 0,
-                        revision = revision + 1
-                    WHERE id = ?
-                    """,
-                arguments: [id.raw])
-            return (row["accountId"] as String?) ?? ""
-        }
-        if let uuid = UUID(uuidString: account) { announceQueued(AccountID(raw: uuid)) }
     }
 
     /// Whether the account has somewhere its contacts come from: a CardDAV address, or

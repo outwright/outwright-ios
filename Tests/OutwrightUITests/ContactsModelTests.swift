@@ -39,8 +39,84 @@ import Testing
         model.reload()
         #expect(model.sections.map(\.letter) == ["A", "B", "E", "Z", "Å", "Ä", "Ö", "#"])
         #expect(model.sections.first { $0.letter == "E" }?.contacts.count == 1)
-        #expect(model.letters == ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q",
-            "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Å", "Ä", "Ö", "#"])
+    }
+
+    @Test func indexShowsOnlyLettersInUse() throws {
+        let (app, books, box) = try fixture()
+        let book = try #require(books.first)
+        for name in ["Bo", "Erik", "Zorro"] { try add(box, name, in: book) }
+        let model = ContactsModel(app: app)
+        model.reload()
+        #expect(model.indexLetters(height: 1_000).map(\.title) == ["B", "E", "Z"])
+        model.searchText = "bo"
+        #expect(model.indexLetters(height: 1_000).isEmpty, "no index while searching")
+    }
+
+    @Test func indexThinsWhenShort() {
+        let letters = (UInt8(ascii: "A")...UInt8(ascii: "Z")).map { String(UnicodeScalar($0)) }
+        let entries = ContactsModel.thinned(letters, height: 120)
+        #expect(entries.contains { $0.title == "•" })
+        #expect(CGFloat(entries.count) * 14 <= 120, "every entry has its 14 points")
+        #expect(entries.first?.title == "A" && entries.last?.title == "Z")
+        #expect(entries.allSatisfy { letters.contains($0.letter) }, "a dot jumps to a letter it stands for")
+        #expect(ContactsModel.thinned(letters, height: 26 * 14).map(\.title) == letters, "room for all: all")
+    }
+
+    @Test func aDeletedContactLeavesTheStack() throws {
+        let (app, books, box) = try fixture()
+        let book = try #require(books.first)
+        try add(box, "Bo", in: book)
+        try add(box, "Eva", in: book)
+        let model = ContactsModel(app: app)
+        model.reload()
+        let ids = model.sections.flatMap(\.contacts).map(\.id)
+        model.path = ids
+        try box.store.deleteContact(ids[1])
+        model.reload()
+        #expect(model.path == [ids[0]])
+    }
+
+    @Test func aBookTurningWritableEnablesAddWhileWatching() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org", cardDAV: true)
+        try box.store.replaceAddressBooks([("/own/", "Own", true)], for: anna.id)
+        let app = AppModel(store: box.store, sync: offlineSync(store: box.store, secrets: InMemorySecretStore()))
+        let model = ContactsModel(app: app)
+        let watching = Task { await model.observe() }
+        defer { watching.cancel() }
+        for _ in 0..<100 where model.bookGroups.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(model.addState == .readOnly)
+        try box.store.replaceAddressBooks([("/own/", "Own", false)], for: anna.id)
+        for _ in 0..<100 where !model.canAdd { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(model.canAdd)
+    }
+
+    @Test func emptyStateOffersAddAccountOnlyWithoutContacts() throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org", cardDAV: true)
+        let app = AppModel(store: box.store, sync: offlineSync(store: box.store, secrets: InMemorySecretStore()))
+        let model = ContactsModel(app: app)
+        model.reload()
+        #expect(model.addState == .noBook, "no account has contacts: Add account")
+        try box.store.replaceAddressBooks([("/shared/", "Shared", true)], for: anna.id)
+        model.reload()
+        #expect(model.addState == .readOnly, "contacts, but none can be added: no Add account")
+        try box.store.replaceAddressBooks([("/own/", "Own", false)], for: anna.id)
+        model.reload()
+        #expect(model.addState == .canAdd)
+    }
+
+    @Test func noWritableBookDisablesAdd() throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org", cardDAV: true)
+        try box.store.replaceAddressBooks([("/shared/", "Shared", true)], for: anna.id)
+        let app = AppModel(store: box.store, sync: offlineSync(store: box.store, secrets: InMemorySecretStore()))
+        let model = ContactsModel(app: app)
+        model.reload()
+        #expect(!model.canAdd)
+        try box.store.replaceAddressBooks([("/shared/", "Shared", true), ("/own/", "Own", false)], for: anna.id)
+        model.reload()
+        #expect(model.canAdd)
     }
 
     @Test func filterShowsOnlyChosenBooks() throws {
@@ -88,17 +164,5 @@ import Testing
         try add(box, "Anna", in: books[0])
         for _ in 0..<100 where model.sections.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
         #expect(model.sections.flatMap(\.contacts).map(\.details.givenName) == ["Anna"])
-    }
-
-    @Test func indexJumpsToTheLetterOrTheNextWithASection() {
-        let letters = ContactsModel.alphabet
-        let have: Set<String> = ["B", "Å", "#"]
-        #expect(AlphabetIndex.target(from: 1, in: letters, available: have) == "B")
-        #expect(AlphabetIndex.target(from: 2, in: letters, available: have) == "Å")
-        #expect(AlphabetIndex.target(from: 27, in: letters, available: have) == "#")
-        #expect(AlphabetIndex.target(from: 28, in: letters, available: ["B"]) == "B", "past the last: the last with one")
-        #expect(AlphabetIndex.target(from: 3, in: letters, available: []) == nil)
-        #expect(AlphabetIndex.target(from: 99, in: letters, available: have) == nil)
-        #expect(AlphabetIndex.target(from: -1, in: letters, available: have) == nil)
     }
 }

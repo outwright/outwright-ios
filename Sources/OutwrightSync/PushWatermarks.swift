@@ -2,28 +2,22 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 public import Foundation
-public import OutwrightModel
 import Synchronization
 
-/// How far a push subscription's Inbox has been announced: the last UID under a UIDVALIDITY.
+/// When a push subscription's server side was last renewed by the notification extension. (Files
+/// from before kept how far the Inbox was announced too; those fields are ignored, the store keeps
+/// that now.)
 public struct PushWatermark: Codable, Sendable, Equatable {
-    public var accountID: AccountID
-    public var uidValidity: UInt32
-    public var lastUID: UInt32
-    /// When the notification extension last renewed the subscription's server side.
     public var renewedAt: Date?
 
-    public init(accountID: AccountID, uidValidity: UInt32, lastUID: UInt32, renewedAt: Date? = nil) {
-        self.accountID = accountID
-        self.uidValidity = uidValidity
-        self.lastUID = lastUID
+    public init(renewedAt: Date? = nil) {
         self.renewedAt = renewedAt
     }
 }
 
-/// The watermarks of every push subscription, in one JSON file in the app group that the app
+/// The renewal marks of every push subscription, in one JSON file in the app group that the app
 /// and its notification extensions share. Each change is a read-modify-write under a file
-/// coordinator, so two processes never both claim a UID. A file that will not read (garbage,
+/// coordinator, so two processes never both claim a renewal. A file that will not read (garbage,
 /// over 64 KiB) counts as empty.
 public final class PushWatermarks: Sendable {
     static let maxFileSize = 64 * 1024
@@ -36,40 +30,18 @@ public final class PushWatermarks: Sendable {
         self.fileURL = fileURL
     }
 
-    public func get(_ subscriptionID: String) throws(SyncError) -> PushWatermark? {
-        try change { $0[subscriptionID] }
-    }
-
-    public func set(_ mark: PushWatermark, for subscriptionID: String) throws(SyncError) {
-        try change { $0[subscriptionID] = mark }
+    /// The subscription is known from now on: its renewals may be claimed. One already known
+    /// stays as it is.
+    public func start(_ subscriptionID: String) throws(SyncError) {
+        try change { marks in
+            if marks[subscriptionID] == nil {
+                marks[subscriptionID] = PushWatermark()
+            }
+        }
     }
 
     public func remove(_ subscriptionID: String) throws(SyncError) {
         try change { $0[subscriptionID] = nil }
-    }
-
-    /// Moves the mark to `uid`; false when it is gone, under another UIDVALIDITY, or already at
-    /// or past `uid` (another probe got there first).
-    public func advance(_ subscriptionID: String, validity: UInt32, to uid: UInt32) throws(SyncError) -> Bool {
-        try !claim(subscriptionID, validity: validity, uids: [uid]).isEmpty
-    }
-
-    /// Of `uids`, the ones above the mark, which then moves to the highest of them: what this
-    /// caller, and no other, may announce. Empty when the mark is gone or under another
-    /// UIDVALIDITY.
-    @discardableResult
-    func claim(_ subscriptionID: String, validity: UInt32, uids: [UInt32]) throws(SyncError) -> [UInt32] {
-        try change { marks in
-            guard var mark = marks[subscriptionID], mark.uidValidity == validity else {
-                return []
-            }
-            let claimed = uids.filter { $0 > mark.lastUID }
-            if let highest = claimed.max() {
-                mark.lastUID = highest
-                marks[subscriptionID] = mark
-            }
-            return claimed
-        }
     }
 
     /// Whether a renewal is due (none in the last `every`, or one dated in the future), and if so

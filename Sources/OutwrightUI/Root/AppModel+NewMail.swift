@@ -21,6 +21,15 @@ extension AppModel {
         }
     }
 
+    /// The app icon shows the unread mail in every Inbox from now on, only Focused while Focused
+    /// Inbox is on; called again when that setting changes.
+    public func showBadge(defaults: UserDefaults = .standard) {
+        let focusedOnly = defaults.object(forKey: SettingsKeys.focusedInbox) as? Bool ?? true
+        badgeWatch?.cancel()
+        let sync = sync
+        badgeWatch = Task { await sync.showBadge(focusedOnly: focusedOnly) }
+    }
+
     /// A tapped new-mail notice, on the Mail tab: its message opens in the list's place; the
     /// summary of many opens its account's Inbox. A sheet in front stays, with the mail behind it.
     public func showMessage(_ request: MessageRequest) {

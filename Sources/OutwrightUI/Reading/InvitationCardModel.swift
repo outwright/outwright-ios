@@ -99,8 +99,10 @@ final class InvitationCardModel {
             onServer: (try? app.store.isOnServer(current.id)) ?? true,
             serverSchedules: current.accountID.flatMap { try? app.store.serverSchedules($0) } ?? true)
         around = neighbours(of: current)
+        let chosen = CalendarColors.chosen(.standard)
         colors = Dictionary(
-            ((try? app.store.allCalendars()) ?? []).map { ($0.id, $0.color) }, uniquingKeysWith: { first, _ in first })
+            ((try? app.store.allCalendars()) ?? []).map { ($0.id, CalendarColors.applied($0, chosen).color) },
+            uniquingKeysWith: { first, _ in first })
     }
 
     /// A calendar's colour (0xRRGGBB).
@@ -230,8 +232,14 @@ final class InvitationCardModel {
         return event.isCancelled && !event.isEditable && isWritable
     }
 
-    /// "Don't send a response" is offered only where the server will not send one.
-    var canWithholdReply: Bool { withholdable }
+    /// "Don't send a response" is offered where the server will not send one, and over Graph, which
+    /// takes `sendResponse: false`.
+    var canWithholdReply: Bool {
+        withholdable || app.accounts.first { $0.id == event?.accountID }?.calendarVia == .graph
+    }
+
+    /// A comment can go with the answer wherever the reply can be kept back: the app writes it, or Graph.
+    var canComment: Bool { canWithholdReply }
 
     /// For a message about one occurrence of a series: that occurrence, which the answer asks to choose
     /// between it and the whole series. Nil when the message holds the whole event.
@@ -251,11 +259,15 @@ final class InvitationCardModel {
     // MARK: Actions
 
     /// Answers the meeting, for the occurrence or the whole event. A reply always goes where the owner
-    /// cannot keep it back (the server sends it).
-    func answer(_ response: Attendee.Response, sendReply: Bool, scope: EditScope) throws(InvitationError) {
+    /// cannot keep it back (the server sends it). The owner's `comment` goes with the reply.
+    func answer(
+        _ response: Attendee.Response, sendReply: Bool, scope: EditScope, comment: String? = nil
+    ) throws(InvitationError) {
         guard let id = event?.id else { return }
         let sends = sendReply || !canWithholdReply
-        try change { () throws(StoreError) in try app.store.respond(id, response, scope: scope, sendReply: sends) }
+        try change { () throws(StoreError) in
+            try app.store.respond(id, response, scope: scope, sendReply: sends, comment: sends ? comment : nil)
+        }
     }
 
     /// Takes the cancelled meeting out of the calendar.

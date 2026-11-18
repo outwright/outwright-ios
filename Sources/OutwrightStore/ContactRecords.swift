@@ -7,7 +7,7 @@ import OutwrightModel
 
 enum ContactRecords {
     static let columns = """
-        id, accountId, addressBookId, detailsJSON, photo, conflictJSON, changeFailed
+        id, accountId, addressBookId, detailsJSON, photo, conflictJSON, changeFailed, photoFailed
         """
 
     static func encode(_ details: ContactDetails) -> String {
@@ -40,7 +40,8 @@ enum ContactRecords {
             id: ContactID(raw: id), accountID: AccountID(raw: account),
             addressBookID: AddressBookID(raw: book), details: details, photo: row["photo"] as Data?,
             conflict: decode(row["conflictJSON"] as String?),
-            changeFailed: ((row["changeFailed"] as Int?) ?? 0) != 0)
+            changeFailed: ((row["changeFailed"] as Int?) ?? 0) != 0,
+            photoFailed: ((row["photoFailed"] as Int?) ?? 0) != 0)
     }
 
     /// Text as searched: lower-case, diacritics folded.

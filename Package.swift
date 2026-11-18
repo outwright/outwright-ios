@@ -32,6 +32,7 @@ let package = Package(
         .library(name: "OutwrightGraph", targets: ["OutwrightGraph"]),
         .library(name: "OutwrightNet", targets: ["OutwrightNet"]),
         .library(name: "OutwrightPush", targets: ["OutwrightPush"]),
+        .library(name: "OutwrightSetup", targets: ["OutwrightSetup"]),
         .library(name: "OutwrightSMTP", targets: ["OutwrightSMTP"]),
         // The fakes, for the tests of a package that builds on this one.
         .library(name: "OutwrightFakes", targets: ["OutwrightFakes"]),
@@ -51,18 +52,19 @@ let package = Package(
         .target(name: "OutwrightDAV", swiftSettings: strict),
         .target(name: "OutwrightGraph", dependencies: ["OutwrightNet"], swiftSettings: strict),
         .target(name: "OutwrightPush", swiftSettings: strict),
+        .target(name: "OutwrightSetup", resources: [.process("Resources")], swiftSettings: strict),
         .target(name: "OutwrightJMAP", dependencies: ["OutwrightNet"], swiftSettings: strict),
         .target(name: "OutwrightModel", dependencies: ["OutwrightMIME"], swiftSettings: strict),
         // L2: SQLite storage of the model.
         .target(name: "OutwrightStore", dependencies: ["OutwrightModel", "OutwrightMIME", .product(name: "GRDB", package: "GRDB.swift")], swiftSettings: strict),
         // L3: synchronisation between protocols, store and model.
-        .target(name: "OutwrightSync", dependencies: ["OutwrightNet", "OutwrightMIME", "OutwrightModel", "OutwrightStore", "OutwrightIMAP", "OutwrightSMTP", "OutwrightDAV", "OutwrightGraph", "OutwrightPush", "OutwrightJMAP"], swiftSettings: strict),
+        .target(name: "OutwrightSync", dependencies: ["OutwrightNet", "OutwrightMIME", "OutwrightModel", "OutwrightStore", "OutwrightIMAP", "OutwrightSMTP", "OutwrightDAV", "OutwrightGraph", "OutwrightPush", "OutwrightJMAP", "OutwrightSetup"], swiftSettings: strict),
         // L4: SwiftUI; reads Model, Store and Sync, never speaks a protocol.
         .target(
-            name: "OutwrightUI", dependencies: ["OutwrightModel", "OutwrightMIME", "OutwrightStore", "OutwrightSync", "OutwrightPush"],
+            name: "OutwrightUI", dependencies: ["OutwrightModel", "OutwrightMIME", "OutwrightStore", "OutwrightSync", "OutwrightPush", "OutwrightSetup"],
             resources: [.process("Resources")], swiftSettings: strict),
         // Test support: in-process fake servers, never a dependency of a product target.
-        .target(name: "OutwrightFakes", dependencies: ["OutwrightNet", "OutwrightMIME"], swiftSettings: strict),
+        .target(name: "OutwrightFakes", dependencies: ["OutwrightNet", "OutwrightMIME", "OutwrightSetup"], swiftSettings: strict),
         .executableTarget(name: "OutwrightFakeMicrosoft", dependencies: ["OutwrightFakes"], swiftSettings: strict),
         // Tests, one target per module.
         .testTarget(name: "OutwrightNetTests", dependencies: ["OutwrightNet", "OutwrightFakes"], swiftSettings: strict),
@@ -73,6 +75,9 @@ let package = Package(
         .testTarget(name: "OutwrightGraphTests", dependencies: ["OutwrightGraph", "OutwrightFakes", "OutwrightNet"], swiftSettings: strict),
         .testTarget(name: "OutwrightPushTests", dependencies: ["OutwrightPush", "OutwrightFakes"], swiftSettings: strict),
         .testTarget(
+            name: "OutwrightSetupTests", dependencies: ["OutwrightSetup", "OutwrightFakes"], resources: [.copy("Fixtures")],
+            swiftSettings: strict),
+        .testTarget(
             name: "OutwrightJMAPTests", dependencies: ["OutwrightJMAP", "OutwrightFakes", "OutwrightNet", "OutwrightPush"],
             swiftSettings: strict),
         .testTarget(name: "OutwrightModelTests", dependencies: ["OutwrightModel", "OutwrightMIME"], swiftSettings: strict),
@@ -81,14 +86,14 @@ let package = Package(
             name: "OutwrightSyncTests",
             dependencies: [
                 "OutwrightSync", "OutwrightFakes", "OutwrightModel", "OutwrightStore", "OutwrightMIME", "OutwrightNet", "OutwrightIMAP",
-                "OutwrightDAV", "OutwrightPush", "OutwrightJMAP", "OutwrightGraph", "OutwrightSMTP", .product(name: "GRDB", package: "GRDB.swift"),
+                "OutwrightDAV", "OutwrightPush", "OutwrightJMAP", "OutwrightGraph", "OutwrightSMTP", "OutwrightSetup", .product(name: "GRDB", package: "GRDB.swift"),
             ],
             swiftSettings: strict),
         .testTarget(
             name: "OutwrightUITests",
             dependencies: [
                 "OutwrightUI", "OutwrightModel", "OutwrightMIME", "OutwrightStore", "OutwrightSync", "OutwrightNet",
-                "OutwrightFakes", "OutwrightPush", "OutwrightDAV",
+                "OutwrightFakes", "OutwrightPush", "OutwrightDAV", "OutwrightSetup",
             ],
             swiftSettings: strict),
     ]

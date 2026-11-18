@@ -75,6 +75,42 @@ func firstCard(_ data: Data) throws -> VCard {
         #expect(card.fields.note == "kept")
     }
 
+    @Test func titleIsReadAndWritten() throws {
+        let card = try firstCard(vcf(["FN:Bo", "TITLE:Chef\\, kök"]))
+        #expect(card.fields.title == "Chef, kök")
+        var fields = card.fields
+        fields.title = "Kock"
+        #expect(try firstCard(VCardWriter.write(card.applying(fields))).fields.title == "Kock")
+        fields.title = ""
+        #expect(!card.applying(fields).properties.contains { $0.name == "TITLE" })
+    }
+
+    @Test func photoIsWrittenInTheCardsVersion() throws {
+        let bytes = Data([0xFF, 0xD8, 0xFF, 0xE0] + (0..<300).map { UInt8($0 % 251) })
+        for version in ["4.0", "3.0"] {
+            let card = try firstCard(vcf(["FN:Bo"], version: version))
+            var fields = card.fields
+            fields.photo = bytes
+            let written = try firstCard(VCardWriter.write(card.applying(fields)))
+            #expect(written.fields.photo == bytes)
+            let photo = try #require(written.properties.first { $0.name == "PHOTO" })
+            if version == "4.0" {
+                #expect(photo.value.hasPrefix("data:image/jpeg;base64,"))
+            } else {
+                #expect(photo.parameters.contains { $0.name == "ENCODING" && $0.values == ["b"] })
+            }
+            fields.photo = nil
+            #expect(!written.applying(fields).properties.contains { $0.name == "PHOTO" }, "a removed photo goes")
+        }
+    }
+
+    @Test func aPhotoAtAnAddressIsLeftAlone() throws {
+        let card = try firstCard(vcf(["FN:Bo", "PHOTO:https://example.org/p.jpg"]))
+        var fields = card.fields
+        fields.note = "changed"
+        #expect(card.applying(fields).properties.contains { $0.name == "PHOTO" && $0.value == "https://example.org/p.jpg" })
+    }
+
     @Test func editKeepsUnknownProperties() throws {
         let card = try firstCard(vcf([
             "FN:Bo Lind", "X-SOCIAL;TYPE=x:@bo", "item1.EMAIL;TYPE=work:bo@example.org",

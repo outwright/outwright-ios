@@ -15,7 +15,7 @@ extension MailStore {
     /// opening found, for the caller to hand on.
     @discardableResult
     public func setBody(_ data: Data, for message: MessageID) throws(StoreError) -> OpenedMessage? {
-        let opened = open(data)
+        let opened = open(data, account: try self.message(message)?.accountID)
         let parsed = opened?.message
         let decrypted = opened?.facts?.decryption == .decrypted
         // The shape from the headers already read, unless the opener replaced the message.
@@ -145,9 +145,24 @@ extension MailStore {
     /// The server numbered the message anew (a draft saved again).
     public func setUID(_ uid: UInt32, for message: MessageID) throws(StoreError) {
         try write { database in
-            try database.execute(
-                sql: "UPDATE message SET uid = ? WHERE id = ?", arguments: [Int64(uid), message.raw])
+            try Self.number(database, message, Int64(uid))
         }
+    }
+
+    /// Gives the message `uid`. A row a sync stored meanwhile for that uid (here or in the
+    /// notification extension) goes: this one is what queued changes, an open message and its
+    /// fetched body point at.
+    static func number(_ database: Database, _ message: MessageID, _ uid: Int64) throws {
+        if uid > 0 {
+            let others = """
+                SELECT o.id FROM message o JOIN message m ON m.id = ?
+                WHERE o.folderId = m.folderId AND o.uid = ? AND o.id != m.id
+                """
+            try database.execute(
+                sql: "DELETE FROM message_fts WHERE rowid IN (\(others))", arguments: [message.raw, uid])
+            try database.execute(sql: "DELETE FROM message WHERE id IN (\(others))", arguments: [message.raw, uid])
+        }
+        try database.execute(sql: "UPDATE message SET uid = ? WHERE id = ?", arguments: [uid, message.raw])
     }
 
     /// What the server says: no action is queued.
@@ -209,6 +224,26 @@ extension MailStore {
 
     public func messages(_ query: InboxQuery, limit: Int) throws(StoreError) -> [MessageRow] {
         try read { database in try Queries.messages(database, query, limit: limit) }
+    }
+
+    /// Every unread message of a list (a folder, or every account's Inbox), not only the rows shown.
+    public func unreadMessages(_ scope: InboxScope) throws(StoreError) -> [MessageID] {
+        try read { database in
+            switch scope {
+            case .allAccounts:
+                try Int64.fetchAll(
+                    database,
+                    sql: """
+                        SELECT id FROM message WHERE isRead = 0
+                        AND folderId IN (SELECT id FROM folder WHERE kind = 'inbox')
+                        """
+                ).map { MessageID(raw: $0) }
+            case .folder(let folder):
+                try Int64.fetchAll(
+                    database, sql: "SELECT id FROM message WHERE isRead = 0 AND folderId = ?", arguments: [folder.raw]
+                ).map { MessageID(raw: $0) }
+            }
+        }
     }
 
     /// The first value is the current state; a new one follows each change to the stored mail.

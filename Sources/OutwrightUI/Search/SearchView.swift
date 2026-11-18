@@ -10,15 +10,16 @@ import SwiftUI
 /// recent searches, or the results.
 struct SearchView: View {
     let app: AppModel
-    @State var model: SearchModel
+    @Bindable var model: SearchModel
     @FocusState private var isFieldFocused: Bool
+    @ScaledMetric(relativeTo: .body) private var fieldHeight: CGFloat = 48
     @State var opening: ShownAttachment?
 
-    init(app: AppModel, query: String = "") {
+    /// `model`: the app's open search (`AppModel.search`), which outlives this view when a resize
+    /// moves search between the cover and the columns.
+    init(app: AppModel, model: SearchModel) {
         self.app = app
-        let model = SearchModel(store: app.store, sync: app.sync)
-        model.query = query
-        _model = State(initialValue: model)
+        self.model = model
     }
 
     var body: some View {
@@ -34,11 +35,6 @@ struct SearchView: View {
         }
         .background(Theme.background)
         .onAppear { isFieldFocused = model.query.isEmpty }
-        // Closed when search is dismissed, not whenever something covers it (Quick Look, a sheet):
-        // what the servers brought in stays while it is still listed.
-        .onChange(of: app.isSearching) { _, isSearching in
-            if !isSearching { model.close() }
-        }
     }
 
     // MARK: - Header
@@ -47,18 +43,23 @@ struct SearchView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 field
+                    .layoutPriority(1)
                 Button {
                     app.isSearching = false
                 } label: {
                     Text(ui: "Cancel")
-                        .font(.title3)
+                        .font(.body)
                         .foregroundStyle(Theme.accent)
+                        .lineLimit(1)
                 }
+                // A bar's button: past the largest standard size it would take the field's room.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .fixedSize()
             }
             .padding(.horizontal, 16)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(SearchChip.allCases, id: \.self) { chip in
+                    ForEach(model.offeredChips, id: \.self) { chip in
                         chipButton(chip)
                     }
                 }
@@ -91,15 +92,16 @@ struct SearchView: View {
                 Button {
                     model.query = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
+                    Image(systemName: Icons.clear)
                         .foregroundStyle(Theme.headerText.opacity(0.5))
                 }
                 .accessibilityLabel(Text(ui: "Clear"))
             }
         }
-        .font(.title3)
+        .font(.body)
         .padding(.horizontal, 16)
-        .frame(height: 48)
+        // Grows with the text, so the clear button keeps beside it rather than over it.
+        .frame(minHeight: fieldHeight)
         .background(Theme.headerTrack, in: .capsule)
     }
 
@@ -109,9 +111,9 @@ struct SearchView: View {
             model.chip = chip
         } label: {
             Text(ui: Self.title(chip))
-                .font(.title3)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 3)
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
                 .foregroundStyle(chosen ? Theme.onAccent : Theme.headerText)
                 .background(chosen ? Theme.accent : Theme.headerTrack, in: .capsule)
         }
@@ -124,6 +126,7 @@ struct SearchView: View {
         case .all: "All"
         case .mail: "Mail"
         case .people: "People"
+        case .events: "Events"
         case .files: "Files"
         }
     }
@@ -183,11 +186,11 @@ struct SearchView: View {
                     Task { await model.submit() }
                 } label: {
                     HStack(spacing: 22) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .foregroundStyle(.secondary)
+                        Image(systemName: Icons.recent)
+                            .foregroundStyle(Theme.secondaryText)
                             .frame(width: 40)
                         Text(recent)
-                            .font(.title3)
+                            .font(.body)
                             .foregroundStyle(.primary)
                     }
                     .padding(.vertical, 8)
@@ -210,8 +213,7 @@ struct SearchView: View {
 
     func open(_ message: MessageRow) {
         model.opened(message.id)
-        app.isSearching = false
-        app.messageToOpen = message.id
+        app.openSearchResult(message.id)
     }
 }
 

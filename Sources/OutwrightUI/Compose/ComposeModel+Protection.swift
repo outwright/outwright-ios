@@ -14,12 +14,32 @@ public enum ProtectionChoice: Sendable, Equatable {
     case removeKeyless
 }
 
+/// What compose keeps of protection between looks.
+struct ProtectionMemo {
+    /// The kind the draft was kept with when it was opened, when it was kept encrypted.
+    var keptKind: ProtectionRequirement.Kind?
+    /// The protection compose chose, with the account it chose it for.
+    var chosen: (account: AccountID, screen: (any ProtectionUI)?)?
+}
+
 /// Protecting a message: what the build's protection says of it, and what it is sent with.
 extension ComposeModel {
+    /// The screens of the protection this message is written with: the one given, else the
+    /// highest-ranked of the build's for the account it is from, chosen once per account (and
+    /// again on each `refreshProtection`, as the account's setup may have changed), not on each look.
+    var protectionUI: (any ProtectionUI)? {
+        if let fixedProtectionUI { return fixedProtectionUI }
+        guard let account else { return protectionScreens.first }
+        if let chosen = protectionMemo.chosen, chosen.account == account.id { return chosen.screen }
+        let screen = ProtectionScreens.forCompose(protectionScreens, account: account)
+        protectionMemo.chosen = (account.id, screen)
+        return screen
+    }
     /// Asks the protection again for the current recipients; called when they change, not per keystroke.
     /// False when the answer came for recipients, an account or a lock that changed meanwhile, and was dropped.
     @discardableResult
     public func refreshProtection() async -> Bool {
+        protectionMemo.chosen = nil
         guard let protectionUI, let account, !hasCalendar else {
             protection = nil
             return true
@@ -31,6 +51,8 @@ extension ComposeModel {
         guard asked.0 == to + cc + bcc, asked.1 == from, asked.2 == ownerLock, asked.3 == ownerSign else {
             return false
         }
+        // A kept draft the protection signs separately from encrypting reopens as it was kept.
+        if answer.signsSeparately, ownerSign == nil, let kept = keptKind { answer.signOn = kept == .encrypt }
         if ownerLock == true {
             answer.lockOn = true
             answer.mustAsk = true
@@ -68,22 +90,40 @@ extension ComposeModel {
         protectionUI != nil && !hasCalendar && (draftWasProtected || original.map { $0.decryption != .none } ?? false)
     }
 
+    /// The kind the draft was kept with when it was opened, when it was kept encrypted.
+    var keptKind: ProtectionRequirement.Kind? { protectionMemo.keptKind }
+
+    /// The kind the draft `id` was kept with, when it was kept encrypted.
+    static func keptKind(of id: MessageID, in store: MailStore) -> ProtectionRequirement.Kind? {
+        guard let kept = try? store.protection(of: id), !kept.plainChosen else { return nil }
+        return kept.kind == .sign ? nil : kept.kind
+    }
+
     /// What a message protected from the start is kept with before the protection has answered.
     func startingRequirement() -> ProtectionRequirement? {
         guard protectedFromStart, let protectionUI, ownerLock != false else { return nil }
         let recipients = Set((to + cc + bcc).map { $0.email.lowercased() }).sorted()
-        return ProtectionRequirement(protection: protectionUI.protection, recipients: recipients, plainChosen: false)
+        return ProtectionRequirement(
+            protection: protectionUI.protection, recipients: recipients, plainChosen: false, kind: keptKind ?? .encrypt)
     }
 
-    /// Nothing can be protected now: only a message that must ask stops, and may go unprotected.
+    /// Nothing can be encrypted now: only a message that must ask stops, and may go unencrypted;
+    /// signed, when the protection can still sign and signing is on.
     private func unprotectableRequirement(
         _ state: ComposeProtection, choice: ProtectionChoice
     ) throws(ComposeError) -> ProtectionRequirement? {
-        guard let protectionUI, ownerLock != false, state.mustAsk || protectedFromStart else { return nil }
+        guard let protectionUI, ownerLock != false, state.mustAsk || protectedFromStart else {
+            return signedRequirement()
+        }
         guard choice == .sendPlain else { throw .protectionUnavailable }
         let recipients = Set((to + cc + bcc).map { $0.email.lowercased() }).sorted()
-        return ProtectionRequirement(protection: protectionUI.protection, recipients: recipients, plainChosen: true)
+        return ProtectionRequirement(
+            protection: protectionUI.protection, recipients: recipients, plainChosen: true,
+            kind: signedRequirement() == nil ? .encrypt : .sign)
     }
+
+    /// The protection can't encrypt from the account now (nothing at all, or signing only).
+    static func cannotEncrypt(_ state: ComposeProtection) -> Bool { !state.canProtect || !state.canEncrypt }
 
     /// The protection's answer is known, so what is kept with the draft may follow it.
     var protectionKnown: Bool { protectionUI != nil && protection != nil && !hasCalendar }
@@ -91,15 +131,17 @@ extension ComposeModel {
     /// What a draft kept now asks to be sent with: locked and the owner's say or every recipient has a
     /// key. Never throws and never removes anyone; the question is asked when sending.
     func keepRequirement() -> ProtectionRequirement? {
-        // A protection that can't protect yet keeps only a message protected from the start off the server.
-        if let state = protection, !state.canProtect { return startingRequirement() }
+        // A protection that can't encrypt yet keeps only a message protected from the start off the server.
+        if let state = protection, Self.cannotEncrypt(state) { return startingRequirement() ?? signedRequirement() }
         guard let protectionUI, let state = protection, state.lockOn, !hasCalendar else { return signedRequirement() }
         let all = to + cc + bcc
         let keyed = all.allSatisfy { state.recipients[$0.email.lowercased()] == .has
             || state.recipients[$0.email.lowercased()] == .changed }
         guard state.mustAsk || keyed else { return signedRequirement() }
         let recipients = Set(all.map { $0.email.lowercased() }).sorted()
-        return ProtectionRequirement(protection: protectionUI.protection, recipients: recipients, plainChosen: false)
+        return ProtectionRequirement(
+            protection: protectionUI.protection, recipients: recipients, plainChosen: false,
+            kind: Self.lockedKind(state))
     }
 
     /// Adds what is typed in the recipient lines as addresses; when one is not an address nothing is added.
@@ -110,9 +152,9 @@ extension ComposeModel {
             if let wrong = rest.first { throw .notAnAddress(wrong) }
             added[list] = addresses
         }
-        to += added[.to] ?? []
-        cc += added[.cc] ?? []
-        bcc += added[.bcc] ?? []
+        for list in [RecipientList.to, .cc, .bcc] {
+            add(added[list] ?? [], to: list)
+        }
     }
 
     /// Makes what is typed recipients, asks the protection about them, then sends: a recipient not yet
@@ -153,45 +195,47 @@ extension ComposeModel {
     /// The owner turns the lock on or off; a lock the owner turned on asks before sending to someone
     /// who can't receive it.
     public func toggleLock() {
-        guard var state = protection else { return }
+        guard var state = protection, !Self.cannotEncrypt(state) else { return }
         state.lockOn.toggle()
         state.mustAsk = true
         ownerLock = state.lockOn
         protection = state
     }
 
-    /// What the line under the subject says the lock does, by the rules Send follows (`requirement`);
-    /// `typed`, addresses typed but not yet recipients, which Send adds. Nil: no line (no protection,
-    /// a calendar invitation, or an account that can't protect and has no lock on).
+    /// What the line under the subject says, by the rules Send follows (`requirement`); `typed`,
+    /// addresses typed but not yet recipients, which Send adds. Nil: no line (no protection, a
+    /// calendar invitation, or a message that goes as ordinary mail).
     func protectionNote(typed: [Address] = []) -> ProtectionNote? {
         guard !hasCalendar else { return nil }
-        return Self.note(protection, recipients: to + cc + bcc + typed, protectedFromStart: protectedFromStart)
+        return Self.note(
+            protection, recipients: to + cc + bcc + typed, protectedFromStart: protectedFromStart, ownerLock: ownerLock)
     }
 
     static func note(
-        _ state: ComposeProtection?, recipients: [Address], protectedFromStart: Bool
+        _ state: ComposeProtection?, recipients: [Address], protectedFromStart: Bool, ownerLock: Bool? = nil
     ) -> ProtectionNote? {
         guard let state else { return nil }
-        guard state.canProtect else {
-            guard state.lockOn || protectedFromStart else { return nil }
-            return state.mustAsk || protectedFromStart ? .cannotProtect : .notEncrypted
+        guard !cannotEncrypt(state) else {
+            // Send stops here (`unprotectableRequirement`): the line says so before it does.
+            let stops = ownerLock != false && (state.mustAsk || protectedFromStart)
+            return stops ? .cannotProtect : nil
         }
-        let unencrypted: ProtectionNote = state.signOn ? .signed : .notEncrypted
-        guard state.lockOn else { return unencrypted }
+        guard state.lockOn else { return nil }
         let keys = recipients.map { state.recipients[$0.email.lowercased()] }
         let keyless = keys.contains { $0 == RecipientKey.none }
         let unknown = keys.contains { $0 == nil || $0 == .looking }
         if keyless, state.mustAsk { return .notEveryone }
         if unknown { return .checking }
-        // Without the question the lock is a wish only: the message goes as it is.
-        return keyless ? unencrypted : .encrypted
+        // Without the question the lock is a wish only: the message goes as it is, with no line.
+        if keyless { return nil }
+        return keys.contains { $0 == .changed } ? .keyChanged : .encrypted
     }
 
     /// What the message asks to be sent with, or the question the owner must answer first. Recipients
     /// the owner chose to leave out are taken off the message. Wherever it goes unencrypted, it goes
     /// signed when signing is on.
     func requirement(choice: ProtectionChoice) throws(ComposeError) -> ProtectionRequirement? {
-        if let state = protection, !state.canProtect, !hasCalendar {
+        if let state = protection, Self.cannotEncrypt(state), !hasCalendar {
             return try unprotectableRequirement(state, choice: choice)
         }
         guard let protectionUI, let state = protection, state.lockOn, !hasCalendar else { return signedRequirement() }
@@ -216,7 +260,15 @@ extension ComposeModel {
             return ProtectionRequirement(
                 protection: protectionUI.protection, recipients: recipients, plainChosen: true, kind: .sign)
         }
-        return ProtectionRequirement(protection: protectionUI.protection, recipients: recipients, plainChosen: plain)
+        return ProtectionRequirement(
+            protection: protectionUI.protection, recipients: recipients, plainChosen: plain,
+            kind: Self.lockedKind(state))
+    }
+
+    /// What a locked message is made: encrypted and signed, or (when signing is the owner's own toggle
+    /// and it is off) encrypted only.
+    static func lockedKind(_ state: ComposeProtection) -> ProtectionRequirement.Kind {
+        state.signsSeparately && !state.signOn ? .encryptUnsigned : .encrypt
     }
 
     /// The recipients without a known key (looked up, or not yet), each once.
@@ -238,6 +290,16 @@ extension ComposeModel {
         }
         return ProtectionRequirement(
             protection: protectionUI.protection, recipients: [], plainChosen: false, kind: .sign)
+    }
+
+    /// A draft kept locked is locked again (and unsigned again, when it was kept encrypted only).
+    func restoreKeptChoices(of id: MessageID) {
+        guard let kept = try? store.protection(of: id), !kept.plainChosen, !hasCalendar else { return }
+        switch kept.kind {
+        case .encrypt: ownerLock = true
+        case .encryptUnsigned: (ownerLock, ownerSign) = (true, false)
+        case .sign: break
+        }
     }
 
     /// The owner turns signing on or off for this message.

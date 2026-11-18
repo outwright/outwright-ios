@@ -13,7 +13,7 @@ struct FloatingActions: View {
             Button {
                 app.closeDrafts()
             } label: {
-                Image(systemName: "xmark")
+                Image(systemName: Icons.close)
                     .font(.title2)
                     .foregroundStyle(.tint)
                     .padding(18)

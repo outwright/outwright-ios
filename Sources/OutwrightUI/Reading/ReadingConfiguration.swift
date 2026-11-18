@@ -33,6 +33,16 @@ public enum ReadingConfiguration {
         return "[" + parts.joined(separator: ",") + "]"
     }
 
+    /// A name for a rule list that changes whenever its rules do (FNV-1a over the UTF-8, in hex).
+    static func fingerprint(_ rules: String) -> String {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in rules.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        return String(hash, radix: 16)
+    }
+
     @MainActor
     public static func make(allowRemote: Bool, cidHandler: any WKURLSchemeHandler) -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()

@@ -4,7 +4,8 @@
 import OutwrightModel
 import SwiftUI
 
-/// One account: its name, its signature, its servers, and removing it.
+/// One account: what is wrong with it first, then its sign-in, name, signature, notifications, contacts,
+/// calendar and the modules' sections, its servers on a page of their own, and removing it.
 struct AccountSettingsView: View {
     let app: AppModel
     @State var account: Account
@@ -16,22 +17,17 @@ struct AccountSettingsView: View {
     @State private var isCheckingPassword = false
     @State private var passwordResult: PasswordResult?
     @State private var unsent = UnsentWork(changes: 0, messages: 0)
-    @State var cardDAV: String
     @State var isChangingPhoneCopy = false
     @State var contactsResult: ContactsResult?
-    /// Unsent contact changes that blanking the CardDAV address would lose, while asking.
+    /// Unsent contact changes that turning the contacts off would lose, while asking.
     @State var unsentContacts = 0
     @State var isConfirmingCardDAVOff = false
-    /// The owner pressed Back with an address blanked: a yes leaves the screen too.
-    @State var isLeavingAfterAnswer = false
-    /// The CalDAV address as typed, and what blanking it would lose while asking (see `+Calendar`).
-    @State var calDAV: String
+    /// The same for the calendar (see `+Calendar`).
     @State var unsentEvents = 0
     @State var isConfirmingCalDAVOff = false
     @State var calendarsNotSaved = false
-    /// The question above came from a switch turned off, not a blanked address.
-    @State var isTurningCalendarOff = false
-    @State var isTurningContactsOff = false
+    /// A sign-in or password problem brought the owner here: the password field is ready for it.
+    @FocusState private var passwordFocused: Bool
     /// The Notifications switch; loaded by the form, which is always there.
     @State private var notifications: NotificationsToggleModel
     @Environment(\.dismiss) var dismiss
@@ -40,6 +36,7 @@ struct AccountSettingsView: View {
         Section {
             SecureField(text: $newPassword) { Text(ui: "New password") }
                 .textContentType(.password)
+                .focused($passwordFocused)
             Button {
                 changePassword()
             } label: {
@@ -60,14 +57,13 @@ struct AccountSettingsView: View {
     init(app: AppModel, account: Account) {
         self.app = app
         _account = State(initialValue: account)
-        _cardDAV = State(initialValue: account.cardDAV ?? "")
-        _calDAV = State(initialValue: account.calDAV ?? "")
         let reminders = app.sync.reminders
         _notifications = State(
             initialValue: NotificationsToggleModel(
                 account: account, support: app.push,
                 local: StoreLocalNotifying(store: app.store) { await reminders.requestAuthorization() },
-                pushIncluded: app.modules.offering?.includes(.push) ?? true))
+                pushIncluded: app.modules.offering?.includes(.push) ?? true,
+                alternative: app.modules.pushAlternative))
     }
 
     /// The account as stored now: the contact and calendar settings change behind this screen's copy.
@@ -79,6 +75,13 @@ struct AccountSettingsView: View {
         Form {
             if app.isUnavailable(account) {
                 unavailableSection
+            }
+            problemsSection
+            if account.auth == .oauth {
+                providerSignInSection
+            }
+            if account.auth == .password {
+                passwordSection
             }
             Section {
                 TextField(text: $account.displayName) { Text(ui: "Your name") }
@@ -95,7 +98,9 @@ struct AccountSettingsView: View {
             } footer: {
                 Text(ui: "Added under every message you write from this account.")
             }
-            NotificationsSection(model: notifications, offering: app.modules.offering)
+            NotificationsSection(
+                account: account, model: notifications, alternative: app.modules.pushAlternative,
+                offering: app.modules.offering)
             contactsSection
             if account.calendarVia == .calDAV {
                 calendarSection
@@ -103,23 +108,13 @@ struct AccountSettingsView: View {
             ForEach(Array(app.modules.accountSections.enumerated()), id: \.offset) { _, module in
                 module.section(for: account)
             }
-            if account.auth == .oauth {
-                providerSignInSection
-            }
-            if account.auth == .password {
-                passwordSection
-            }
             Section {
-                LabeledContent {
-                    Text(verbatim: "\(account.imap.host):\(account.imap.port)")
+                NavigationLink {
+                    ServerSettingsView(app: app, account: account)
                 } label: {
-                    Text(ui: "Incoming mail (IMAP)")
+                    Text(ui: "Server settings")
                 }
-                LabeledContent {
-                    Text(verbatim: "\(account.smtp.host):\(account.smtp.port)")
-                } label: {
-                    Text(ui: "Outgoing mail (SMTP)")
-                }
+                .accessibilityIdentifier("account.servers")
             }
             Section {
                 Button(role: .destructive) {
@@ -132,25 +127,18 @@ struct AccountSettingsView: View {
             }
         }
         .navigationTitle(Text(account.email))
-        // A blanked CardDAV or CalDAV address may need a question before the screen goes: Back asks
-        // it. The hidden back button also stops the edge swipe; the Settings sheet is held the same way.
-        .navigationBarBackButtonHidden(isBlanking)
-        .interactiveDismissDisabled(isBlanking)
-        .toolbar {
-            if isBlanking {
-                ToolbarItem(placement: .navigation) {
-                    Button { leave() } label: { Label { Text(ui: "Back") } icon: { Image(systemName: "chevron.left") } }
-                        .accessibilityIdentifier("account.back")
-                }
-            }
-        }
+        .inlineNavigationTitle()
         .task { await notifications.load() }
+        .task {
+            guard account.auth == .password, app.asksForPassword(account.id) else { return }
+            // Once the page has come in: a field focused while it is pushed loses its keyboard.
+            try? await Task.sleep(for: .milliseconds(600))
+            passwordFocused = true
+        }
         .onDisappear {
             // A removed account is not saved again.
             if !isRemoved {
                 try? app.updateAccount(account)
-                saveCardDAV(leaving: true)
-                saveCalDAV(leaving: true)
             }
         }
         .confirmationDialog(
@@ -194,27 +182,31 @@ struct AccountSettingsView: View {
 }
 
 extension AccountSettingsView {
-    private var isBlanking: Bool { isBlankingCardDAV || isBlankingCalDAV }
-
-    /// Back with an address blanked: asks as Return does (one question at a time), and leaves once
-    /// answered yes.
-    func leave() {
-        saveCardDAV()
-        if isConfirmingCardDAVOff {
-            isLeavingAfterAnswer = true
-            return
+    /// What is wrong with the account, first: a message that wasn't sent opens Drafts; the rest is put
+    /// right on this page.
+    @ViewBuilder private var problemsSection: some View {
+        let items = app.attention(for: account.id)
+        if !items.isEmpty {
+            Section {
+                ForEach(items, id: \.self) { item in
+                    if item.action == .drafts {
+                        Button { app.act(on: item) } label: { problemRow(item) }
+                            .accessibilityHint(Text(ui: "Opens the account's Drafts"))
+                    } else {
+                        problemRow(item)
+                    }
+                }
+            }
         }
-        leaveAfterContacts()
     }
 
-    /// The contacts settled: the calendar's question if it has one, else away.
-    func leaveAfterContacts() {
-        saveCalDAV()
-        if isConfirmingCalDAVOff {
-            isLeavingAfterAnswer = true
-        } else {
-            dismiss()
+    private func problemRow(_ item: AttentionItem) -> some View {
+        Label {
+            Text(item.text).foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: Icons.warningFilled).foregroundStyle(Theme.warning)
         }
+        .accessibilityIdentifier("account.problem")
     }
 }
 

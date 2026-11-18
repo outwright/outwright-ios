@@ -32,4 +32,15 @@ extension MailStore {
     func breakAccountReads() throws {
         try write { database in try database.execute(sql: "ALTER TABLE account RENAME TO account_unreadable") }
     }
+
+    /// The account kim@example.org can no longer be changed, as a refusing database would.
+    func refuseChangesToKim() throws {
+        try write { database in
+            try database.execute(
+                sql: """
+                    CREATE TRIGGER refuse_account BEFORE UPDATE ON account WHEN OLD.email = 'kim@example.org'
+                    BEGIN SELECT RAISE(ABORT, 'refused'); END
+                    """)
+        }
+    }
 }

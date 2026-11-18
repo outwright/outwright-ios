@@ -35,6 +35,8 @@ public enum APNsEnvironment: String, Codable, Sendable {
 public actor RelayClient {
     static let maxResponse = 64 * 1024
     private let base: URL
+    /// The relay's base URL (`…/v1`), which names it: a method checks addresses against it.
+    public nonisolated var baseURL: URL { base }
     private let session: URLSession
 
     public init(base: URL, session: URLSession = .shared) {

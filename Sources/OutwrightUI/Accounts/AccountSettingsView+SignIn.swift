@@ -23,7 +23,7 @@ extension AccountSettingsView {
     @ViewBuilder var unavailableSection: some View {
         Section {
             Text(ui: "Not available in this version of Outwright. The account is kept as it is.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondaryText)
         }
     }
 }

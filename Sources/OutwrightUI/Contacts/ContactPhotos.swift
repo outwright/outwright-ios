@@ -43,3 +43,32 @@ enum ContactPhotos {
         return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnail as CFDictionary)
     }
 }
+
+extension ContactPhotos {
+    /// The longer side of a picture given to a contact, at most.
+    nonisolated static let writtenSide = 512
+
+    /// A picked picture as a contact keeps it: at most `writtenSide` pixels on its longer side, as
+    /// a JPEG; nil when it can't be read.
+    nonisolated static func prepared(_ data: Data) -> Data? {
+        let options: [CFString: Any] = [kCGImageSourceShouldCache: false]
+        guard let source = CGImageSourceCreateWithData(data as CFData, options as CFDictionary),
+            CGImageSourceGetCount(source) > 0
+        else { return nil }
+        let thumbnail: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: writtenSide
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnail as CFDictionary) else {
+            return nil
+        }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, "public.jpeg" as CFString, 1, nil) else {
+            return nil
+        }
+        CGImageDestinationAddImage(
+            destination, image, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? output as Data : nil
+    }
+}

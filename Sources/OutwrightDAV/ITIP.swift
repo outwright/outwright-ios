@@ -127,20 +127,24 @@ public enum ITIP {
     /// for `recurrenceID` (or the series), with only the owner's ATTENDEE. An answer for the whole
     /// series also carries one VEVENT per override the copy holds (RFC 5546 › 3.2.3), the owner's
     /// answer on each, so the organiser's per-occurrence answers follow it. Nil when that VEVENT has
-    /// no ORGANIZER or no ATTENDEE for `ownEmail`.
+    /// no ORGANIZER or no ATTENDEE for `ownEmail`. A `comment` is each VEVENT's COMMENT (RFC 5546 ›
+    /// 3.2.3 allows one in a REPLY), on one line: CR, LF and NUL never reach the property.
     public static func reply(from calendar: ICalComponent, ownEmail: String, partstat: String,
-                             recurrenceID: ICalProperty?, now: Date) -> ICalComponent? {
+                             recurrenceID: ICalProperty?, now: Date, comment: String? = nil) -> ICalComponent? {
         let answer = token(partstat)
+        let note = comment.map(oneLine).flatMap { $0.isEmpty ? nil : $0 }
         guard !answer.isEmpty, let source = replySource(calendar, recurrenceID: recurrenceID),
               let organizer = source.first("ORGANIZER"),
-              let main = replyEvent(source, organizer: organizer, ownEmail: ownEmail, answer: answer, now: now)
+              let main = replyEvent(source, organizer: organizer, ownEmail: ownEmail, answer: (answer, note), now: now)
         else { return nil }
         var replied = [main]
         if recurrenceID == nil, source.first("RECURRENCE-ID") == nil {
             let uid = source.first("UID")?.value
             replied += events(calendar).filter { $0.first("RECURRENCE-ID") != nil && $0.first("UID")?.value == uid }
                 .prefix(DAVLimits.componentsPerResource)
-                .compactMap { replyEvent($0, organizer: organizer, ownEmail: ownEmail, answer: answer, now: now) }
+                .compactMap {
+                    replyEvent($0, organizer: organizer, ownEmail: ownEmail, answer: (answer, note), now: now)
+                }
         }
         let used = Set(replied.flatMap(\.properties).compactMap { $0.parameter("TZID") })
         let zones = calendar.components.filter {
@@ -153,10 +157,12 @@ public enum ITIP {
         return ICalComponent(name: "VCALENDAR", properties: header, components: zones + replied)
     }
 
-    /// One VEVENT of a REPLY: `source`'s identity and time, its ORGANIZER (else `organizer`) and the
-    /// owner's ATTENDEE at `answer`. Nil when `source` has no ATTENDEE for `ownEmail`.
+    /// One VEVENT of a REPLY: `source`'s identity and time, its ORGANIZER (else `organizer`), the
+    /// owner's ATTENDEE at the answer's PARTSTAT and its comment. Nil when `source` has no ATTENDEE for
+    /// `ownEmail`.
     private static func replyEvent(
-        _ source: ICalComponent, organizer: ICalProperty, ownEmail: String, answer: String, now: Date
+        _ source: ICalComponent, organizer: ICalProperty, ownEmail: String,
+        answer: (partstat: String, comment: String?), now: Date
     ) -> ICalComponent? {
         guard let own = source.all("ATTENDEE").first(where: { isOwn($0, ownEmail) }) else { return nil }
         var properties: [ICalProperty] = []
@@ -171,8 +177,9 @@ public enum ITIP {
         properties.append(withoutScheduling(source.first("ORGANIZER") ?? organizer))
         var attendee = withoutScheduling(own)
         attendee.parameters = attendee.parameters.filter { $0.name != "PARTSTAT" && $0.name != "RSVP" }
-            + [ContentParameter(name: "PARTSTAT", values: [answer])]
+            + [ContentParameter(name: "PARTSTAT", values: [answer.partstat])]
         properties.append(attendee)
+        if let comment = answer.comment { properties.append(ICalProperty(name: "COMMENT", text: comment)) }
         return ICalComponent(name: "VEVENT", properties: properties)
     }
 
@@ -204,6 +211,18 @@ public enum ITIP {
             ("A"..."Z").contains($0) || ("0"..."9").contains($0) || $0 == "-"
         }.prefix(maxToken)
         return String(String.UnicodeScalarView(kept))
+    }
+
+    /// The text on one line: CR and LF become spaces, NUL goes; trimmed.
+    static func oneLine(_ text: String) -> String {
+        let scalars = text.unicodeScalars.compactMap { scalar -> Unicode.Scalar? in
+            switch scalar {
+            case "\0": nil
+            case "\r", "\n": " "
+            default: scalar
+            }
+        }
+        return String(String.UnicodeScalarView(scalars)).trimmingCharacters(in: .whitespaces)
     }
 
     /// A CAL-ADDRESS as an address: without `mailto:`, lower-cased.

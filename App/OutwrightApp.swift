@@ -46,11 +46,16 @@ struct OutwrightApp: App {
             guard let app, !Self.isSample else { return }
             switch phase {
             case .active:
+                StoreGrace.sharing.cameToFront()
+                // What the notification extension stored meanwhile shows in the lists.
+                try? app.store.lookAgain()
                 app.sceneChanged(toActive: true) { await WiFi.isOn() }
                 Task { await AppPush.renewIfDue() }
             case .background:
                 BackgroundRefresh.schedule()
                 app.sceneChanged(toActive: false)
+                app.sweepSetupFiles()
+                StoreGrace.sharing.wentToBackground()
             default:
                 break
             }
@@ -60,12 +65,14 @@ struct OutwrightApp: App {
             guard BackgroundRefresh.isOn else { return }
             // The next one is asked for first, so a refresh cut short still leaves one coming.
             BackgroundRefresh.schedule()
-            guard let app = await Self.backgroundModel() else { return }
-            // First, so the reminders are refilled even when the refresh is cut short.
-            await app.sync.rescheduleReminders()
-            await app.refresh()
-            await app.announceNewMail()
-            await AppPush.renewIfDue()
+            await StoreGrace.sharing.refresh {
+                guard let app = Self.backgroundModel() else { return }
+                // First, so the reminders are refilled even when the refresh is cut short.
+                await app.sync.rescheduleReminders()
+                await app.refresh()
+                await app.announceNewMail()
+                await AppPush.renewIfDue()
+            }
         }
     }
 
@@ -81,21 +88,33 @@ struct OutwrightApp: App {
         if let sample = hooks.sampleModel() {
             return sample
         }
-        guard let url = storeURL(), let store = try? MailStore(path: url) else { return nil }
+        guard let folder = applicationSupport() else { return nil }
+        let url = storeURL(in: folder)
+        // Application Support, where the modules' files stay (a fresh start clears the app group too).
+        hooks.prepare(storeFolder: folder)
+        guard let store = try? MailStore(path: url) else { return nil }
+        hooks.storeOpened(store)
         removeLeftoverAttachmentFiles()
-        var modules = Composition.modules(store: store, folder: url.deletingLastPathComponent(), hooks: hooks.hooks)
+        SetupModel.removeLeftovers()
+        // The modules keep their own files where they always were; only the store moved.
+        var modules = Composition.modules(store: store, folder: folder, hooks: hooks.hooks)
         modules.providers = hooks.providers(modules.providers)
         let providers = ProviderSet([OwnServerProvider()] + modules.providers)
         DefaultSignature.fillEmpty(store: store)
         DefaultSignature.replaceOld(store: store)
         let offset = hooks.clockOffset
         let clock: @Sendable () -> Date = { [offset] in Date().addingTimeInterval(offset) }
-        if let opening = modules.opening { store.setOpening(opening) }
+        store.setOpenings(modules.openings)
+        let journal = DiagnosticsJournal(
+            fileURL: DiagnosticsJournal.place(container: PushPlaces.container, fallback: folder))
+        // Off the main thread: a count over a large store, or the extension holding the file, must
+        // not hold up the first screen.
+        Task.detached(priority: .utility) { noteLaunch(journal, store: store, at: url) }
         let sync = SyncCoordinator(
             store: store, secrets: KeychainSecretStore(), tokens: providers.tokens, available: Set(providers.ids),
             now: clock, phoneContacts: SystemPhoneContacts(), reminders: SystemReminders(now: clock),
             graphBases: providers.graphBases, meetingWording: AppModel.meetingWording,
-            protections: modules.protections)
+            protections: modules.protections, journal: journal)
         let model = AppModel(store: store, sync: sync)
         model.modules = modules
         model.now = clock
@@ -103,6 +122,8 @@ struct OutwrightApp: App {
         Task { await model.movePushToLocalWhereNotIncluded() }
         model.diagnostics = Metrics.start()
         NetworkWatch.start { [weak model] in model?.networkChanged() }
+        StoreChanges.observe { [weak model] in try? model?.store.lookAgain() }
+        model.showBadge()
         shared = model
         front = model
         openPendingEvent()
@@ -152,12 +173,31 @@ struct OutwrightApp: App {
         shared
     }
 
-    static func storeURL() -> URL? {
-        guard
-            let folder = try? FileManager.default.url(
-                for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        else { return nil }
-        return folder.appendingPathComponent("mail.sqlite")
+    /// The launch, the store's size and any migrations opening it applied, for the diagnostics.
+    private nonisolated static func noteLaunch(_ journal: DiagnosticsJournal, store: MailStore, at url: URL) {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? ""
+        journal.note(.launch(version: version, build: info["CFBundleVersion"] as? String ?? ""))
+        let bytes = [url.path, url.path + "-wal"].reduce(Int64(0)) { total, path in
+            total + ((try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int64) ?? 0)
+        }
+        journal.note(.store(bytes: bytes, messages: (try? store.messageCount()) ?? 0))
+        if !store.migrated.names.isEmpty {
+            journal.note(.migration(names: store.migrated.names, milliseconds: Int(store.migrated.seconds * 1_000)))
+        }
+    }
+
+    static func applicationSupport() -> URL? {
+        try? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+    }
+
+    /// In the app group, where the notification extension reaches it, moved there once from
+    /// Application Support; in Application Support for a build without an app group.
+    static func storeURL(in applicationSupport: URL) -> URL {
+        let old = applicationSupport.appendingPathComponent("mail.sqlite")
+        guard let container = PushPlaces.container else { return old }
+        return StoreFile.place(old: old, new: PushPlaces.store(in: container))
     }
 }
 

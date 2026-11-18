@@ -31,7 +31,7 @@ import Testing
             request: ComposeRequest(kind: .reply(original)), store: box.store, accounts: [anna], locale: swedish)
         #expect(model.subject == "Sv: Möte")
         #expect(model.to.map(\.email) == ["bo@example.org"])
-        let text = String(model.body.characters)
+        let text = shownText(model)
         let signature = try #require(text.range(of: "Anna Andersson"))
         let quote = try #require(text.range(of: "Ses i morgon klockan tio."))
         #expect(signature.upperBound <= quote.lowerBound)
@@ -253,6 +253,23 @@ import Testing
         #expect(model.attachments.count == 2)
     }
 
+    @Test func defaultAccountIsUsedForNewMailInAllAccounts() throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let bo = try box.addAccount("bo@other.example")
+        let all = ComposeModel(
+            request: ComposeRequest(kind: .new), store: box.store, accounts: [anna, bo], defaultAccount: bo.id)
+        #expect(all.from == bo.id)
+        // An account in view wins over the default; one that is gone is not used.
+        let inView = ComposeModel(
+            request: ComposeRequest(kind: .new), store: box.store, accounts: [anna, bo], accountInView: anna.id,
+            defaultAccount: bo.id)
+        #expect(inView.from == anna.id)
+        let gone = ComposeModel(
+            request: ComposeRequest(kind: .new), store: box.store, accounts: [anna, bo], defaultAccount: AccountID())
+        #expect(gone.from == anna.id)
+    }
+
     @Test func messageIDFollowsTheChosenAccount() throws {
         var box = try Mailbox()
         let anna = try box.addAccount("anna@example.org")
@@ -418,7 +435,7 @@ import Testing
             body: try mail(from: address("bo@example.org"), to: [address(anna.email)], cc: [address("carl@example.org")]))
         let model = await ComposeModel.make(
             request: ComposeRequest(kind: .reply(id)), store: box.store, accounts: [anna], locale: swedish)
-        #expect(String(model.body.characters).contains("Kopia: carl@example.org"))
+        #expect(shownText(model).contains("Kopia: carl@example.org"))
     }
 
     /// A draft from another client whose Message-ID cannot be written is saved under a new one.
@@ -445,5 +462,199 @@ import Testing
         let model = ComposeModel(request: ComposeRequest(kind: .new), store: box.store, accounts: [anna])
         model.to = [Address(name: nil, email: String(repeating: "a", count: 250) + "@example.org")]
         #expect(throws: ComposeError.notWritable) { try model.send() }
+    }
+
+    // MARK: - Recipients, the quoted original, attachments
+
+    @Test func duplicateRecipientIsSkipped() throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let model = ComposeModel(request: ComposeRequest(kind: .new), store: box.store, accounts: [anna])
+        model.add([address("bo@example.org")], to: .to)
+        model.add([address("BO@example.org"), address("carl@example.org"), address("carl@example.org")], to: .cc)
+        #expect(model.to.map(\.email) == ["bo@example.org"])
+        #expect(model.cc.map(\.email) == ["carl@example.org"])
+        try model.send(typed: [.bcc: "bo@example.org, dora@example.org"])
+        let draft = try #require(try draftRows(box, anna).first)
+        let parsed = try MIMEParser.parse(try #require(try box.store.body(draft.id)))
+        #expect(parsed.bcc.map(\.email) == ["dora@example.org"])
+    }
+
+    private func htmlMail(html: String, inline: [OutwrightMIME.Attachment] = []) throws -> Data {
+        try MIMEWriter.write(
+            OutgoingMessage(
+                from: address("bo@example.org"), to: [address("anna@example.org")], cc: [], bcc: [], subject: "Bild",
+                textBody: "Hej Anna", htmlBody: html, attachments: inline, inReplyTo: nil, references: [],
+                date: Date(timeIntervalSince1970: 1_800_000_000), messageID: "html@example.org"),
+            includeBcc: false)
+    }
+
+    @Test func forwardKeepsInlineParts() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let picture = Attachment(
+            filename: "pic.png", mimeType: "image/png", contentID: "pic1@example.org", isInline: true,
+            data: Data([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]))
+        let id = try box.add(
+            anna, uid: 8, body: try htmlMail(html: "<p>Se <img src=\"cid:pic1@example.org\"></p>", inline: [picture]))
+        let model = await ComposeModel.make(request: ComposeRequest(kind: .forward(id)), store: box.store, accounts: [anna])
+        #expect(model.attachments.isEmpty, "an inline picture is no attachment chip")
+        model.to = [address("carl@example.org")]
+        try model.send()
+        let draft = try #require(try draftRows(box, anna).first)
+        let sent = try MIMEParser.parse(try #require(try box.store.body(draft.id)))
+        let kept = try #require(sent.attachments.first { $0.contentID == "pic1@example.org" })
+        #expect(kept.isInline)
+        #expect(kept.data == picture.data)
+        #expect(sent.htmlBody?.contains("cid:pic1@example.org") == true)
+    }
+
+    /// A forward's inline picture too large for the room left goes, with its picture in the quote, and
+    /// is counted for the owner; the forward's files stay.
+    @Test func anOversizedInlinePartIsLeftOut() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let file = Attachment(
+            filename: "notes.bin", mimeType: "application/octet-stream", contentID: nil, isInline: false,
+            data: Data(count: 60 << 10))
+        let small = Attachment(
+            filename: "small.png", mimeType: "image/png", contentID: "small@example.org", isInline: true,
+            data: Data(count: 10 << 10))
+        let big = Attachment(
+            filename: "big.png", mimeType: "image/png", contentID: "big@example.org", isInline: true,
+            data: Data(count: 60 << 10))
+        let html = "<p>A <img src=\"cid:small@example.org\"> B <img src=\"cid:big@example.org\"></p>"
+        let id = try box.add(anna, uid: 11, body: try htmlMail(html: html, inline: [file, small, big]))
+        let model = await ComposeModel.make(
+            request: ComposeRequest(kind: .forward(id)), store: box.store, accounts: [anna],
+            attachmentLimit: 100 << 10)
+        #expect(model.attachments.map(\.filename) == ["notes.bin"])
+        #expect(model.quoted?.inline.compactMap(\.contentID) == ["small@example.org"])
+        #expect(model.leftOut.tooLarge == 1)
+        #expect(model.attachmentBytes <= 100 << 10)
+        model.to = [address("carl@example.org")]
+        try model.send()
+        let draft = try #require(try draftRows(box, anna).first)
+        let sent = try MIMEParser.parse(try #require(try box.store.body(draft.id)))
+        let html2 = try #require(sent.htmlBody)
+        #expect(html2.contains("cid:small@example.org"))
+        #expect(!html2.contains("cid:big@example.org"))
+    }
+
+    /// What didn't fit is said once: taking it empties it.
+    @Test func whatWasLeftOutIsSaidOnce() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let big = Attachment(
+            filename: "big.png", mimeType: "image/png", contentID: "big@example.org", isInline: true,
+            data: Data(count: 60 << 10))
+        let id = try box.add(anna, uid: 12, body: try htmlMail(html: "<img src=\"cid:big@example.org\">", inline: [big]))
+        let model = await ComposeModel.make(
+            request: ComposeRequest(kind: .forward(id)), store: box.store, accounts: [anna], attachmentLimit: 10 << 10)
+        #expect(model.takeLeftOut().tooLarge == 1)
+        #expect(model.takeLeftOut().isEmpty)
+    }
+
+    /// A pasted list, one address a line, is read as that many addresses.
+    @Test func addressesOnLinesOfTheirOwnAreSplit() {
+        let (found, rest) = RecipientParser.split("a@example.org\nb@example.org\r\nc@example.org\rnot one")
+        #expect(found.map(\.email) == ["a@example.org", "b@example.org", "c@example.org"])
+        #expect(rest == ["not one"])
+    }
+
+    @Test func replyCarriesTheOriginalHTMLAsCite() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let html = "<html><head><style>p{color:red}</style></head><body><p onclick=\"steal()\">Hej <b>Anna</b></p>"
+            + "<script>alert(1)</script><a href=\"javascript:steal()\">x</a></body></html>"
+        let id = try box.add(anna, uid: 9, body: try htmlMail(html: html))
+        let model = await ComposeModel.make(request: ComposeRequest(kind: .reply(id)), store: box.store, accounts: [anna])
+        #expect(!String(model.body.characters).contains("Hej Anna"), "the original is under the editor, not in it")
+        #expect(model.quoted?.text.contains("Hej Anna") == true)
+        model.body = AttributedString("Tack!")
+        try model.send()
+        let draft = try #require(try draftRows(box, anna).first)
+        let sent = try MIMEParser.parse(try #require(try box.store.body(draft.id)))
+        let sentHTML = try #require(sent.htmlBody)
+        let cite = try #require(sentHTML.range(of: "<blockquote type=\"cite\">"))
+        let own = try #require(sentHTML.range(of: "Tack!"))
+        #expect(own.upperBound <= cite.lowerBound)
+        #expect(sentHTML[cite.upperBound...].contains("<b>Anna</b>"))
+        for unsafe in ["<script", "onclick", "javascript:", "<style"] {
+            #expect(!sentHTML.lowercased().contains(unsafe))
+        }
+        #expect(sent.textBody?.contains("> Hej Anna") == true)
+    }
+
+    /// A reply kept as a draft opens again with the owner's text in the editor and the original under
+    /// it, and is sent with the original quoted once.
+    @Test func aDraftKeepsItsQuoteUnderTheEditor() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let id = try box.add(anna, uid: 10, body: try htmlMail(html: "<p>Hej <b>Anna</b></p>"))
+        let reply = await ComposeModel.make(request: ComposeRequest(kind: .reply(id)), store: box.store, accounts: [anna])
+        reply.body = AttributedString("Utkast")
+        try reply.close()
+        let draft = try #require(try draftRows(box, anna).first)
+        let reopened = await ComposeModel.make(
+            request: ComposeRequest(kind: .draft(draft.id)), store: box.store, accounts: [anna])
+        #expect(String(reopened.body.characters) == "Utkast")
+        #expect(reopened.quoted?.text.contains("Hej Anna") == true)
+        reopened.body = AttributedString("Utkast, klart")
+        try reopened.send()
+        let sent = try MIMEParser.parse(try #require(try box.store.body(draft.id)))
+        let html = try #require(sent.htmlBody)
+        #expect(html.components(separatedBy: "<blockquote type=\"cite\">").count == 2)
+        #expect(html.contains("<b>Anna</b>"))
+    }
+
+    @Test func failedAttachmentsAreCountedTogether() throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let model = ComposeModel(request: ComposeRequest(kind: .new), store: box.store, accounts: [anna])
+        model.attachmentLimit = 1_000
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("attach-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        func file(_ name: String, _ bytes: Int) throws -> URL {
+            let url = folder.appendingPathComponent(name)
+            try Data(repeating: 0x41, count: bytes).write(to: url)
+            return url
+        }
+        var urls = [try file("big1.bin", 2_000), try file("big2.bin", 2_000), folder.appendingPathComponent("gone.bin")]
+        for index in 0..<19 { urls.append(try file("small\(index).txt", 10)) }
+        let failed = model.attachFiles(urls)
+        #expect(failed.tooLarge == 2)
+        #expect(failed.unreadable == 1)
+        #expect(failed.pastTheLimit == 2)
+        #expect(model.attachments.count == 17)
+    }
+
+    @Test func writingStartsAboveTheSignature() async throws {
+        var box = try Mailbox()
+        var anna = try box.addAccount("anna@example.org")
+        anna.signature = "Anna Andersson"
+        try box.store.save(anna)
+        let original = try received(box, anna, subject: "Möte", text: "Ses i morgon.")
+        let reply = await ComposeModel.make(
+            request: ComposeRequest(kind: .reply(original)), store: box.store, accounts: [anna])
+        #expect(reply.cursorOnEntering == 0)
+        let fresh = ComposeModel(request: ComposeRequest(kind: .new), store: box.store, accounts: [anna])
+        #expect(fresh.cursorOnEntering == 0)
+
+        // Once the body is written in, the cursor is where the writer left it.
+        reply.body = AttributedString("Gärna.") + reply.body
+        #expect(reply.cursorOnEntering == nil)
+        try reply.keep()
+        #expect(reply.cursorOnEntering == nil, "kept as a draft in the background, still written in")
+
+        // A draft opened again is the writer's text: the editor places the cursor.
+        fresh.to = [Address(name: nil, email: "bo@example.org")]
+        fresh.body = AttributedString("Hej Bo")
+        try fresh.close()
+        let draft = try #require(try draftRows(box, anna).first)
+        let reopened = await ComposeModel.make(
+            request: ComposeRequest(kind: .draft(draft.id)), store: box.store, accounts: [anna])
+        #expect(reopened.cursorOnEntering == nil)
     }
 }

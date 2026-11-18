@@ -7,12 +7,14 @@ import SwiftUI
 
 /// A message in the results: an envelope on the accent colour.
 struct MailIcon: View {
+    @ScaledMetric(relativeTo: .title3) private var diameter: CGFloat = 44
+
     var body: some View {
         Circle()
             .fill(Theme.accent)
-            .frame(width: 44, height: 44)
+            .frame(width: diameter, height: diameter)
             .overlay {
-                Image(systemName: "envelope.fill")
+                Image(systemName: Icons.mailFilled)
                     .foregroundStyle(Theme.onAccent)
             }
             .accessibilityHidden(true)
@@ -32,7 +34,7 @@ struct PersonBadge: View {
                 .foregroundStyle(.primary)
             Text(words.dropFirst().joined(separator: " "))
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.secondaryText)
         }
         .lineLimit(1)
         .frame(width: 72)
@@ -42,26 +44,40 @@ struct PersonBadge: View {
 /// A document drawn from SF Symbols, with the file's kind on it.
 struct FileIcon: View {
     let name: String
+    @ScaledMetric(relativeTo: .title) private var glyph: CGFloat = 34
+    @ScaledMetric(relativeTo: .caption2) private var kind: CGFloat = 8
+    @ScaledMetric(relativeTo: .title) private var box: CGFloat = 44
 
     var body: some View {
         let ext = (name.split(separator: ".").last.map(String.init) ?? "").uppercased()
-        Image(systemName: "doc")
-            .font(.system(size: 34, weight: .light))
-            .foregroundStyle(.secondary)
+        Image(systemName: Icons.document)
+            .font(.system(size: glyph, weight: .light))
+            .foregroundStyle(Theme.secondaryText)
             .overlay(alignment: .center) {
                 Text(verbatim: ext.count <= 4 ? ext : "")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(Theme.delete)
+                    .font(.system(size: kind, weight: .bold))
+                    .foregroundStyle(Theme.accent)
                     .offset(y: 3)
             }
-            .frame(width: 44, height: 44)
+            .frame(width: box, height: box)
             .accessibilityHidden(true)
     }
 }
 
 extension View {
-    /// Search covers the whole screen on the phone (a sheet where there is no such thing).
-    func searchCover<Content: View>(
+    /// Compose on a phone covers the whole screen (else a sheet).
+    func screenCover<Item: Identifiable, Content: View>(
+        item: Binding<Item?>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping (Item) -> Content
+    ) -> some View {
+        #if os(iOS)
+        fullScreenCover(item: item, onDismiss: onDismiss, content: content)
+        #else
+        sheet(item: item, onDismiss: onDismiss, content: content)
+        #endif
+    }
+
+    /// Search and the first account's Add account cover the whole screen on the phone (else a sheet).
+    func screenCover<Content: View>(
         isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         #if os(iOS)

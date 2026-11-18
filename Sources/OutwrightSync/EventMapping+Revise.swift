@@ -24,7 +24,8 @@ extension EventMapping {
         return marked(event, from: old, to: new)
     }
 
-    /// STATUS and TRANSP, when they changed.
+    /// STATUS, Show as (TRANSP, and X-MICROSOFT-CDO-BUSYSTATUS for what TRANSP can't say) and CLASS,
+    /// when they changed.
     private static func marked(_ event: ICalComponent, from old: EventDetails?, to new: EventDetails) -> ICalComponent {
         var event = event
         if old?.status != new.status {
@@ -35,9 +36,20 @@ extension EventMapping {
             }
             event = event.replacing("STATUS", with: [ICalProperty(name: "STATUS", value: status)])
         }
-        if old?.transparency != new.transparency {
-            let transparency = new.transparency == .free ? "TRANSPARENT" : "OPAQUE"
-            event = event.replacing("TRANSP", with: [ICalProperty(name: "TRANSP", value: transparency)])
+        if old?.showAs != new.showAs {
+            let transp = new.showAs == .free ? "TRANSPARENT" : "OPAQUE"
+            let status = switch new.showAs {
+            case .busy: "BUSY"
+            case .free: "FREE"
+            case .tentative: "TENTATIVE"
+            case .away: "OOF"
+            }
+            event = event.replacing("TRANSP", with: [ICalProperty(name: "TRANSP", value: transp)])
+                .replacing(busyStatus, with: [ICalProperty(name: busyStatus, value: status)])
+        }
+        if (old?.isPrivate ?? false) != new.isPrivate {
+            // Public is CLASS's default (RFC 5545 › 3.8.1.3): no line says it.
+            event = event.replacing("CLASS", with: new.isPrivate ? [ICalProperty(name: "CLASS", value: "PRIVATE")] : [])
         }
         return event
     }
@@ -56,7 +68,8 @@ extension EventMapping {
         take(\.reminder)
         take(\.attendees)
         take(\.status)
-        take(\.transparency)
+        take(\.showAs)
+        take(\.isPrivate)
         if ours.start != base.start || ours.end != base.end {
             result.start = ours.start
             result.end = ours.end

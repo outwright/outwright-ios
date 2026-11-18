@@ -22,7 +22,7 @@ struct SuggestionList: View {
                         if person.name != nil {
                             Text(person.email)
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.secondaryText)
                         }
                     }
                 }
@@ -52,15 +52,15 @@ struct AttachmentChips: View {
                                     .lineLimit(1)
                                 Text(ByteCountFormatter.string(
                                     fromByteCount: Int64(attachment.data.count), countStyle: .file))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Theme.secondaryText)
                             }
                         }
                         .buttonStyle(.plain)
                         Button {
                             if model.attachments.indices.contains(index) { model.attachments.remove(at: index) }
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                            Image(systemName: Icons.clear)
+                                .foregroundStyle(Theme.secondaryText)
                         }
                         .accessibilityLabel(Text(ui: "Remove"))
                     }
@@ -74,5 +74,23 @@ struct AttachmentChips: View {
             .padding(.vertical, 8)
         }
         .opensAttachment($opening)
+    }
+}
+
+/// Under the subject of a reply whose original couldn't be loaded: it opens without the quote, and says so.
+struct NotQuotedRow: View {
+    var body: some View {
+        Label {
+            Text(ui: "The original couldn't be loaded, so it isn't quoted.")
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: Icons.warning)
+        }
+        .font(.footnote)
+        .foregroundStyle(Theme.secondaryText)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .accessibilityIdentifier("compose.notQuoted")
     }
 }

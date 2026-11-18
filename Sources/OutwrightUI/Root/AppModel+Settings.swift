@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import Foundation
+public import OutwrightModel
+
 /// Settings, opened at the list or at one account.
 extension AppModel {
     /// Opens settings at the list of accounts.
@@ -9,11 +12,17 @@ extension AppModel {
         isShowingSettings = true
     }
 
-    /// A sync problem's banner was tapped: settings opens at that account, where its password and
-    /// servers are put right; at the list when the account is gone (a banner not yet read again).
-    public func showSettings(for problem: AccountProblem) {
-        let id = problem.account.id
-        settingsAccount = accounts.contains { $0.id == id } ? id : nil
+    /// Opens settings at one account (the drawer's gear, with the account in view), or at the list when nil.
+    public func showSettings(account: AccountID?) {
+        settingsAccount = account.flatMap { id in accounts.contains { $0.id == id } ? id : nil }
         isShowingSettings = true
+    }
+}
+
+extension AppModel {
+    /// The account new mail is from when none is in view (Settings › Default account); nil until chosen.
+    public var defaultAccountID: AccountID? {
+        UserDefaults.standard.string(forKey: SettingsKeys.defaultAccount).flatMap(UUID.init(uuidString:))
+            .map { AccountID(raw: $0) }
     }
 }

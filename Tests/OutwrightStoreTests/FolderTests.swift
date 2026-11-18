@@ -156,3 +156,37 @@ import Testing
         #expect(try store.highestModSeq(FolderID(raw: 1)) == nil)
     }
 }
+
+@Suite struct FolderObservationTests {
+    /// The iPad's sidebar stays on screen: its unread counts and folders follow the store.
+    @Test func observingFoldersSeesNewMailAndNewFolders() async throws {
+        let f = try Fixture()
+        let changes = f.store.observeFolders()
+        let store = f.store
+        let account = f.account
+        let inbox = f.inbox
+        let seen = try await withThrowingTaskGroup(of: Int?.self) { group in
+            group.addTask {
+                var changed = changes.makeAsyncIterator()
+                _ = try await changed.next()
+                _ = try store.upsert([row(account.id, inbox.id, uid: 1)])
+                var count = try await changed.next() != nil ? 1 : 0
+                var folders = try store.folders(account.id)
+                folders.append(Folder(
+                    id: FolderID(raw: 0), accountID: account.id, path: "Projects", name: "Projects", kind: .other,
+                    uidValidity: 1, unread: 0, isFavorite: false))
+                try store.replaceFolders(folders, for: account.id)
+                count += try await changed.next() != nil ? 1 : 0
+                return count
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(10))
+                return nil
+            }
+            let first = try await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+        #expect(seen == 2)
+    }
+}

@@ -14,11 +14,12 @@ extension MailStore {
     }
 
     /// The owner gave up a change the server did not take: the server's version (`details` read
-    /// from `serverCard`) is the contact again, and the change, its failure and any held conflict
-    /// go. A contact the server never had (`details` nil, no address) is removed. For every contact
-    /// the server has, its ETag and its book's sync token go, since the server may have changed the
-    /// card while the failure waited: the next sync fetches it again and its card replaces what is
-    /// shown (the details kept here when the held card can't be read).
+    /// from `serverCard`) is the contact again, and the change, its failure, any held conflict and
+    /// any photo of the owner's not on the server go. A contact the server never had (`details` nil,
+    /// no address) is removed. For every contact the server has, its ETag and its book's sync token
+    /// go, since the server may have changed the card while the failure waited: the next sync
+    /// fetches it again and its card replaces what is shown (the details kept here when the held
+    /// card can't be read).
     public func restoreServerVersion(_ id: ContactID, details: ContactDetails?, photo: Data?) throws(StoreError) {
         try write { database in
             let row = try Self.contactRow(database, id)
@@ -29,7 +30,8 @@ extension MailStore {
                     try database.execute(
                         sql: """
                             UPDATE contact SET pendingChange = NULL, changeFailed = 0, conflictJSON = NULL,
-                                attempts = 0, etag = NULL, revision = revision + 1 WHERE id = ?
+                                attempts = 0, photoPending = 0, photoFailed = 0, etag = NULL,
+                                revision = revision + 1 WHERE id = ?
                             """, arguments: [id.raw])
                     try Self.forgetServerState(database, id)
                 }
@@ -39,7 +41,7 @@ extension MailStore {
                 sql: """
                     UPDATE contact SET detailsJSON = ?, sortKey = ?, photo = ?, pendingChange = NULL,
                         changeFailed = 0, conflictJSON = NULL, attempts = 0, newHref = NULL, newCard = NULL,
-                        revision = revision + 1 WHERE id = ?
+                        photoPending = 0, photoFailed = 0, revision = revision + 1 WHERE id = ?
                     """, arguments: [ContactRecords.encode(details), details.sortKey, photo, id.raw])
             if (row["href"] as String?) != nil {
                 try Self.forgetServerState(database, id)

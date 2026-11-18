@@ -13,6 +13,13 @@ public protocol Provider: Sendable {
     var tokens: (any TokenRefreshing)? { get }
     /// Where the provider's Graph is; nil when it has none.
     var graphBase: URL? { get }
+    /// The OAuth client id this build signs in with for the provider: a refresh token issued to
+    /// another client id is not used here. Nil for a provider whose accounts use passwords.
+    var oauthClientID: String? { get }
+}
+
+extension Provider {
+    public var oauthClientID: String? { nil }
 }
 
 /// The owner's own server: passwords, IMAP and SMTP with CalDAV and CardDAV, or JMAP.
@@ -28,18 +35,22 @@ public struct ProviderSet: Sendable {
     public let ids: [ProviderID]
     public let tokens: [ProviderID: any TokenRefreshing]
     public let graphBases: [ProviderID: URL]
+    public let oauthClientIDs: [ProviderID: String]
 
     public init(_ providers: [any Provider]) {
         var ids: [ProviderID] = []
         var tokens: [ProviderID: any TokenRefreshing] = [:]
         var graphBases: [ProviderID: URL] = [:]
+        var oauthClientIDs: [ProviderID: String] = [:]
         for provider in providers where !ids.contains(provider.id) {
             ids.append(provider.id)
             tokens[provider.id] = provider.tokens
             graphBases[provider.id] = provider.graphBase
+            oauthClientIDs[provider.id] = provider.oauthClientID
         }
         self.ids = ids
         self.tokens = tokens
         self.graphBases = graphBases
+        self.oauthClientIDs = oauthClientIDs
     }
 }

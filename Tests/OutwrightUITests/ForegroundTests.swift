@@ -5,9 +5,11 @@ import Foundation
 import OutwrightFakes
 import OutwrightModel
 import OutwrightNet
+import OutwrightSetup
 import OutwrightStore
-import OutwrightSync
 import Testing
+
+@testable import OutwrightSync
 
 @testable import OutwrightUI
 
@@ -42,6 +44,32 @@ private func withFakeAccount(_ body: (AppModel, FakeIMAPServer, Account) async t
     await smtp.stop()
 }
 
+/// A CalDAV server with a calendar and a CardDAV server with an address book, both on loopback,
+/// taking the fake IMAP server's user and password.
+private struct DAVFakes {
+    let calendars: FakeCalDAVServer
+    let books: FakeCardDAVServer
+    let calDAV: String
+    let cardDAV: String
+
+    static func start() async throws -> DAVFakes {
+        let calendars = FakeCalDAVServer(user: FakeIMAPServer.user, password: FakeIMAPServer.password)
+        let books = FakeCardDAVServer(user: FakeIMAPServer.user, password: FakeIMAPServer.password)
+        let calendarPort = try await calendars.start()
+        let bookPort = try await books.start()
+        _ = await calendars.addCalendar("Work")
+        _ = await books.addBook("Contacts")
+        return DAVFakes(
+            calendars: calendars, books: books, calDAV: "http://127.0.0.1:\(calendarPort)/",
+            cardDAV: "http://127.0.0.1:\(bookPort)/")
+    }
+
+    func stop() async {
+        await calendars.stop()
+        await books.stop()
+    }
+}
+
 /// Counts the times it is asked.
 private actor AskCount {
     private var count = 0
@@ -65,9 +93,132 @@ private func eventually(seconds: Double = 60, _ condition: @Sendable () async ->
     @Test func aNewAccountIsWatchedAtOnce() async throws {
         try await withFakeAccount { app, server, account in
             try app.store.save(account)
-            await app.accountAdded()
+            await app.accountAdded(account)
             let idling0 = await eventually { await server.idlingSessions == 1 }
             #expect(idling0)
+        }
+    }
+
+    /// A restored account's Inbox is watched and its contacts and calendars synced at once, while a
+    /// large folder of it is still being read.
+    @Test func aRestoredAccountIsWatchedAndItsCalendarsSyncedAtOnce() async throws {
+        try await withFakeAccount { app, server, account in
+            try await Self.showsAtOnce(app, server, account) { _ in await app.restoredFromSetup() }
+        }
+    }
+
+    @Test func anAddedAccountIsWatchedAndItsCalendarsSyncedAtOnce() async throws {
+        try await withFakeAccount { app, server, account in
+            try await Self.showsAtOnce(app, server, account) { added in await app.accountAdded(added) }
+        }
+    }
+
+    /// The app in front, `account` (with a calendar and an address book) is stored and `arrive`
+    /// told of it while its folder "Slow" holds the full sync: its Inbox is watched, and its
+    /// calendars and contacts are in the store, before that folder is answered.
+    private static func showsAtOnce(
+        _ app: AppModel, _ server: FakeIMAPServer, _ account: Account,
+        _ arrive: @escaping @MainActor (Account) async -> Void
+    ) async throws {
+        let dav = try await DAVFakes.start()
+        var account = account
+        account.calDAV = dav.calDAV
+        account.cardDAV = dav.cardDAV
+        await server.addFolder("Slow", specialUse: nil)
+        await server.holdSelects(of: "Slow")
+        await app.sceneChanged(toActive: true).value
+        try app.store.save(account)
+        let added = account
+        let arrival = Task { await arrive(added) }
+        let store = app.store
+        let watched = await eventually { await server.idlingSessions == 1 }
+        let calendars = await eventually { !((try? store.calendars(added.id)) ?? []).isEmpty }
+        let books = await eventually { !((try? store.addressBooks(added.id)) ?? []).isEmpty }
+        await server.releaseSelects()
+        await arrival.value
+        await dav.stop()
+        #expect(watched)
+        #expect(calendars)
+        #expect(books)
+    }
+
+    /// Back in front with the app already there (an account came while it was), the new account's
+    /// contacts and calendars are synced too, not only those of the first return.
+    @Test func aSecondStartForegroundSyncsANewAccountsContactsAndCalendars() async throws {
+        try await withFakeAccount { app, _, account in
+            let dav = try await DAVFakes.start()
+            await app.sceneChanged(toActive: true).value
+            var account = account
+            account.calDAV = dav.calDAV
+            account.cardDAV = dav.cardDAV
+            try app.store.save(account)
+            await app.sync.startForeground()
+            let store = app.store
+            let id = account.id
+            let calendars = await eventually { !((try? store.calendars(id)) ?? []).isEmpty }
+            let books = await eventually { !((try? store.addressBooks(id)) ?? []).isEmpty }
+            await dav.stop()
+            #expect(calendars)
+            #expect(books)
+        }
+    }
+
+    /// The device holds a wrong password for the account and the owner takes the file's instead:
+    /// the account's syncer, the same one, signs in with it and reads the Inbox, with no restart.
+    @Test func aRestoredPasswordSignsInWithoutARestart() async throws {
+        try await withFakeAccount { app, _, account in
+            let id = account.id
+            try app.sync.secrets.setPassword(Secret("wrong"), for: id)
+            try app.store.save(account)
+            app.reloadAccounts()
+            await app.sceneChanged(toActive: true).value
+            let refused = await eventually { await app.sync.lastErrors[id] == .imap(.authenticationFailed) }
+            #expect(refused)
+            let first = await app.sync.syncers[id].map(\.syncer)
+            let before = try #require(first)
+
+            // The other device's file: the same account with the server's password.
+            let other = try MailStore(path: nil)
+            let otherSecrets = InMemorySecretStore()
+            try other.save(account)
+            try otherSecrets.setPassword(Secret(FakeIMAPServer.password), for: id)
+            let part = AccountsSetupPart(
+                store: other, secrets: otherSecrets, providers: ProviderSet([OwnServerProvider()]))
+            let sender = SetupExchange(parts: [part], device: "Other phone")
+            let bundle = try await sender.exportBundle().bundle
+            let exchange = app.setupExchange()
+            let preview = await exchange.preview(bundle)
+            #expect(preview.differences.map(\.id) == ["jk@example.org"])
+            let report = await exchange.restore(preview, replacing: Set(preview.differences))
+            #expect(report.replaced.map(\.label) == ["jk@example.org"])
+            await app.restoredFromSetup()
+
+            let store = app.store
+            let synced = await eventually {
+                ((try? store.folders(id)) ?? []).contains { $0.kind == .inbox }
+            }
+            #expect(synced)
+            let lastError = await app.sync.lastErrors[id]
+            #expect(lastError == nil)
+            let after = await app.sync.syncers[id].map(\.syncer)
+            #expect(after === before)
+        }
+    }
+
+    /// A restored account's Inbox says its mail is on its way at once, not once every folder is read.
+    @Test func firstSyncStateShowsAtOnce() async throws {
+        try await withFakeAccount { app, server, account in
+            await server.holdSelects(of: "INBOX")
+            await app.sceneChanged(toActive: true).value
+            // What the return to the front looks at afterwards is done before the account comes.
+            await app.frontFollowUps?.value
+            try app.store.save(account)
+            let restore = Task { await app.restoredFromSetup() }
+            let id = account.id
+            let awaiting = await eventually { await app.awaitingFirstInbox.contains(id) }
+            await server.releaseSelects()
+            await restore.value
+            #expect(awaiting)
         }
     }
 
@@ -81,7 +232,7 @@ private func eventually(seconds: Double = 60, _ condition: @Sendable () async ->
             await app.sceneChanged(toActive: true) { await asks.next() > 1 }.value
             _ = await server.deliver(Self.message("waiting"), to: "INBOX")
             try app.store.save(account)
-            await app.accountAdded()
+            await app.accountAdded(account)
             let store = app.store
             let fetched = await eventually {
                 guard let inbox = try? store.folders(account.id).first(where: { $0.kind == .inbox }),

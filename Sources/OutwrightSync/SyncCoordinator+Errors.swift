@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import Foundation
 import OutwrightModel
 
 /// What each account last failed with, for the banner.
@@ -14,7 +15,7 @@ extension SyncCoordinator {
             unreachableInARow[id] = nil
             return
         }
-        syncLog.error("Sync failed: \(caseName(error), privacy: .public): \(String(describing: error))")
+        syncLog.error("Sync failed: \(errorCode(error), privacy: .public)")
         if error.isUnreachable {
             let count = (unreachableInARow[id] ?? 0) + 1
             unreachableInARow[id] = count
@@ -26,4 +27,31 @@ extension SyncCoordinator {
         }
         lastErrors[id] = error
     }
+
+    /// Notes one protocol's sync of the account in the diagnostics journal, by its error's code
+    /// (nil: it worked). Every failure is noted, the first unreachable one too; a run cut short
+    /// (cancelled) tells nothing about the account and is not noted.
+    func journalSync(_ id: AccountID, _ kind: SyncKind, _ error: SyncError?) {
+        guard !Task.isCancelled, let journal else { return }
+        let code = error.map(errorCode)
+        let key = JournalKey(account: id, kind: kind)
+        let date = now()
+        // A watch that keeps failing the same way (a retry a minute) is noted once per quarter of
+        // an hour, so it does not push everything else out of the journal.
+        if let code, let last = journaled[key], last.code == code,
+            date.timeIntervalSince(last.at) < Self.journalRepeat {
+            return
+        }
+        journaled[key] = (code, date)
+        journal.note(.sync(account: id, kind: kind, code: code))
+    }
+
+    /// How long a failure the same as the last one noted waits before it is noted again.
+    static let journalRepeat: TimeInterval = 15 * 60
+}
+
+/// One account's protocol, for what it last noted in the journal.
+struct JournalKey: Hashable {
+    let account: AccountID
+    let kind: SyncKind
 }

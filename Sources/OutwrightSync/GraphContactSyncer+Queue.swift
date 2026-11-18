@@ -18,9 +18,6 @@ extension GraphContactSyncer {
                 contact: $0.contact, change: $0.change, href: $0.href, etag: $0.etag, vcard: $0.vcard,
                 book: $0.book, revision: $0.revision)
         }
-        guard !pending.isEmpty else {
-            return
-        }
         let books = try stored { try store.addressBooks(account.id) }
         for change in pending {
             do {
@@ -34,6 +31,7 @@ extension GraphContactSyncer {
                 try failed(change)
             }
         }
+        try await sendPhotos(client)
     }
 
     /// Details that can't be read are read again from the held Graph JSON before anything is sent.
@@ -207,6 +205,57 @@ extension GraphContactSyncer {
         case let .status(code): (400..<500).contains(code) && ![408, 423, 429].contains(code)
         default: false
         }
+    }
+
+    /// Graph keeps a contact's photo apart: a photo the owner gave goes to `/photo/$value` as a step
+    /// of its own, once the contact's fields are on Graph, so a failed upload is tried again alone,
+    /// at most `ContactSyncer.serverAttempts` times (counted in `attempts`, free while no field
+    /// change is queued); a refusal for good gives it up at once. A photo given up stays the owner's
+    /// and marks the contact failed. Graph takes no removal there (the editor offers none).
+    private func sendPhotos(_ client: GraphClient) async throws(SyncError) {
+        for waiting in try stored({ try store.photosToSend(account.id) }) {
+            guard let id = Self.id(waiting.href) else { continue }
+            if let photo = waiting.photo {
+                do throws(SyncError) {
+                    try await graph { () async throws(GraphError) in try await client.setPhoto(id: id, photo) }
+                } catch {
+                    guard case let .graph(graph) = error, Self.isServerTrouble(error) else { throw error }
+                    let attempts = try stored {
+                        try store.contactChangeAttempted(waiting.contact, revision: waiting.revision)
+                    }
+                    if Self.refusedForGood(graph) || attempts >= ContactSyncer.serverAttempts {
+                        try stored { try store.photoGivenUp(waiting.contact, revision: waiting.revision) }
+                    }
+                    continue
+                }
+                try stored { try store.photoSent(waiting.contact, revision: waiting.revision) }
+                await keepMovedTag(waiting, id: id, client)
+            } else {
+                try stored { try store.photoSent(waiting.contact, revision: waiting.revision) }
+            }
+        }
+    }
+
+    /// The upload moved the contact's ETag: read again, the new tag is kept when nothing else
+    /// changed, so the next edit is no false conflict. When another client changed it meanwhile, or
+    /// it can't be read, the old tag stays: the next sync reads the contact, and a queued edit meets
+    /// its conflict instead of overwriting the other client's change.
+    private func keepMovedTag(_ waiting: PhotoToSend, id: String, _ client: GraphClient) async {
+        guard let moved = try? await client.contact(id: id),
+            let held = waiting.serverCopy.flatMap(GraphContacts.fields(json:)),
+            GraphContactMapping.details(moved.fields) == GraphContactMapping.details(held)
+        else { return }
+        try? store.contactServerCopyMoved(waiting.contact, etag: moved.etag, vcard: moved.json)
+    }
+
+    /// Reads the contact's photo from Graph (the owner opened its card): kept unless one of the
+    /// owner's waits to be sent. Nothing is said when it can't be read.
+    func fetchPhoto(_ contact: ContactID) async {
+        guard !retired, let href = try? store.contactHref(contact), let id = Self.id(href),
+            let client = try? await client()
+        else { return }
+        guard let found = try? await client.photo(id: id) else { return }
+        try? store.setServerPhoto(contact, ContactPhoto.safe(found))
     }
 
     private func done(_ change: QueuedContactChange, folder: String, _ contact: GraphContact) throws(SyncError) {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import Foundation
-import OutwrightModel
+public import OutwrightModel
 import OutwrightGraph
 import OutwrightStore
 
@@ -16,13 +16,18 @@ extension SyncCoordinator {
         }
         let discovery = await discoverCardDAV(id)
         var failure: SyncError?
+        let syncer = await contactSyncer(for: id)
         do {
-            try await contactSyncer(for: id)?.sync()
+            try await syncer?.sync()
         } catch {
             failure = error
         }
         if let phone = refreshPhoneExport(id) {
             failure = failure ?? phone
+        }
+        // An account without contacts here has nothing to note.
+        if syncer != nil || discovery ?? failure != nil {
+            journalSync(id, .contacts, discovery ?? failure)
         }
         return discovery ?? failure
     }
@@ -90,6 +95,12 @@ extension SyncCoordinator {
         return syncer
     }
 
+    /// The contact's card opened: a server that keeps photos apart (Graph) is asked for its photo.
+    public func fetchContactPhoto(_ contact: ContactID) async {
+        guard let account = try? store.contact(contact)?.accountID else { return }
+        await contactSyncer(for: account)?.fetchPhoto(contact)
+    }
+
     private static func sameContacts(_ first: Account, _ second: Account) -> Bool {
         first.cardDAV == second.cardDAV && first.cardDAVOff == second.cardDAVOff
             && first.contactsVia == second.contactsVia && first.auth == second.auth
@@ -104,7 +115,11 @@ protocol ContactSyncing: Actor {
     func sync() async throws(SyncError)
     func runChanges() async throws(SyncError)
     func retire()
+    /// Reads a photo the server keeps apart from the card; CardDAV's is in the card.
+    func fetchPhoto(_ contact: ContactID) async
 }
 
-extension ContactSyncer: ContactSyncing {}
+extension ContactSyncer: ContactSyncing {
+    func fetchPhoto(_ contact: ContactID) async {}
+}
 extension GraphContactSyncer: ContactSyncing {}

@@ -129,6 +129,17 @@ private let token = Data([0xAB, 0xCD, 0x01])
         }
     }
 
+    /// Where a push's mail starts is the store's business, on the first push: switching on asks
+    /// the mailbox nothing.
+    @Test func enableDoesNotSignInToTheMailbox() async throws {
+        try await withPush { rig in
+            await rig.controller.setDeviceToken(token)
+            try await rig.controller.enable(rig.h.account)
+            #expect(await rig.controller.isEnabled(rig.h.account.id))
+            #expect(await rig.h.imap.sessionStarts.isEmpty)
+        }
+    }
+
     @Test func theExtensionSeesTheAccountAsItWasLastChanged() async throws {
         try await withPush { rig in
             await rig.controller.setDeviceToken(token)

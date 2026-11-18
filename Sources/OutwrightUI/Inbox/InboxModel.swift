@@ -11,20 +11,26 @@ public import OutwrightStore
 public final class InboxModel {
     @ObservationIgnored let store: MailStore
     @ObservationIgnored let refresher: @MainActor () async -> Void
-    /// Brings older mail of a list from the servers; false when none is left.
-    @ObservationIgnored let olderFetcher: @MainActor (InboxScope) async -> Bool
+    /// Brings older mail of a list from the servers.
+    @ObservationIgnored let olderFetcher: @MainActor (InboxScope) async -> OlderMail
     @ObservationIgnored let now: () -> Date
     @ObservationIgnored let calendar: Calendar
+    @ObservationIgnored let defaults: UserDefaults
+    /// The move or delete waiting out its undo window: its rows are left out.
+    @ObservationIgnored public let pending: PendingMail
 
     public var scope: InboxScope {
         didSet {
             guard scope != oldValue else { return }
             selected = nil
+            selection = []
             startOver()
         }
     }
     /// The message beside the list on a wide screen. When it leaves the list, the next one takes its place.
     public var selected: MessageID?
+    /// The rows chosen in selection mode (a long press starts it); empty: not selecting.
+    public var selection: Set<MessageID> = []
 
     /// Whether the message is a row of the list.
     public func shows(_ message: MessageID) -> Bool {
@@ -53,22 +59,25 @@ public final class InboxModel {
     /// The kind of folder in view; nil for every account's Inbox.
     public private(set) var folderKind: FolderKind?
     /// The store failed the last time it was asked.
-    public private(set) var failed = false
+    public internal(set) var failed = false
     public private(set) var isRefreshing = false
 
     public init(
         store: MailStore, scope: InboxScope, calendar: Calendar = .autoupdatingCurrent,
         now: @escaping () -> Date = Date.init, refresher: @escaping @MainActor () async -> Void = {},
-        olderFetcher: @escaping @MainActor (InboxScope) async -> Bool = { _ in false },
-        defaults: UserDefaults = .standard
+        olderFetcher: @escaping @MainActor (InboxScope) async -> OlderMail = { _ in .noneLeft },
+        defaults: UserDefaults = .standard, pending: PendingMail? = nil
     ) {
         self.olderFetcher = olderFetcher
         self.store = store
+        self.pending = pending ?? PendingMail(store: store)
+        self.defaults = defaults
         isFocusedInboxOn = defaults.object(forKey: SettingsKeys.focusedInbox) as? Bool ?? true
         self.scope = scope
         self.calendar = calendar
         self.now = now
         self.refresher = refresher
+        self.pending.watch(self)
         reload()
     }
 
@@ -113,17 +122,18 @@ public final class InboxModel {
     }
 
     /// The end of the list was reached: a page more of what the phone holds, else older mail
-    /// from the servers while they have any.
+    /// from the servers while they have any. A fetch that failed adds no page, so the end of the
+    /// list asks again only when it is reached again, not over and over while it is in view.
     public func loadMore() async {
         guard !isLoadingOlder else { return }
         if shownCount < limit {
             guard serverMayHaveMore else { return }
             let asked = scope
             isLoadingOlder = true
-            let more = await olderFetcher(asked)
+            let older = await olderFetcher(asked)
             isLoadingOlder = false
-            guard asked == scope else { return }
-            serverMayHaveMore = more
+            guard asked == scope, older != .failed else { return }
+            serverMayHaveMore = older == .more
         }
         limit += Self.page
         reload()
@@ -145,9 +155,16 @@ public final class InboxModel {
         shownCount = rows.count
         failed = false
         let before = sections.flatMap(\.rows)
-        let rows = keepingTheOpenConversation(rows, before: before)
+        let rows = keepingTheOpenConversation(staged(rows), before: before)
         sections = DaySections.group(rows, now: now(), calendar: calendar)
         selected = PaneSelection.following(selected, old: before.map(\.id), new: rows.map(\.id))
+        if !selection.isEmpty { selection.formIntersection(rows.map(\.id)) }
+    }
+
+    /// The rows without those a staged move or delete is about.
+    private func staged(_ rows: [MessageRow]) -> [MessageRow] {
+        let hidden = pending.hidden
+        return hidden.isEmpty ? rows : rows.filter { !hidden.contains($0.id) }
     }
 
     /// The open conversation stays in view while it is read: a reply to it moves the selection to its
@@ -155,7 +172,7 @@ public final class InboxModel {
     /// meanwhile (opening it marks it read) stays until another is opened. Moving it to another folder,
     /// or to Other or Focused, still takes it out.
     private func keepingTheOpenConversation(_ rows: [MessageRow], before: [MessageRow]) -> [MessageRow] {
-        guard let open = selected, !rows.contains(where: { $0.id == open }),
+        guard let open = selected, !rows.contains(where: { $0.id == open }), !pending.hidden.contains(open),
             let old = before.first(where: { $0.id == open }) else { return rows }
         if let newest = rows.first(where: { $0.threadID == old.threadID && $0.accountID == old.accountID }) {
             selected = newest.id
@@ -175,41 +192,46 @@ public final class InboxModel {
         DaySections.rowLabel(row.date, now: now(), calendar: calendar)
     }
 
-    /// Delete the row's whole conversation (its messages in this folder): to Trash, or for good
-    /// from Trash; queued for the server.
-    public func swipeLeft(_ message: MessageID) {
-        var broke = false
-        do {
-            if let row = try store.message(message) {
-                try Conversation.apply(Conversation.inFolder(of: row, store: store), store: store) { .delete($0) }
-            }
-        } catch {
-            broke = true
+    /// What a swipe from `edge` does: Settings' choice, or the default when none is made or the stored
+    /// value is not one of the actions.
+    public func swipeAction(_ edge: SwipeEdge) -> SwipeAction {
+        switch edge {
+        case .leading:
+            defaults.string(forKey: SettingsKeys.swipeLeading).flatMap(SwipeAction.init) ?? SwipeAction.leadingDefault
+        case .trailing:
+            defaults.string(forKey: SettingsKeys.swipeTrailing).flatMap(SwipeAction.init) ?? SwipeAction.trailingDefault
         }
-        reload()
-        if broke { failed = true }
     }
 
-    public func swipeRight(_ message: MessageID) {
-        guard let row = (try? store.message(message)) ?? nil else { return }
-        perform(.setFlagged(message, !row.isFlagged))
+    /// Whether the action asks first: a delete from Trash is for good.
+    public func needsConfirmation(for action: SwipeAction) -> Bool {
+        action == .delete && folderKind == .trash
     }
 
-    public func perform(_ action: MailAction) {
-        var broke = false
-        do {
-            try store.apply(action)
-        } catch {
-            broke = true
+    /// What a swipe from `edge` on the row does, as Settings chose it. Delete, Archive and Move wait
+    /// out the undo window; Flag and Mark as read are made at once. Move and a delete that asks first
+    /// are the view's (a picker, a question), and do nothing here.
+    public func swipe(_ edge: SwipeEdge, on message: MessageID) {
+        guard let row = row(message) else { return }
+        switch swipeAction(edge) {
+        case .delete where !needsConfirmation(for: .delete): delete([message])
+        case .archive: archive([message])
+        case .flag: now([.setFlagged(row.id, !row.isFlagged)])
+        case .read: now(conversation(row).map { .setRead($0.id, !row.isRead) })
+        case .delete, .move, .none: break
         }
-        reload()
-        if broke { failed = true }
     }
 
     public func refresh() async {
         isRefreshing = true
         await refresher()
         isRefreshing = false
+        reload()
+    }
+}
+
+extension InboxModel: PendingMailWatcher {
+    func pendingMailChanged() {
         reload()
     }
 }

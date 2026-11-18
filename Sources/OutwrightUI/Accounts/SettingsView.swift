@@ -3,13 +3,19 @@
 
 import OutwrightModel
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// Settings: the accounts (name, signature, remove), Focused Inbox, the swipes, the default calendar,
-/// the subscribed calendars, about.
+/// Settings: the accounts (name, signature, remove, add, the default one), Focused Inbox, the swipes,
+/// notifications per account, backing up and moving the setup, the default calendar, the subscribed
+/// calendars, what the build adds, about.
 struct SettingsView: View {
     let app: AppModel
     @AppStorage(SettingsKeys.focusedInbox) private var focusedInbox = true
     @AppStorage(SettingsKeys.backgroundRefresh) private var backgroundRefresh = true
+    /// Swipe right is a swipe from the leading edge of a row, swipe left from the trailing one.
+    @AppStorage(SettingsKeys.swipeLeading) private var swipeRight = SwipeAction.leadingDefault.rawValue
+    @AppStorage(SettingsKeys.swipeTrailing) private var swipeLeft = SwipeAction.trailingDefault.rawValue
+    @AppStorage(SettingsKeys.defaultAccount) private var defaultAccount = ""
     @Environment(\.dismiss) private var dismiss
     /// The account shown over the list; settings opened from a sync problem starts at it.
     @State private var path: [AccountID]
@@ -18,6 +24,11 @@ struct SettingsView: View {
     /// Add subscribed calendar is open; how many times it has closed.
     @State private var isAddingSubscription = false
     @State private var subscriptionAddsClosed = 0
+    /// Restore from a file: the picker is open, and the file picked.
+    @State private var isPickingSetup = false
+    @State private var restoringSetup: SetupFileRequest?
+    /// Add account is pushed on Settings' own stack, so closing it lands back here.
+    @State private var isAddingAccount = false
 
     init(app: AppModel) {
         self.app = app
@@ -34,59 +45,80 @@ struct SettingsView: View {
                                 Avatar(
                                     name: account.displayName, email: account.email, size: 36,
                                     colorIndex: account.colorIndex)
+                                .attentionDot(!app.attention(for: account.id).isEmpty, ring: Theme.groupedRow)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(account.displayName)
                                     Text(account.email)
                                         .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(Theme.secondaryText)
                                     if app.isUnavailable(account) {
                                         Text(ui: "Not available in this version")
                                             .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(Theme.secondaryText)
                                     }
                                 }
                             }
                         }
                     }
                     Button {
-                        app.addsAccountAfterSettings = true
-                        dismiss()
+                        isAddingAccount = true
                     } label: {
                         ModuleLabel("Add account", systemImage: Icons.add)
                     }
+                    .accessibilityIdentifier("settings.addAccount")
+                    if app.accounts.count > 1 {
+                        Picker(selection: defaultAccountSelection) {
+                            ForEach(app.accounts) { account in
+                                Text(verbatim: account.displayName).tag(account.id.raw.uuidString)
+                            }
+                        } label: {
+                            Text(ui: "Default account")
+                        }
+                        .accessibilityIdentifier("settings.defaultAccount")
+                    }
                 } header: {
                     Text(ui: "Accounts")
+                } footer: {
+                    if app.accounts.count > 1 {
+                        Text(ui: "New mail is sent from the default account when no account is open.")
+                    }
                 }
                 Section {
                     Toggle(isOn: $focusedInbox) { Text(ui: "Focused Inbox") }
                         .accessibilityIdentifier("settings.focusedInbox")
-                    LabeledContent {
-                        Text(ui: "Delete")
-                    } label: {
-                        Text(ui: "Swipe left")
-                    }
-                    LabeledContent {
-                        Text(ui: "Flag")
+                        .onChange(of: focusedInbox) { app.showBadge() }
+                    Picker(selection: $swipeRight) {
+                        ForEach(SwipeAction.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
                     } label: {
                         Text(ui: "Swipe right")
                     }
+                    .accessibilityIdentifier("settings.swipeRight")
+                    Picker(selection: $swipeLeft) {
+                        ForEach(SwipeAction.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
+                    } label: {
+                        Text(ui: "Swipe left")
+                    }
+                    .accessibilityIdentifier("settings.swipeLeft")
                 } header: {
                     Text(ui: "Mail")
                 } footer: {
                     Text(ui: "Focused Inbox sorts mail from people apart from newsletters and the like.")
                 }
+                NotificationsSettingsSection(app: app)
+                SetupSection(app: app, isPicking: $isPickingSetup)
                 Section {
                     Toggle(isOn: $backgroundRefresh) { Text(ui: "Background refresh") }
                         .accessibilityIdentifier("settings.backgroundRefresh")
                 } footer: {
                     Text(ui: "Fetches new mail now and then while Outwright is closed. iOS decides when.")
                 }
-                ForEach(Array(app.modules.settingsSections.enumerated()), id: \.offset) { _, module in
-                    module.section()
-                }
                 DefaultCalendarSection(app: app)
                 SubscriptionsSection(
                     app: app, isAdding: $isAddingSubscription, addsClosed: subscriptionAddsClosed)
+                // What a build adds (Plus) comes last of the settings, above the About.
+                ForEach(Array(app.modules.settingsSections.enumerated()), id: \.offset) { _, module in
+                    module.section()
+                }
                 Section {
                     LabeledContent {
                         Text(verbatim: Self.version)
@@ -99,7 +131,7 @@ struct SettingsView: View {
                             Your mail stays on this phone and your own servers.
                             """)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.secondaryText)
                 } header: {
                     Text(ui: "About")
                 }
@@ -142,9 +174,18 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle(Text(ui: "Settings"))
+            .inlineNavigationTitle()
             .sheet(
                 isPresented: $isAddingSubscription, onDismiss: { subscriptionAddsClosed &+= 1 },
                 content: { SubscriptionAddView(model: SubscriptionAddModel(app: app)) })
+            .fileImporter(isPresented: $isPickingSetup, allowedContentTypes: [.outwrightSetup, .data]) { result in
+                guard case .success(let url) = result else { return }
+                restoringSetup = SetupFileRequest(url: url)
+            }
+            .sheet(item: $restoringSetup) { RestoreSetupView(app: app, url: $0.url) }
+            .navigationDestination(isPresented: $isAddingAccount) {
+                AddAccountView(app: app, placement: .pushed)
+            }
             .navigationDestination(for: AccountID.self) { id in
                 if let account = app.accounts.first(where: { $0.id == id }) {
                     AccountSettingsView(app: app, account: account)
@@ -155,6 +196,17 @@ struct SettingsView: View {
                     Button { dismiss() } label: { Text(ui: "Done") }
                 }
             }
+        }
+    }
+
+    /// The default account as the picker shows it: the first one until another is chosen, or when the
+    /// chosen one has been removed.
+    private var defaultAccountSelection: Binding<String> {
+        Binding {
+            let stored = app.accounts.first { $0.id.raw.uuidString == defaultAccount }
+            return (stored ?? app.accounts.first)?.id.raw.uuidString ?? ""
+        } set: {
+            defaultAccount = $0
         }
     }
 
@@ -229,4 +281,22 @@ public enum SettingsKeys {
     public static let focusedInbox = "focusedInbox"
     /// Bool, on unless turned off: iOS is asked to wake the app now and then to fetch new mail.
     public static let backgroundRefresh = "backgroundRefresh"
+    /// String (a `SwipeAction`'s raw value): what a swipe from the left edge of a mail row does; Flag until chosen.
+    public static let swipeLeading = "swipeLeading"
+    /// The same for a swipe from the right edge; Delete until chosen.
+    public static let swipeTrailing = "swipeTrailing"
+    /// String (an account's id): who new mail is from when no account is in view; the first account until chosen.
+    public static let defaultAccount = "defaultAccount"
+    /// String (a `CalendarMode`'s raw value): the view the calendar was last left in; 3 Day, or Week on a
+    /// wide screen, until chosen.
+    public static let calendarMode = "calendarMode"
+    /// String (a `WeekMode`'s raw value): the week a phone on its side shows; Week until chosen.
+    public static let calendarWeekMode = "calendarWeekMode"
+    /// [Int64] (calendar ids): the calendars shown; absent means every calendar.
+    public static let shownCalendars = "shownCalendars"
+    /// [String: Int] (a calendar id's raw value as text, 0xRRGGBB): the colours the owner chose for
+    /// calendars over their own (`CalendarColors`).
+    public static let calendarColors = "calendarColors"
+    /// Data (a `DoNotDisturb`), kept in the app group's defaults so the notification extension reads it.
+    public static let doNotDisturb = DoNotDisturb.defaultsKey
 }

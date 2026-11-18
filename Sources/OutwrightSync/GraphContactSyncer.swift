@@ -138,7 +138,7 @@ public actor GraphContactSyncer {
             _ = try stored {
                 try store.upsertRemote(
                     href: href, etag: contact.etag, vcard: contact.json,
-                    details: GraphContactMapping.details(contact.fields), photo: nil, in: local)
+                    details: GraphContactMapping.details(contact.fields), photo: nil, keepsPhoto: true, in: local)
             }
         }
         let removed = known.keys.filter { !listed.contains($0) }

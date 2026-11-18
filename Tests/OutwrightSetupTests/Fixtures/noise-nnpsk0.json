@@ -1,0 +1,29 @@
+{
+  "initiatorEphemeral": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+  "initiatorToResponder": [
+    {
+      "plaintext": "66697273742066726f6d20696e69746961746f72",
+      "ciphertext": "1118c2830faca0fb19668ec962df4aeca930afa364c1e63761fa07e4f6368fa1b44c9d74"
+    },
+    {
+      "plaintext": "",
+      "ciphertext": "0568ed7cf3f27f6a2426ab765aacca97"
+    }
+  ],
+  "message1": "d89e3bad79437dbed9f843418304f460ff05c7fe81fe4a9577a804cb9367ff663b43ce0f14ad2174b59bbdad5bd25443",
+  "message2": "493e82fc74464a59268817623d2053c5eb8e2cc4a988b4fee179ec6b010d531dd8b1859e8dc6f262489223856c4e9414",
+  "prologue": "6f75747772696768742d70616972696e672d74657374",
+  "protocol": "Noise_NNpsk0_25519_ChaChaPoly_SHA256",
+  "psk": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+  "responderEphemeral": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+  "responderToInitiator": [
+    {
+      "plaintext": "66697273742066726f6d20726573706f6e646572",
+      "ciphertext": "9459f9e24da7c9fe3e771a788bfffc73dc0fbcdf12abf7db979eb9b2cbb29563ef487785"
+    },
+    {
+      "plaintext": "7365636f6e642066726f6d20726573706f6e646572",
+      "ciphertext": "c39786dc1a4572974d660592ed06eee71019d872222cc65a2b2ebfced502e1dcd36591af69"
+    }
+  ]
+}

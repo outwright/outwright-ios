@@ -163,7 +163,8 @@ public enum EventEdit: Sendable, Equatable, Codable {
     case update(EventDetails, rule: RecurrenceRule?, scope: EditScope)
     case delete(scope: EditScope)
     /// The owner's answer to an invitation; `sendReply` false keeps the answer from the organiser.
-    case respond(Attendee.Response, scope: EditScope, sendReply: Bool)
+    /// `comment` is the owner's note to the organiser, sent with the reply (`EventEdit.comment`).
+    case respond(Attendee.Response, scope: EditScope, sendReply: Bool, comment: String? = nil)
     /// The owner's own reminder on an invitation, in minutes before the start; nil for none.
     case ownReminder(Int?, scope: EditScope)
     /// A guest's answer to the owner's meeting, from their REPLY by mail (RFC 6047), written to a
@@ -173,6 +174,26 @@ public enum EventEdit: Sendable, Equatable, Codable {
     /// owner's copy on the server (RFC 6638 › 3.2.2.2). It changes nothing itself: the object it is
     /// written onto is the organiser's change already.
     case organiserChange
+}
+
+extension EventEdit {
+    /// The longest comment kept on an answer.
+    public static let maxComment = 2_000
+
+    /// A comment as an answer carries it: on one line (CR and LF become spaces, NUL goes), trimmed, at
+    /// most `maxComment` characters; nil when nothing is left.
+    public static func comment(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let scalars = text.unicodeScalars.compactMap { scalar -> Unicode.Scalar? in
+            switch scalar {
+            case "\0": nil
+            case "\r", "\n": " "
+            default: scalar
+            }
+        }
+        let line = String(String.UnicodeScalarView(scalars)).trimmingCharacters(in: .whitespaces)
+        return line.isEmpty ? nil : String(line.prefix(maxComment))
+    }
 }
 
 /// Who wrote a calendar object: the server (its own scheduling put an invitation there, or another

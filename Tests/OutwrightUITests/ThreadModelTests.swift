@@ -5,6 +5,7 @@ import Foundation
 import OutwrightMIME
 import OutwrightModel
 import OutwrightStore
+import Synchronization
 import Testing
 
 @testable import OutwrightUI
@@ -13,14 +14,35 @@ import Testing
 private final class DecryptingOpener: MessageOpening {
     let inner: Data
     init(inner: Data) { self.inner = inner }
-    func open(_ raw: Data, limits: MIMELimits) -> OpenedMessage? {
+    func open(_ raw: Data, limits: MIMELimits, account: String?) -> OpenedMessage? {
         guard let message = try? MIMEParser.parse(inner, limits: limits) else { return nil }
         let facts = ProtectionFacts(decryption: .decrypted, signature: .none, resentBy: nil)
         return OpenedMessage(message: message, facts: facts)
     }
 }
 
+/// Notes the account every opening was told.
+private final class AccountNotingOpener: MessageOpening {
+    let accounts = Mutex<[String?]>([])
+    func open(_ raw: Data, limits: MIMELimits, account: String?) -> OpenedMessage? {
+        accounts.withLock { $0.append(account) }
+        return nil
+    }
+}
+
 @MainActor @Suite struct ThreadModelTests {
+    @Test func theConversationIsOpenedWithItsAccount() async throws {
+        var box = try Mailbox()
+        let (anna, ids) = try threadOfThree(&box, bodies: true)
+        let opener = AccountNotingOpener()
+        box.store.setOpenings([opener])
+        let model = ThreadModel(store: box.store, message: ids[0]) { _ in }
+        await model.open()
+        let accounts = opener.accounts.withLock { $0 }
+        #expect(!accounts.isEmpty)
+        #expect(accounts.allSatisfy { $0 == anna.id.raw.uuidString })
+    }
+
     private func threadOfThree(_ box: inout Mailbox, bodies: Bool) throws -> (Account, [MessageID]) {
         let anna = try box.addAccount("anna@example.org")
         var ids: [MessageID] = []
@@ -70,7 +92,7 @@ private final class DecryptingOpener: MessageOpening {
         let anna = try box.addAccount("anna@example.org")
         let id = try box.add(anna, uid: 1, subject: "...", body: nil)
         let store = box.store
-        store.setOpening(DecryptingOpener(inner: try message(subject: "The real subject", text: "inside")))
+        store.setOpenings([DecryptingOpener(inner: try message(subject: "The real subject", text: "inside"))])
         let model = ThreadModel(store: store, message: id) { id in
             if let outer = try? message(subject: "...", text: "ciphertext") {
                 _ = try? store.setBody(outer, for: id)
@@ -308,5 +330,110 @@ private final class DecryptingOpener: MessageOpening {
         #expect(model.items.first?.isExpanded == true)
         #expect(model.items.last?.isExpanded == true)
         #expect(try box.store.message(reply)?.isRead == true)
+    }
+
+    /// Mark unread goes back to the list (on a phone; beside the list the row stays selected).
+    @Test func markUnreadAsksToCloseOnPhone() async throws {
+        var box = try Mailbox()
+        let (_, ids) = try threadOfThree(&box, bodies: true)
+        let model = ThreadModel(store: box.store, message: ids[2]) { _ in }
+        await model.open()
+        #expect(model.markUnread() == .close)
+        #expect(try box.store.message(ids[2])?.isRead == false)
+    }
+
+    /// The bar's moves and deletes wait out the undo window: nothing reaches the store yet, the
+    /// conversation leaves the view, and Undo brings it back as it was.
+    @Test func barMovesWaitOutTheUndoWindow() async throws {
+        for act in ["delete", "archive", "junk", "move"] {
+            var box = try Mailbox()
+            let (anna, ids) = try threadOfThree(&box, bodies: true)
+            let pending = PendingMail(store: box.store)
+            let model = ThreadModel(store: box.store, message: ids[2], pending: pending) { _ in }
+            await model.open()
+            switch act {
+            case "delete": model.delete()
+            case "archive": model.archive()
+            case "junk": model.junk()
+            default: model.move(to: try box.folder(anna, .archive).id)
+            }
+            #expect(model.isGone, "\(act)")
+            #expect(pending.hidden == Set(ids))
+            #expect(try box.store.message(ids[2])?.folderID == box.folder(anna, .inbox).id)
+            pending.undo()
+            #expect(try box.store.message(ids[2])?.folderID == box.folder(anna, .inbox).id)
+        }
+    }
+
+    /// In Trash, Delete is for good and asks first; anywhere else it doesn't.
+    @Test func deleteAsksFirstOnlyInTrash() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let trashed = try box.add(anna, .trash, uid: 1, thread: "x", body: try message(subject: "Hej", text: "old"))
+        let kept = try box.add(anna, uid: 2, thread: "y", body: try message(subject: "Hej", text: "new"))
+        let inTrash = ThreadModel(store: box.store, message: trashed, pending: PendingMail(store: box.store)) { _ in }
+        await inTrash.open()
+        let inInbox = ThreadModel(store: box.store, message: kept, pending: PendingMail(store: box.store)) { _ in }
+        await inInbox.open()
+        #expect(inTrash.deleteNeedsConfirmation)
+        #expect(!inInbox.deleteNeedsConfirmation)
+        inTrash.deleteForGood()
+        #expect(inTrash.isGone)
+        #expect(try box.store.message(trashed) == nil)
+    }
+
+    /// Decrypted text nobody vouches for (it may have been changed on the way) never fetches
+    /// pictures: neither the bar is offered nor does Download pictures take.
+    @Test func picturesStayShutOnDecryptedContentWithoutIntegrity() async throws {
+        for integrity in [false, true] {
+            var box = try Mailbox()
+            let anna = try box.addAccount("anna@example.org")
+            let html = "Content-Type: text/html\r\n\r\n<img src=\"https://example.org/a.png\">"
+            let id = try box.add(anna, uid: 1, body: Data(("Subject: s\r\n" + html).utf8))
+            let model = ThreadModel(store: box.store, message: id, fetchBody: { _ in }) { data in
+                var content = MessageContent(try? MIMEParser.parse(data))
+                content?.facts = ProtectionFacts(
+                    decryption: .decrypted, signature: .none, resentBy: nil, contentIntegrity: integrity)
+                return content
+            }
+            await model.open()
+            #expect(model.items.last?.content?.hasRemotePictures == true)
+            #expect(model.items.last?.content?.offersRemotePictures == integrity)
+            model.allowPictures(id)
+            #expect(model.items.last?.allowsRemote == integrity)
+        }
+    }
+
+    /// Reading the message again (a key came in) shows what it says now, without reopening it.
+    @Test func reverifyReadsTheMessageAgain() async throws {
+        var box = try Mailbox()
+        let anna = try box.addAccount("anna@example.org")
+        let id = try box.add(anna, uid: 1, body: try message(subject: "Hej", text: "signed"))
+        let reads = Counter()
+        let model = ThreadModel(store: box.store, message: id, fetchBody: { _ in }) { data in
+            var content = MessageContent(try? MIMEParser.parse(data))
+            let signature: SignatureState = await reads.next() == 1 ? .unknownKey(fingerprint: "AB") : .valid(verified: false)
+            content?.facts = ProtectionFacts(decryption: .none, signature: signature, resentBy: nil)
+            return content
+        }
+        await model.open()
+        #expect(model.items.last?.content?.facts?.signature == .unknownKey(fingerprint: "AB"))
+        await model.reverify(id)
+        #expect(model.items.last?.content?.facts?.signature == .valid(verified: false))
+    }
+}
+
+private actor Counter {
+    var count = 0
+    func next() -> Int {
+        count += 1
+        return count
+    }
+}
+
+private extension MessageContent {
+    init?(_ message: MIMEMessage?) {
+        guard let message else { return nil }
+        self.init(message)
     }
 }

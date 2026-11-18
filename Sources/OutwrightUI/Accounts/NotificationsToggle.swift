@@ -29,13 +29,17 @@ public final class PushSupport {
     let askPermission: @Sendable () async -> Bool
     let registerForRemote: @MainActor () -> Void
     let setupGuide: @Sendable (Account) async -> URL?
+    /// Whether the account's push was switched off because what it came through went away.
+    let dropped: @Sendable (AccountID) async -> Bool
     private var answers: [AccountID: Task<Bool, Never>] = [:]
 
     public init(
         switcher: any PushSwitching, offersPush: @escaping @Sendable (Account) async -> Bool,
         askPermission: @escaping @Sendable () async -> Bool, registerForRemote: @escaping @MainActor () -> Void,
-        setupGuide: @escaping @Sendable (Account) async -> URL? = { _ in nil }
+        setupGuide: @escaping @Sendable (Account) async -> URL? = { _ in nil },
+        dropped: @escaping @Sendable (AccountID) async -> Bool = { _ in false }
     ) {
+        self.dropped = dropped
         self.switcher = switcher
         self.offersPush = offersPush
         self.askPermission = askPermission
@@ -74,6 +78,8 @@ public enum NotificationsMessage: Sendable, Equatable {
     case serverRefused
     /// The mail server is not set up for push; `guide` says how its owner sets it up.
     case notSetUp(guide: URL?)
+    /// Push went off by itself: what it came through went away.
+    case dropped
 }
 
 /// Local new-mail notices, as the switch sees them: the store, or a stand-in in tests.
@@ -117,15 +123,25 @@ public final class NotificationsToggleModel {
     public private(set) var isLocal = false
     public private(set) var isWorking = false
     public private(set) var message: NotificationsMessage?
+    /// Whether the build's alternative is shown: where push from the server is not on (missing,
+    /// failed, or not tried), or where the account already uses it.
+    public private(set) var showsAlternative = false
+    /// Push is not on for the account, so the alternative is shown for want of it, not only for being in use.
+    public private(set) var missesPush = false
 
     @ObservationIgnored private let account: Account
     @ObservationIgnored private let support: PushSupport?
     @ObservationIgnored private let local: any LocalNotifying
+    @ObservationIgnored private let alternative: (any PushAlternative)?
     /// Push is included for this user (`Offering`); without it, on is local notices only.
     public let pushIncluded: Bool
 
-    public init(account: Account, support: PushSupport?, local: any LocalNotifying, pushIncluded: Bool = true) {
+    public init(
+        account: Account, support: PushSupport?, local: any LocalNotifying, pushIncluded: Bool = true,
+        alternative: (any PushAlternative)? = nil
+    ) {
         self.account = account
+        self.alternative = alternative
         self.support = support
         self.local = local
         self.pushIncluded = pushIncluded
@@ -215,5 +231,17 @@ public final class NotificationsToggleModel {
         let locally = await local.isOn(account.id)
         isOn = pushed || locally
         isLocal = !pushed && locally
+        guard let support else { return }
+        if message == nil, !isOn, await support.dropped(account.id) {
+            message = .dropped
+        }
+        // A failure is not kept between visits, so push not on is what counts as missing.
+        missesPush = pushIncluded && !pushed
+        guard let alternative, alternative.offers(account) else {
+            showsAlternative = false
+            return
+        }
+        // In use, it stays reachable even where push is no longer included, so its address can be removed.
+        showsAlternative = missesPush ? true : await alternative.isInUse(account.id)
     }
 }

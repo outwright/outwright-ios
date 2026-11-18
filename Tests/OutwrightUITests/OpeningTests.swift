@@ -13,7 +13,7 @@ import Testing
 /// Counts how often stored mail is opened; handles nothing itself.
 private final class CountingOpener: MessageOpening {
     let calls = Mutex(0)
-    func open(_ raw: Data, limits: MIMELimits) -> OpenedMessage? {
+    func open(_ raw: Data, limits: MIMELimits, account: String?) -> OpenedMessage? {
         calls.withLock { $0 += 1 }
         return nil
     }
@@ -25,7 +25,7 @@ private final class ThreadNotingOpener: MessageOpening {
     let onMain = Mutex(false)
     let facts: ProtectionFacts?
     init(facts: ProtectionFacts? = nil) { self.facts = facts }
-    func open(_ raw: Data, limits: MIMELimits) -> OpenedMessage? {
+    func open(_ raw: Data, limits: MIMELimits, account: String?) -> OpenedMessage? {
         if Thread.isMainThread { onMain.withLock { $0 = true } }
         guard let facts, let message = try? MIMEParser.parse(raw, limits: limits) else { return nil }
         return OpenedMessage(message: message, facts: facts)
@@ -40,10 +40,10 @@ private final class ThreadNotingOpener: MessageOpening {
         let id = try box.add(anna, uid: 1, body: body)
         let draft = try box.add(anna, .drafts, uid: 2, body: body)
         let opener = ThreadNotingOpener()
-        box.store.setOpening(opener)
+        box.store.setOpenings([opener])
         for kind in [ComposeRequest.Kind.reply(id), .replyAll(id), .forward(id), .draft(draft)] {
             let model = await ComposeModel.make(request: ComposeRequest(kind: kind), store: box.store, accounts: [anna])
-            #expect(String(model.body.characters).contains("text"))
+            #expect(shownText(model).contains("text"))
         }
         #expect(opener.onMain.withLock { $0 } == false)
     }
@@ -57,13 +57,13 @@ private final class ThreadNotingOpener: MessageOpening {
             "From: anna@example.org\r\nTo: mallory@example.org\r\nSubject: Hi\r\nMessage-ID: <x@example.org>\r\n\r\nHi\r\n"
                 .utf8)
         let id = try box.add(anna, uid: 1, from: anna.email, body: body)
-        box.store.setOpening(ThreadNotingOpener(
-            facts: ProtectionFacts(decryption: .decrypted, signature: .none, resentBy: nil)))
+        box.store.setOpenings([ThreadNotingOpener(
+            facts: ProtectionFacts(decryption: .decrypted, signature: .none, resentBy: nil))])
         let forged = await ComposeModel.make(request: ComposeRequest(kind: .reply(id)), store: box.store, accounts: [anna])
         #expect(!forged.to.map(\.email).contains("mallory@example.org"))
 
-        box.store.setOpening(ThreadNotingOpener(
-            facts: ProtectionFacts(decryption: .decrypted, signature: .none, resentBy: nil, fromIsProtected: true)))
+        box.store.setOpenings([ThreadNotingOpener(
+            facts: ProtectionFacts(decryption: .decrypted, signature: .none, resentBy: nil, fromIsProtected: true))])
         let own = await ComposeModel.make(request: ComposeRequest(kind: .reply(id)), store: box.store, accounts: [anna])
         #expect(own.to.map(\.email) == ["mallory@example.org"])
     }
@@ -72,11 +72,11 @@ private final class ThreadNotingOpener: MessageOpening {
         var box = try Mailbox()
         _ = try box.addAccount("anna@example.org")
         let body = try message(subject: "Hej", text: "text")
-        box.store.setOpening(ThreadNotingOpener(
-            facts: ProtectionFacts(decryption: .unreadable, signature: .none, resentBy: nil)))
+        box.store.setOpenings([ThreadNotingOpener(
+            facts: ProtectionFacts(decryption: .unreadable, signature: .none, resentBy: nil))])
         #expect(await MessageContent.read(body, store: box.store)?.isUnreadable == true)
-        box.store.setOpening(ThreadNotingOpener(
-            facts: ProtectionFacts(decryption: .decrypted, signature: .none, resentBy: nil)))
+        box.store.setOpenings([ThreadNotingOpener(
+            facts: ProtectionFacts(decryption: .decrypted, signature: .none, resentBy: nil))])
         #expect(await MessageContent.read(body, store: box.store)?.isUnreadable == false)
     }
 
@@ -87,7 +87,7 @@ private final class ThreadNotingOpener: MessageOpening {
         let id = try box.add(anna, uid: 1, body: body)
         let row = try #require(try box.store.message(id))
         let opener = CountingOpener()
-        box.store.setOpening(opener)
+        box.store.setOpenings([opener])
 
         _ = await MessageContent.read(body, store: box.store)
         #expect(opener.count == 1)
@@ -106,7 +106,7 @@ private final class ThreadNotingOpener: MessageOpening {
         let id = try box.add(anna, uid: 1, body: body)
         let draft = try box.add(anna, .drafts, uid: 2, body: body)
         let opener = CountingOpener()
-        box.store.setOpening(opener)
+        box.store.setOpenings([opener])
 
         _ = await ComposeModel.make(request: ComposeRequest(kind: .forward(id)), store: box.store, accounts: [anna])
         #expect(opener.count == 1)
@@ -124,8 +124,8 @@ private final class ThreadNotingOpener: MessageOpening {
                     + "--b\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n--b--\r\n").utf8))
         let model = await ComposeModel.make(request: ComposeRequest(kind: .reply(id)), store: box.store, accounts: [anna])
         #expect(try #require(try box.store.message(id)).isProtected)
-        #expect(!String(model.body.characters).contains("Encrypted"))
-        #expect(!String(model.body.characters).contains("preview"))
+        #expect(!shownText(model).contains("Encrypted"))
+        #expect(!shownText(model).contains("preview"))
     }
 
     @Test func theEncryptedMarkerIsOnlyForARowNotOpened() throws {

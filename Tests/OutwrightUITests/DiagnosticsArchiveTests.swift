@@ -85,7 +85,7 @@ import Testing
 }
 
 /// A small deterministic generator (SplitMix64), so a property test runs the same every time.
-private struct SeededGenerator: RandomNumberGenerator {
+struct SeededGenerator: RandomNumberGenerator {
     private var state: UInt64
     init(seed: UInt64) { state = seed }
     mutating func next() -> UInt64 {
