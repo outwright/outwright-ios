@@ -31,6 +31,22 @@ import Testing
         }
     }
 
+    @Test func serverSearchLooksInAFolderNotOpenedHereYet() async throws {
+        let server = await standardServer()
+        await server.deliver(
+            mail("sent to bo", from: "jk@example.org", to: "bo@example.org", date: daysAgo(3)), to: "Sent")
+        try await withHarness(server) { h in
+            let syncer = h.syncer()
+            try await syncer.syncFolders()
+            let to = ServerQuery(text: "", people: ["bo@example.org"], direction: .to, before: nil)
+            #expect(try await syncer.searchServer(to, limit: 10).count == 1)
+            #expect(try h.rows(.sent).map(\.subject) == ["sent to bo"])
+            // The folder synced afterwards keeps what the search brought in, once.
+            try await syncer.sync(try h.folder(.sent).id)
+            #expect(try h.rows(.sent).map(\.subject) == ["sent to bo"])
+        }
+    }
+
     @Test func beforeKeepsOnlyOlderHits() async throws {
         let server = await standardServer()
         await server.deliver(mail("budget now", date: daysAgo(100)), to: "INBOX")

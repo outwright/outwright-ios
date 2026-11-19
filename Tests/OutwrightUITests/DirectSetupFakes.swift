@@ -172,6 +172,15 @@ final class Gate: DeviceUnlock {
     var value = 0
 }
 
+/// The owner taps the button once what came shows (it always shows, for the accounts' switches).
+@MainActor @discardableResult
+func confirming(_ receiver: ReceiveSetupModel) -> Task<Void, Never> {
+    Task { @MainActor in
+        _ = await eventually { if case .choosing = receiver.state { true } else { false } }
+        await receiver.restoreChosen()
+    }
+}
+
 func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     let deadline = ContinuousClock.now + .seconds(5)
     while ContinuousClock.now < deadline {

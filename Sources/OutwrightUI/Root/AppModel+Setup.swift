@@ -12,8 +12,9 @@ public import OutwrightSync
 
 /// The setup file: what this build carries in it.
 extension AppModel {
-    /// The exchange that makes and restores a setup file from the open parts (accounts,
-    /// subscribed calendars, settings) and the ones the modules register.
+    /// The exchange that makes and restores a setup file from the open parts (accounts and
+    /// subscribed calendars) and the ones the modules register. The app's settings stay on each
+    /// device.
     public func setupExchange(parameters: Argon2Parameters = .writer) -> SetupExchange {
         let providers = ProviderSet([OwnServerProvider()] + modules.providers)
         let open: [any SetupPart] = [
@@ -21,13 +22,11 @@ extension AppModel {
                 store: store, secrets: sync.secrets, providers: providers,
                 pushEnabled: { [push] account in await push?.switcher.isEnabled(account) ?? false },
                 lastError: { [sync] account in await sync.lastErrors[account] },
-                title: L10n.string("Accounts")),
-            SubscriptionsSetupPart(store: store, secrets: sync.secrets, title: L10n.string("Subscribed calendars")),
-            SettingsSetupPart(
-                defaults: .standard, shared: DoNotDisturbDefaults.shared,
-                accounts: { [store] in Set(((try? store.accounts()) ?? []).map(\.id.raw)) })
+                signatures: DefaultSignature.setupRule, title: L10n.string("Accounts")),
+            SubscriptionsSetupPart(store: store, secrets: sync.secrets, title: L10n.string("Subscribed calendars"))
         ]
-        return SetupExchange(parts: open + modules.setupParts, device: Self.deviceName, parameters: parameters)
+        return SetupExchange(
+            parts: open + modules.setupParts, device: Self.deviceName, parameters: parameters, secrets: sync.secrets)
     }
 
     /// The model of a backup, a move or a restore, unlocking with the device's own lock.

@@ -34,8 +34,8 @@ public final class ReceiveSetupModel {
         case showing(PairingCode, expires: Date)
         /// Connected; the owner confirms on the other device.
         case waiting
-        /// The setup came and this device has something that differs: the owner chooses before anything is
-        /// restored, while the other device waits for `done`.
+        /// The setup came: the owner sees what comes, switches accounts off, taps the button and answers what
+        /// differs before anything is restored, while the other device waits for `done`.
         case choosing(SetupPreview)
         case restoring
         case report(SetupImportReport)
@@ -216,6 +216,7 @@ public final class ReceiveSetupModel {
     /// finished, and the other device is told it was; while the owner is asked, nothing is restored.
     public func cancel() {
         guard state != .restoring, let session else { return }
+        setup.endQuestions()
         end(session, stop: true)
     }
 
@@ -231,26 +232,25 @@ public final class ReceiveSetupModel {
         state = .failed(failure)
     }
 
-    /// What came is read: with nothing that differs it is restored at once; otherwise the owner is asked, and
-    /// true.
+    /// What came is read and shown, and the owner is asked; true while the other device waits.
     private func received(_ bundle: SetupBundle, over channel: SetupChannel, in session: DirectSession) async -> Bool {
         guard self.session === session, !session.isEnded else { return false }
         state = .restoring
         origin = SetupOrigin(bundle)
         let preview = await setup.previewReceived(bundle)
-        guard preview.differences.isEmpty else {
-            guard self.session === session, !session.isEnded else { return false }
-            state = .choosing(preview)
-            return true
-        }
-        await restore(over: channel, in: session)
-        return false
+        guard self.session === session, !session.isEnded else { return false }
+        state = .choosing(preview)
+        return true
     }
 
-    /// Restores what came with the owner's choices, then tells the other device it is done. Only while the owner
-    /// is asked and the other device still waits: once it left, nothing is restored.
+    /// The owner tapped the button: each difference is asked in turn, then what came is restored with the
+    /// answers and the other device told it is done. Only while the other device still waits: once it left,
+    /// nothing is restored.
     public func restoreChosen() async {
-        guard case .choosing = state, let session, !session.isEnded, let channel = session.channel else { return }
+        guard case .choosing = state, let session, !session.isEnded else { return }
+        guard await setup.askQuestions(), case .choosing = state, self.session === session, !session.isEnded,
+            let channel = session.channel
+        else { return }
         state = .restoring
         await restore(over: channel, in: session)
     }
@@ -258,6 +258,7 @@ public final class ReceiveSetupModel {
     /// The other device left while the owner was asked: nothing was restored.
     private func left(_ session: DirectSession, _ error: SetupError) {
         guard case .choosing = state else { return }
+        setup.endQuestions()
         failed(session, Self.failure(error))
     }
 

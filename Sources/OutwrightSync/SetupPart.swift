@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import CryptoKit
 public import Foundation
 public import OutwrightSetup
 
 /// One piece of the owner's setup that a setup file carries (accounts, subscribed calendars,
-/// settings, keys), under a name of its own and as its own versioned JSON. A build registers its
+/// keys), under a name of its own and as its own versioned JSON. A build registers its
 /// parts; the exchange walks them and never names one.
 public protocol SetupPart: Sendable {
     /// The part's name in the file; stable across versions.
@@ -25,58 +26,76 @@ public protocol SetupPart: Sendable {
     /// Adds what the content holds and this device does not have. The content is hostile; an item
     /// that cannot be added is reported, never a trap.
     func importContent(_ content: Data, version: Int) async -> SetupImportReport
-    /// What the content holds that this device already has otherwise (a password, a current key,
-    /// a setting), for the owner to choose between. Read with this device's secrets, after the file
+    /// What the content holds that this device already has otherwise (a password, a current key),
+    /// for the owner to choose between. Read with this device's secrets, after the file
     /// was opened; a difference names only what it is about, never a secret. The content is hostile:
     /// what cannot be read gives none.
     func differences(in content: Data) async -> [SetupDifference]
-    /// `importContent`, taking from the file what `replacing` names (the ids of this part's
-    /// differences) instead of keeping this device's. Empty, it is `importContent` exactly.
-    func importContent(_ content: Data, version: Int, replacing: Set<String>) async -> SetupImportReport
+    /// `importContent` with the owner's choices: what `replacing` names (the ids of this part's
+    /// differences) is taken from the file instead of kept, and nothing of an account in
+    /// `leavingOff` is added. With no choices, it is `importContent` exactly.
+    func importContent(_ content: Data, version: Int, choices: SetupChoices) async -> SetupImportReport
 }
 
 extension SetupPart {
     /// A part with nothing on the device to differ from has no differences.
     public func differences(in content: Data) async -> [SetupDifference] { [] }
 
-    /// A part without differences has nothing to replace.
-    public func importContent(_ content: Data, version: Int, replacing: Set<String>) async -> SetupImportReport {
+    /// A part without differences or accounts has nothing to choose.
+    public func importContent(_ content: Data, version: Int, choices: SetupChoices) async -> SetupImportReport {
         await importContent(content, version: version)
+    }
+
+    /// `importContent` taking `replacing` from the file and leaving nothing off.
+    public func importContent(_ content: Data, version: Int, replacing: Set<String>) async -> SetupImportReport {
+        await importContent(content, version: version, choices: SetupChoices(replacing: replacing))
     }
 }
 
 /// Something a setup file holds that the device already has otherwise: the owner chooses the
-/// file's or keeps the device's. It carries no secret, only what the owner sees.
+/// file's or keeps the device's. What the owner sees carries no secret.
 public struct SetupDifference: Sendable, Equatable, Hashable {
     public enum Kind: String, Sendable, Equatable, Hashable {
         /// An account's password or refresh token: its label is the address.
         case accountSecret
         /// An address's current own key: its label is the address.
         case ownKey
-        /// The settings, all at once: its label is the part's title.
-        case settings
+        /// An account's signature, written by the owner on both devices: its label is the address.
+        case signature
+        /// An account's servers and user name: its label is the address.
+        case servers
     }
 
     public var kind: Kind
     /// The name of the part it belongs to.
     public var part: String
-    /// What the owner sees: an address, or the settings' title.
+    /// What the owner sees: an address.
     public var label: String
     /// Stable within the part, and what the part is handed back when the owner takes the file's.
     public var id: String
+    /// Both sides as they are now, digested (`state(here:file:)`): the same while neither side
+    /// changes, so a kept answer is remembered by it. Never shown, logged or kept outside the
+    /// keychain: for a password it is derived from secrets.
+    public var state: String
 
-    public init(kind: Kind, part: String, label: String, id: String) {
+    public init(kind: Kind, part: String, label: String, id: String, state: String = "") {
         self.kind = kind
         self.part = part
         self.label = label
         self.id = id
+        self.state = state
+    }
+
+    /// The state of a difference between `here` and `file`: SHA-256, in hex, of both joined by NUL.
+    public static func state(here: String, file: String) -> String {
+        SHA256.hash(data: Data((here + "\u{0}" + file).utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }
 
 /// One thing a setup file holds, as the owner sees it.
 public struct SetupItem: Sendable, Equatable, Hashable {
     public enum Kind: String, Sendable, Equatable, Hashable {
-        case account, calendar, ownKey, contactKey, settings
+        case account, calendar, ownKey, contactKey
         /// The settings of one address (OpenPGP's switch and defaults): its label is the address.
         case addressSettings
         /// A whole part this build cannot read: its label is the part's title.
@@ -100,6 +119,8 @@ public enum SkipReason: String, Sendable, Equatable, Hashable {
     case notInThisBuild
     /// Adding it failed; nothing of it was kept.
     case failed
+    /// The owner left the account off this device.
+    case leftOff
 }
 
 /// An item that was not added, and why.
@@ -128,7 +149,7 @@ public struct SetupImportReport: Sendable, Equatable {
     /// Added with saving its contacts to the phone on, which the owner did not allow: turned off.
     public var phoneContactsOff: [SetupItem]
     /// Already on the device otherwise, and the owner chose the file's: replaced from the file
-    /// (an account's secret, a current key, a setting), nothing else about it changed.
+    /// (an account's secret, a current key), nothing else about it changed.
     public var replaced: [SetupItem]
 
     public init(

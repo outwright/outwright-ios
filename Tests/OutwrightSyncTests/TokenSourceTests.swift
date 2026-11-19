@@ -328,4 +328,6 @@ final class FailingWrites: SecretStore {
         try base.setSubscriptionAddress(secret, for: key)
     }
     func removeSubscriptionAddress(_ key: UUID) throws(SyncError) { try base.removeSubscriptionAddress(key) }
+    func setupMemory() throws(SyncError) -> Secret? { try base.setupMemory() }
+    func setSetupMemory(_ secret: Secret) throws(SyncError) { try base.setSetupMemory(secret) }
 }

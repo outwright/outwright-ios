@@ -21,6 +21,8 @@ final class LockedSecretStore: SecretStore {
     func subscriptionAddress(_ key: UUID) throws(SyncError) -> Secret? { throw Self.locked }
     func setSubscriptionAddress(_ secret: Secret, for key: UUID) throws(SyncError) { throw Self.locked }
     func removeSubscriptionAddress(_ key: UUID) throws(SyncError) { throw Self.locked }
+    func setupMemory() throws(SyncError) -> Secret? { throw Self.locked }
+    func setSetupMemory(_ secret: Secret) throws(SyncError) { throw Self.locked }
 }
 
 @Suite struct SetupItemsTests {

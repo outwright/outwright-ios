@@ -21,7 +21,7 @@ struct NoAccountView: View {
             Button { app.isAddingAccount = true } label: { Text(ui: "Add account") }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("noAccount.add")
-            Button { isPicking = true } label: { Text(ui: "Restore from a file") }
+            Button { isPicking = true } label: { Text(ui: "Import from a file") }
                 .accessibilityIdentifier("noAccount.restore")
         }
         .fileImporter(isPresented: $isPicking, allowedContentTypes: [.outwrightSetup, .data]) { result in

@@ -104,6 +104,8 @@ public enum Icons {
     public static let add = "plus"
     public static let edit = "pencil"
     public static let details = "info.circle"
+    public static let lightBackground = "sun.max"
+    public static let darkBackground = "moon"
     public static let allAccounts = "tray.2"
     public static let phone = "phone"
     public static let message = "message"

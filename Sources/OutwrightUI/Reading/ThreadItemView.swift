@@ -11,6 +11,7 @@ struct ThreadItemView: View {
     @ScaledMetric(relativeTo: .body) private var moreWidth: CGFloat = 32
     @ScaledMetric(relativeTo: .body) private var moreHeight: CGFloat = 24
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.colorScheme) private var colorScheme
     let app: AppModel
     let item: ThreadItem
     let model: ThreadModel
@@ -22,8 +23,17 @@ struct ThreadItemView: View {
     @State private var webUnavailable = false
     /// The meeting card is shown: the calendar part it stands for is not listed as an attachment.
     @State private var cardShown = false
-    /// The web view has laid out the body (for these pictures settings); until then a spinner stands in.
-    @State private var webShown: Bool?
+    /// The web view has laid out the body (for these settings); until then a spinner stands in.
+    @State private var webShown: WebKey?
+    /// The owner chose to see this message as written, on white, in dark mode.
+    @State private var asWritten = false
+
+    /// What the body's page is made for: a change of any of them makes a new one.
+    private struct WebKey: Hashable {
+        let remote: Bool
+        let dark: Bool
+        let asWritten: Bool
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -121,6 +131,14 @@ struct ThreadItemView: View {
     /// Reply to this message, and its ⋯.
     private var buttons: some View {
         HStack(spacing: 4) {
+            if colorScheme == .dark, item.content?.html != nil, !webUnavailable {
+                Button { asWritten.toggle() } label: {
+                    Image(systemName: asWritten ? Icons.darkBackground : Icons.lightBackground)
+                        .foregroundStyle(Theme.secondaryText)
+                        .frame(width: moreWidth, height: moreHeight)
+                }
+                .accessibilityLabel(Text(ui: asWritten ? "Dark background" : "Light background"))
+            }
             Button { app.compose(.reply(item.id)) } label: {
                 Image(systemName: Icons.reply)
                     .foregroundStyle(Theme.secondaryText)
@@ -190,14 +208,15 @@ struct ThreadItemView: View {
             // In Junk a link does nothing and pictures are never fetched: Not junk opens them up.
             let junk = model.isInJunk
             let remote = item.allowsRemote && !junk && (content.facts?.allowsRemoteContent ?? true)
-            let shown = webShown == remote
+            let key = WebKey(remote: remote, dark: colorScheme == .dark, asWritten: asWritten)
+            let shown = webShown == key
             ZStack(alignment: .top) {
                 LockedWebView(
-                    html: html, attachments: content.attachments, allowRemote: remote,
-                    height: $webHeight, onLink: { if !junk { onLink($0) } }, onUnavailable: { webUnavailable = true },
-                    onShown: { webShown = remote }
+                    html: html, attachments: content.attachments, allowRemote: remote, dark: key.dark,
+                    adaptsColors: !asWritten, height: $webHeight, onLink: { if !junk { onLink($0) } },
+                    onUnavailable: { webUnavailable = true }, onShown: { webShown = key }
                 )
-                .id(remote)
+                .id(key)
                 .frame(height: shown ? webHeight : 1)
                 .opacity(shown ? 1 : 0)
                 if !shown {

@@ -60,6 +60,9 @@ final class RecordingSecrets: SecretStore {
     func removeSubscriptionAddress(_ key: UUID) throws(SyncError) {
         _ = addresses.withLock { $0.removeValue(forKey: key) }
     }
+
+    func setupMemory() throws(SyncError) -> Secret? { nil }
+    func setSetupMemory(_ secret: Secret) throws(SyncError) {}
 }
 
 @MainActor @Suite struct AddAccountModelTests {

@@ -42,7 +42,7 @@ struct FuturePart: SetupPart {
         }
 
         func exchange(extra: [any SetupPart] = []) -> SetupExchange {
-            SetupExchange(parts: parts(extra: extra), device: "Test phone", parameters: quick)
+            SetupExchange(parts: parts(extra: extra), device: "Test phone", parameters: quick, secrets: secrets)
         }
     }
 
@@ -103,6 +103,23 @@ struct FuturePart: SetupPart {
         #expect(report.skipped == [SetupSkip(item: future, reason: .notInThisBuild)])
         #expect(try receiver.store.accounts().map(\.email) == ["pat@example.org"])
         #expect(try receiver.store.subscriptions().count == 1)
+    }
+
+    /// Files made before settings stopped coming along hold a `settings` part: it is passed over,
+    /// never shown as left out.
+    @Test func retiredSettingsPartIsSkippedSilently() async throws {
+        var (bundle, _) = try await sender().exchange().exportBundle()
+        bundle.parts["settings"] = SetupBundle.Part(
+            version: 1, title: "Settings", content: Data("{\"values\":{\"focusedInbox\":true}}".utf8))
+        let receiver = try Device()
+
+        let preview = await receiver.exchange().preview(bundle)
+        #expect(preview.notInThisBuild.isEmpty)
+        #expect(preview.unreadable.isEmpty)
+
+        let report = await receiver.exchange().restore(preview)
+        #expect(!report.skipped.contains { $0.item.kind == .part })
+        #expect(try receiver.store.accounts().map(\.email) == ["pat@example.org"])
     }
 
     @Test func exportBundleHoldsEveryPart() async throws {
@@ -284,9 +301,9 @@ extension SetupExchangeTests {
         let before = try device.store.accounts()
 
         let preview = try await device.exchange().preview(file, passphrase: passphrase)
-        let difference = SetupDifference(
-            kind: .accountSecret, part: "accounts", label: "pat@example.org", id: "pat@example.org")
-        #expect(preview.differences == [difference])
+        // The signature written here differs too, and is its own question.
+        #expect(preview.differences.map(\.id) == ["password:pat@example.org", "signature:pat@example.org"])
+        let difference = try #require(preview.differences.first)
         let report = await device.exchange().restore(preview, replacing: [difference])
 
         #expect(report.replaced == [SetupItem(kind: .account, label: "pat@example.org")])

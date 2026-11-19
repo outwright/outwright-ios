@@ -39,7 +39,7 @@ private struct RestoreSetupFlow: View {
 
     var body: some View {
         content
-            .navigationTitle(Text(ui: "Restore"))
+            .navigationTitle(Text(ui: "Import"))
             .inlineNavigationTitle()
             .toolbar { toolbar }
     }
@@ -53,7 +53,7 @@ private struct RestoreSetupFlow: View {
         case .preview(let preview):
             previewForm(preview)
         case .restoring:
-            working(Text(ui: "Restoring…"))
+            working(Text(ui: "Importing…"))
         case .report(let report):
             SetupReportForm(report: report, source: .file)
         case .unreadable:
@@ -149,8 +149,7 @@ private struct RestoreSetupFlow: View {
     private func previewForm(_ preview: SetupPreview) -> some View {
         Form {
             made(preview)
-            SetupDifferencesSection(model: model, differences: preview.differences, source: .file)
-            SetupItemSections(items: preview.items.flatMap(\.items))
+            SetupItemSections(items: preview.items.flatMap(\.items), choosing: model)
             if !preview.notInThisBuild.isEmpty {
                 Section {
                     ForEach(Array(preview.notInThisBuild.enumerated()), id: \.offset) {
@@ -168,18 +167,19 @@ private struct RestoreSetupFlow: View {
                 } header: {
                     Text(ui: "Can't be read")
                 } footer: {
-                    Text(ui: "These parts of the file are damaged; they are left out and the rest is restored.")
+                    Text(ui: "These parts of the file are damaged; they are left out and the rest is imported.")
                 }
             }
             Section {
                 Button {
                     Task { await restore() }
                 } label: {
-                    Text(ui: "Restore")
+                    Text(ui: "Import")
                 }
                 .accessibilityIdentifier("restore.restore")
             }
         }
+        .setupQuestion(model, source: .file)
     }
 
     /// Where and when the file was made, and what happens to what the device has.
@@ -196,19 +196,11 @@ private struct RestoreSetupFlow: View {
                 Text(ui: "Date")
             }
         } footer: {
-            if preview.differences.isEmpty {
-                Text(
-                    ui: """
-                        What you already have on this device is left as it is. A password, key or calendar \
-                        address missing from it is filled in.
-                        """)
-            } else {
-                Text(
-                    ui: """
-                        What you already have on this device is left as it is, unless you choose the file's \
-                        below. A password, key or calendar address missing from it is filled in.
-                        """)
-            }
+            Text(
+                ui: """
+                    What you already have on this device stays as it is. If something differs, you're asked \
+                    about it after you tap Import.
+                    """)
         }
     }
 
@@ -358,6 +350,7 @@ struct SetupReportForm: View {
         case .alreadyHere: Text(ui: "Already here")
         case .notInThisBuild: Text(ui: "Not in this version")
         case .failed: Text(ui: "Couldn't be added")
+        case .leftOff: Text(ui: "Not on this device")
         }
     }
 }

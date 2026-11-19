@@ -13,6 +13,9 @@ struct LockedWebView: UIViewRepresentable {
     let html: String
     let attachments: [Attachment]
     let allowRemote: Bool
+    /// The app is in dark mode: the page's colours are turned for it unless `adaptsColors` is off.
+    let dark: Bool
+    let adaptsColors: Bool
     @Binding var height: CGFloat
     let onLink: (URL) -> Void
     /// The rule list couldn't be compiled: nothing was loaded, and the caller shows the text instead.
@@ -37,7 +40,8 @@ struct LockedWebView: UIViewRepresentable {
         webView.allowsLinkPreview = false
         webView.allowsBackForwardNavigationGestures = false
         context.coordinator.observe(webView)
-        let page = ReadingConfiguration.page(html: html, allowRemote: allowRemote)
+        let page = ReadingConfiguration.page(
+            html: html, allowRemote: allowRemote, dark: dark, adaptsColors: adaptsColors)
         context.coordinator.page = page
         ReadingRuleLists.list(allowRemote: allowRemote) { list in
             // Fail closed: without the rule list nothing of the HTML is loaded.

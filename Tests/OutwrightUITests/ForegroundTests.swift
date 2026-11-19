@@ -188,7 +188,7 @@ private func eventually(seconds: Double = 60, _ condition: @Sendable () async ->
             let bundle = try await sender.exportBundle().bundle
             let exchange = app.setupExchange()
             let preview = await exchange.preview(bundle)
-            #expect(preview.differences.map(\.id) == ["jk@example.org"])
+            #expect(preview.differences.map(\.id) == ["password:jk@example.org"])
             let report = await exchange.restore(preview, replacing: Set(preview.differences))
             #expect(report.replaced.map(\.label) == ["jk@example.org"])
             await app.restoredFromSetup()

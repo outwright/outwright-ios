@@ -24,12 +24,14 @@ public struct AccountsSetupPart: SetupPart {
     let pushEnabled: @Sendable (AccountID) async -> Bool
     /// What the account's sync last failed with on this device; nil when it last worked.
     let lastError: @Sendable (AccountID) async -> SyncError?
+    /// Which signatures are the app's default rather than the owner's.
+    let signatures: SignatureRule
 
     public init(
         store: MailStore, secrets: any SecretStore, providers: ProviderSet,
         pushEnabled: @escaping @Sendable (AccountID) async -> Bool = { _ in false },
         lastError: @escaping @Sendable (AccountID) async -> SyncError? = { _ in nil },
-        title: String = "Accounts"
+        signatures: SignatureRule = .none, title: String = "Accounts"
     ) {
         self.title = title
         self.store = store
@@ -37,6 +39,7 @@ public struct AccountsSetupPart: SetupPart {
         self.providers = providers
         self.pushEnabled = pushEnabled
         self.lastError = lastError
+        self.signatures = signatures
     }
 
     /// The part's JSON, version 1.
@@ -77,9 +80,10 @@ public struct AccountsSetupPart: SetupPart {
         ((try? store.accounts()) ?? []).map(Self.item)
     }
 
-    /// An account here (by its address) whose password differs from the file's, or whose sign-in is
-    /// refused while the file has a refresh token this build can use. Its id is the address,
-    /// lower-cased.
+    /// For each account here (by its address): its password when it differs from the file's, or
+    /// its sign-in when refused while the file has a refresh token this build can use
+    /// (`password:<address>`), its servers and user name when they differ (`servers:<address>`),
+    /// and its signature when both are the owner's and differ (`signature:<address>`). The address is lower-cased.
     public func differences(in content: Data) async -> [SetupDifference] {
         guard let entries = try? read(content), let held = try? store.accounts() else { return [] }
         let byAddress = Self.byAddress(held)
@@ -87,44 +91,48 @@ public struct AccountsSetupPart: SetupPart {
         var differences: [SetupDifference] = []
         for entry in entries {
             let address = entry.account.email.lowercased()
-            guard !seen.contains(address), let here = byAddress[address],
-                await replacement(for: here, from: entry) != nil
-            else { continue }
-            seen.insert(address)
-            differences.append(
-                SetupDifference(kind: .accountSecret, part: name, label: entry.account.email, id: address))
+            guard let here = byAddress[address], seen.insert(address).inserted else { continue }
+            if let secret = await replacement(for: here, from: entry),
+                let mine = (try? heldSecret(of: here)) ?? nil {
+                // A refresh token rotates on renewal: an answer about one is never remembered.
+                let state = here.auth == .password ? SetupDifference.state(here: mine.reveal(), file: secret) : ""
+                differences.append(
+                    SetupDifference(
+                        kind: .accountSecret, part: name, label: entry.account.email, id: Self.passwordID(address),
+                        state: state))
+            }
+            if let difference = serversDifference(here: here, file: entry.account) {
+                differences.append(difference)
+            }
+            if let difference = signatureDifference(here: here, file: entry.account) {
+                differences.append(difference)
+            }
         }
         return differences
     }
 
+    static func passwordID(_ address: String) -> String { "password:" + address }
+
     public func importContent(_ content: Data, version: Int) async -> SetupImportReport {
-        await importContent(content, version: version, replacing: [])
+        await importContent(content, version: version, choices: .none)
     }
 
-    /// Adds what the content holds and this device does not have; an account here whose address
-    /// is in `replacing` takes the file's secret, and nothing else of it changes.
-    public func importContent(_ content: Data, version: Int, replacing: Set<String>) async -> SetupImportReport {
+    /// Adds what the content holds and this device does not have, except accounts the owner leaves
+    /// off; an account here takes from the file what the owner chose (`differences(in:)`).
+    public func importContent(_ content: Data, version: Int, choices: SetupChoices) async -> SetupImportReport {
         guard version <= self.version else { return .notRead(title) }
         guard let entries = try? read(content), let held = try? store.accounts() else { return .unreadable(title) }
         var addresses = Set(held.map { $0.email.lowercased() })
         var ids = Set(held.map(\.id))
-        let byID = Dictionary(held.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let byAddress = Self.byAddress(held)
-        var replaced = Set<String>()
+        var here = Here(
+            byAddress: Self.byAddress(held),
+            byID: Dictionary(held.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }))
         var placedAfter = held
         var report = SetupImportReport()
         for entry in entries {
             let item = Self.item(entry.account)
             let address = entry.account.email.lowercased()
-            if replacing.contains(address), !replaced.contains(address),
-                await replaceSecret(of: byAddress[address], from: entry, item: item, into: &report) {
-                replaced.insert(address)
-                continue
-            }
-            if let here = byID[entry.account.id] {
-                fillSecret(of: here, from: entry, item: item, into: &report)
-                continue
-            }
+            guard await !importHere(entry, here: &here, choices: choices, into: &report) else { continue }
             guard !addresses.contains(address), !ids.contains(entry.account.id) else {
                 report.skipped.append(SetupSkip(item: item, reason: .alreadyHere))
                 continue
@@ -135,6 +143,7 @@ public struct AccountsSetupPart: SetupPart {
             }
             // On a device with accounts of its own, the restored ones go after them, in their order.
             var account = entry.account
+            account.signature = signatureForNew(account.signature)
             if !held.isEmpty { account.sortOrder = account.placed(after: placedAfter, colors: 1).sortOrder }
             guard let signInAgain = add(account, from: entry) else {
                 report.skipped.append(SetupSkip(item: item, reason: .failed))
@@ -163,22 +172,11 @@ public struct AccountsSetupPart: SetupPart {
         return finish(account, secret: secret)
     }
 
-    /// Fills in the secret of an account already here, and reports what became of it.
-    private func fillSecret(
-        of here: Account, from entry: AccountEntry, item: SetupItem, into report: inout SetupImportReport
-    ) {
-        switch fillSecret(of: here, from: entry) {
-        case true?: report.restored.append(item)
-        case false?: report.skipped.append(SetupSkip(item: item, reason: .alreadyHere))
-        case nil: report.skipped.append(SetupSkip(item: item, reason: .failed))
-        }
-    }
-
     /// The account is here (its id matches, as after restoring the phone from an iCloud or Finder
     /// backup, whose keychain stays behind): its secret is filled in when it has none, and nothing
     /// else about it changes. True when filled in, false when there was nothing to fill (it has
     /// one, or the file's cannot be used here), nil when the secret store refused it.
-    private func fillSecret(of here: Account, from entry: AccountEntry) -> Bool? {
+    func fillSecret(of here: Account, from entry: AccountEntry) -> Bool? {
         guard here.auth == entry.account.auth, here.provider == entry.account.provider else { return false }
         let held: Secret?
         do {
@@ -191,27 +189,13 @@ public struct AccountsSetupPart: SetupPart {
         return keep(secret, for: here) ? true : nil
     }
 
-    /// Takes the file's secret for the account here, when it is a difference, and reports it;
-    /// false when there was none to take.
-    private func replaceSecret(
-        of here: Account?, from entry: AccountEntry, item: SetupItem, into report: inout SetupImportReport
-    ) async -> Bool {
-        guard let here, let secret = await replacement(for: here, from: entry) else { return false }
-        if keep(secret, for: here) {
-            report.replaced.append(item)
-        } else {
-            report.skipped.append(SetupSkip(item: item, reason: .failed))
-        }
-        return true
-    }
-
     /// The file's secret for an account here, when the owner may take it instead of the device's:
     /// the same kind of account with a provider in this build, a secret this build can use (a
     /// token for another client id is none), and the device's own secret there and not working: a
     /// password that differs, or a refresh token whose sign-in is refused (another token alone
     /// tells nothing, as it rotates on renewal). A device without one has it filled in, never
     /// asked; nil otherwise.
-    private func replacement(for here: Account, from entry: AccountEntry) async -> String? {
+    func replacement(for here: Account, from entry: AccountEntry) async -> String? {
         guard here.auth == entry.account.auth, here.provider == entry.account.provider,
             providers.ids.contains(here.provider),
             let secret = (try? usableSecret(entry)) ?? nil,
@@ -225,7 +209,7 @@ public struct AccountsSetupPart: SetupPart {
     }
 
     /// The account's password or refresh token on this device.
-    private func heldSecret(of account: Account) throws(SyncError) -> Secret? {
+    func heldSecret(of account: Account) throws(SyncError) -> Secret? {
         switch account.auth {
         case .password: try secrets.password(for: account.id)
         case .oauth: try secrets.refreshToken(for: account.id)
@@ -285,7 +269,7 @@ public struct AccountsSetupPart: SetupPart {
     }
 
     /// Keeps the account's secret in the secret store; false when the store refused it.
-    private func keep(_ secret: String, for account: Account) -> Bool {
+    func keep(_ secret: String, for account: Account) -> Bool {
         do {
             switch account.auth {
             case .password: try secrets.setPassword(Secret(secret), for: account.id)
@@ -303,7 +287,7 @@ public struct AccountsSetupPart: SetupPart {
         return entries
     }
 
-    private static func item(_ account: Account) -> SetupItem {
+    static func item(_ account: Account) -> SetupItem {
         SetupItem(kind: .account, label: account.email)
     }
 }

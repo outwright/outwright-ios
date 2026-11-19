@@ -1,7 +1,8 @@
 # The setup file
 
-A setup file carries the owner's accounts, their passwords and sign-in tokens, a few settings
-and their OpenPGP keys from one device to another. It is made by the owner on purpose, from
+A setup file carries the owner's accounts, their passwords and sign-in tokens, their subscribed
+calendars and their keys from one device to another. How the app is set up (its settings) stays
+on each device. It is made by the owner on purpose, from
 the app's settings, and it is encrypted with a passphrase the app shows once when the file is
 made. This page describes the format, so the owner can always get their keys out of it with
 other software, and so another app can read or write the file. The last section describes the
@@ -100,8 +101,10 @@ page describes, such as a field of the wrong type where the part's section below
 otherwise, or it is over a limit) is listed as one that cannot be read and left out, and the
 other parts are restored.
 
-The parts the app writes are `accounts`, `subscriptions`, `settings` and `openpgp`. Each
-one a build carries is written every time, with empty lists when there is nothing in it.
+The parts the app writes are `accounts`, `subscriptions`, `openpgp` and `smime`. Each
+one a build carries is written every time, with empty lists when there is nothing in it. Files
+made by earlier versions may hold a `settings` part with the app's settings: it is no longer
+read, and passed over without a word.
 
 Restoring adds what the receiving device does not have and leaves what it has as it is. One
 thing is filled in: a device restored from an iCloud or Finder backup of a phone has its
@@ -110,10 +113,17 @@ When an item is already there without its secret, the secret is taken from the f
 nothing else about the item changes. Each part below says when an item counts as already
 there.
 
-Some of what is already there can differ from the file: an account's password or sign-in,
-the current own key for an address, settings the device has set. The app shows these before it
-restores anything and asks the owner about each; the device's stays unless the owner chooses the
-file's. Each part below says what it asks about.
+Some of what is already there can differ from the file: an account's password or sign-in, its
+servers, its signature, the current own key for an address. The app asks the owner about each,
+one at a time, before it restores anything; the device's stays unless the owner chooses the
+file's. Each part below says what it asks about. The owner may also leave an account off the
+device: nothing of it is added (its own keys, certificates and settings neither), and one already
+there is left as it is.
+
+A setup is brought more than once to keep devices alike, so the app remembers, in the keychain,
+what the owner kept and which accounts they left off. A difference the owner kept is not asked
+again until either side of it changes; an account left off stays off until they switch it on.
+Nothing is ever removed from the receiving device.
 
 ## The accounts part
 
@@ -154,12 +164,20 @@ An entry is the account as the app keeps it, plus its secret:
 At most 1 024 entries, and no secret longer than 16 384 octets. An account with the same
 `id` as one on the receiving device is already there: its password or refresh token is filled
 in when the device has none (a refresh token only under the same client id), and nothing else
-changes. Another account with the same `email` is already there too, and is left alone. When
-an account here with the same `email` (and the same provider and kind of sign-in) has another
-password than the file, the owner is asked, and the file's replaces it only when they choose so;
-nothing else about the account changes. A refresh token rotates as it is used, so another one
-than the file's is no difference by itself: the owner is asked about it only when the device's
-sign-in for the account does not work (the server refused it, or it needs signing in again).
+changes. Another account with the same `email` is already there too. When an account here with
+the same `email` (and the same provider and kind of sign-in) has another password than the file,
+the owner is asked, and the file's replaces it only when they choose so. A refresh token rotates
+as it is used, so another one than the file's is no difference by itself: the owner is asked
+about it only when the device's sign-in for the account does not work (the server refused it, or
+it needs signing in again). When its servers or user name (`imap`, `smtp`, `user`) differ from
+the file's, the owner is asked too, and only those three change when they take the file's; a host
+name is compared in any case, a user name as typed.
+
+The app's default signature ("Sent from Outwright for iOS", in any language it shipped in) is
+each device's own: an account that comes with it gets the receiving device's default, and it
+never replaces a signature there. A signature the owner wrote, an empty one included, comes
+along: an account added gets it, and an account here with the default takes it. When both are
+the owner's and differ, the owner is asked.
 
 ## The subscriptions part
 
@@ -175,27 +193,6 @@ One entry for each subscribed calendar (a published calendar read-only): `key` (
 secret. At most 1 024 entries. A calendar with the same `key` is already there: its address
 is filled in when the device has none, and its name and colour stay as the device has them.
 A calendar with the same address is already there too.
-
-## The settings part
-
-```json
-{"values": {"focusedInbox": true, "swipeLeading": "archive", "defaultAccount": "11111111-2222-3333-4444-555555555555"}}
-```
-
-An object `values` from a setting's key to a value, a boolean or a string. Only these keys
-move; a key not listed here is not read, and a value of the wrong type or not in the list
-is skipped. A setting the receiving device has ever set is its owner's choice there and stays
-as it is; only settings it never set are taken from the file. When some it has set differ from
-the file, the owner is asked once for all of them, and they are replaced only when the owner
-chooses the file's.
-
-| Key | Value |
-|---|---|
-| `focusedInbox`, `backgroundRefresh`, `badge.focusedOnly` | boolean |
-| `swipeLeading`, `swipeTrailing` | `delete`, `archive`, `flag`, `read`, `move` or `none` |
-| `defaultAccount` | an account's UUID, taken only when that account is on the receiving device; otherwise left out without a word |
-| `calendarMode` | `agenda`, `day`, `threeDay`, `month`, `week` or `workWeek` |
-| `calendarWeekMode` | `workWeek` or `week` |
 
 ## The openpgp part
 
@@ -253,6 +250,51 @@ and it becomes the current one (the device's kept, retired) only when the owner 
 To use a key elsewhere, decrypt the file, decode the `openpgp` part's `content` from base64,
 and take `secretKey` from an entry of `ownKeys`; it is an armored key as any OpenPGP software
 writes it.
+
+## The smime part
+
+The owner's S/MIME setup. Certificates are DER (X.509) and private keys PKCS #8, each in standard
+base64, so any S/MIME software can use them once they are out of the JSON.
+
+```json
+{
+  "own": [{"account": "sam@example.org", "certificate": "<base64 DER>", "key": "<base64 PKCS #8>"}],
+  "learned": [{"certificate": "<base64 DER>", "addresses": ["kim@example.org"], "account": "sam@example.org"}],
+  "intermediates": ["<base64 DER>"],
+  "orgRoots": [{"account": "sam@example.org", "certificate": "<base64 DER>"}],
+  "settings": [{"account": "sam@example.org", "isOn": true, "alwaysSign": false,
+                "alwaysEncrypt": false, "useForCompose": true}]
+}
+```
+
+- `own`: the owner's certificates, one entry for each whose private key is on the device, with
+  the account's address. `key` is the part's one secret.
+- `learned`: other people's certificates, learned from their signed mail. `addresses` are the
+  addresses the certificate was learned for, there for the owner's eyes; a reader takes them from
+  the certificate itself. `account` is the account it was learned for through that account's
+  organisation root; absent, it holds for every account.
+- `intermediates`: intermediate certificates kept to build chains.
+- `orgRoots`: organisation roots the owner accepted for an account. A reader never trusts one from
+  a file: it offers each to the owner for its account, and a learned certificate that chains only
+  to an offered root waits for the owner's answer.
+- `settings`: for each address, whether S/MIME is on (`isOn`), whether a new message is always
+  signed or encrypted, and `useForCompose`, whether writing uses S/MIME when OpenPGP is on too
+  (absent: the default, S/MIME on a Microsoft account and OpenPGP on others).
+
+Addresses are lower case. A receiver checks each entry's shape (an address as in the openpgp
+part, a certificate or key of at most 512 KiB, at most 16 addresses for a learned certificate),
+drops an entry out of shape, and then checks each against its bytes: an own key has to sign as its
+certificate's key, and a learned certificate has to chain to a root its account trusts on the
+receiving device. An entry that fails is skipped and reported. Limits: 1 024 own certificates,
+8 192 learned, 2 048 intermediates, 1 024 organisation roots and 1 024 settings; a list over its
+limit makes the whole part one that cannot be read. The owner's own certificates always come
+along or the file is not made; learned certificates come along while the part stays within 8 MiB.
+
+An own certificate the receiving account already holds is already there (its key is filled in when
+the device has none); one it does not hold is added beside the account's others, so nothing is
+asked. A learned certificate the device holds for the address is already there, and so are
+settings for an address the device has set. Own certificates are restored whatever the plan, as
+the owner had them; the plan decides only what they may be used for.
 
 ## Other readers and writers
 
@@ -391,8 +433,8 @@ showed the code.
    confirmation is up, before anything is unlocked or made. When the owner confirms, and after
    the sender has asked the owner to unlock the device, it sends `bundle`.
 6. The receiver restores what it got, as the file's rules say, and sends `done`. When the receiving
-   device already has something that differs from the bundle (a password, the current own key,
-   settings), it first asks its owner which to keep, as a file's restore does, and restores nothing
+   device already has something that differs from the bundle (a password, the current own key),
+   it first asks its owner which to keep, as a file's restore does, and restores nothing
    until the owner answers; the sender's wait for `done` (300 seconds, below) is the time the owner
    has. If the sender stops or the connection drops before the answer, the receiver restores
    nothing. Apart from that question, it sends `done` before it does anything that waits for the

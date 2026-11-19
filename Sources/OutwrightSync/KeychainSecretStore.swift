@@ -68,6 +68,12 @@ public struct KeychainSecretStore: SecretStore {
         try delete(Self.subscriptionPrefix + key.uuidString)
     }
 
+    static let setupMemoryKey = "setup-memory"
+
+    public func setupMemory() throws(SyncError) -> Secret? { try read(Self.setupMemoryKey) }
+
+    public func setSetupMemory(_ secret: Secret) throws(SyncError) { try write(secret, Self.setupMemoryKey) }
+
     // MARK: - Items
 
     private func read(_ key: String) throws(SyncError) -> Secret? {

@@ -122,8 +122,15 @@ public final class SetupModel {
     public private(set) var items: [SetupItem] = []
     /// What the file just made holds.
     public private(set) var exported: [SetupItem] = []
-    /// What the device has that the owner chose to take from the file instead; empty for a new preview.
-    public private(set) var replacing: Set<SetupDifference> = []
+    /// The accounts (addresses, lower-cased) the owner leaves off this device; for a new preview,
+    /// those left off the last time.
+    public internal(set) var leavingOff: Set<String> = []
+    /// The difference the owner is being asked about, after the button, one at a time.
+    public internal(set) var question: SetupDifference?
+    /// What the owner answered so far: the differences to take from the other side.
+    @ObservationIgnored var replacing: Set<SetupDifference> = []
+    /// Resumed with the owner's answer to `question`, or nil when the questions end unanswered.
+    @ObservationIgnored var answering: CheckedContinuation<Bool?, Never>?
     @ObservationIgnored private var purpose: SetupPurpose?
 
     @ObservationIgnored private let exchange: SetupExchange
@@ -238,6 +245,7 @@ public final class SetupModel {
 
     /// Reads a setup file to restore; its passphrase is asked for next.
     public func open(_ url: URL) {
+        endQuestions()
         file = nil
         received = url
         let scoped = url.startAccessingSecurityScopedResource()
@@ -281,28 +289,19 @@ public final class SetupModel {
         }
     }
 
-    /// Shows a preview with every difference kept as the device has it.
+    /// Shows a preview with nothing answered yet, and the accounts left off last time off again.
     private func show(_ preview: SetupPreview) {
+        endQuestions()
         replacing = []
+        leavingOff = preview.leftOff
         state = .preview(preview)
     }
 
-    /// The owner's choice for something the device already has: the file's, or the device's (the
-    /// default).
-    public func choose(_ difference: SetupDifference, fromFile: Bool) {
-        guard case .preview(let preview) = state, preview.differences.contains(difference) else { return }
-        if fromFile {
-            replacing.insert(difference)
-        } else {
-            replacing.remove(difference)
-        }
-    }
-
-    /// Adds what the preview holds, then shows the report. Added accounts that save their contacts
-    /// to the phone ask for access to its Contacts once (refused, that goes off for them); restored
-    /// accounts that notify ask the owner once for permission to.
+    /// Asks the differences, then adds what the preview holds, then shows the report. Added
+    /// accounts that save their contacts to the phone ask for access to its Contacts once (refused,
+    /// that goes off for them); restored accounts that notify ask the owner once for permission to.
     public func restore() async {
-        guard let report = await add() else { return }
+        guard await askQuestions(), let report = await add() else { return }
         state = .report(await askForPhoneContacts(report))
         await askForNotices()
     }
@@ -313,8 +312,10 @@ public final class SetupModel {
         guard case .preview(let preview) = state else { return nil }
         state = .restoring
         let exchange = exchange
-        let replacing = replacing
-        let report = await Task.detached { await exchange.restore(preview, replacing: replacing) }.value
+        let (replacing, leavingOff) = (replacing, leavingOff)
+        let report = await Task.detached {
+            await exchange.restore(preview, replacing: replacing, leavingOff: leavingOff)
+        }.value
         file = nil
         self.replacing = []
         return report
@@ -349,8 +350,9 @@ public final class SetupModel {
         return preview
     }
 
-    /// Restores the received preview with the owner's choices and returns what was added (nil
-    /// without one), before any ask: the other device hears `done` before a prompt is up.
+    /// Restores the received preview with the owner's answers (`askQuestions` first) and returns
+    /// what was added (nil without one), before any ask: the other device hears `done` before a
+    /// prompt is up.
     public func restoreReceived() async -> SetupImportReport? {
         guard let report = await add() else { return nil }
         state = .report(report)
@@ -370,6 +372,7 @@ public final class SetupModel {
 
     /// The flow is over: the file made is removed, and so is the copy iOS handed over of one opened.
     public func dismissed() {
+        endQuestions()
         removeExport()
         file = nil
         if let received { Self.discardHandedOver(received) }

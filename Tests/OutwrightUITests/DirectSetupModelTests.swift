@@ -25,6 +25,7 @@ import Testing
         #expect(sender.state == .confirm(device: "Pat's iPad", items: Self.items))
         #expect(await eventually { receiver.state == .waiting })
 
+        confirming(receiver)
         await sender.send()
         #expect(sender.state == .sent(device: "Pat's iPad"))
         #expect(await eventually { if case .report = receiver.state { true } else { false } })
@@ -109,6 +110,9 @@ import Testing
         let sender = sender(link)
         await sender.scanned(code.text)
         let sending = Task { await sender.send() }
+        // The owner taps the button once what came shows; the restore then takes its time.
+        #expect(await eventually { if case .choosing = receiver.state { true } else { false } })
+        let confirmed = Task { await receiver.restoreChosen() }
         #expect(await eventually { receiver.state == .restoring })
 
         await receiver.newCode()
@@ -116,6 +120,7 @@ import Testing
         await sending.value
         #expect(sender.state == .sent(device: "Pat's iPad"))
         #expect(await eventually { if case .report = receiver.state { true } else { false } })
+        await confirmed.value
     }
 
     @Test func theSenderHearsDoneBeforeTheNotificationsAsk() async throws {
@@ -128,6 +133,7 @@ import Testing
         let sender = sender(link)
         await sender.scanned(code.text)
 
+        confirming(receiver)
         await sender.send()
         #expect(sender.state == .sent(device: "Pat's iPad"))
         #expect(await eventually { gate.asked })

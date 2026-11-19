@@ -70,7 +70,7 @@ extension AccountSyncer {
         return try await exclusive { () async throws(SyncError) in
             try await withMain { client async throws(SyncError) in
                 let folders = try stored { try store.folders(account.id) }
-                    .filter { Self.searchedKinds.contains($0.kind) && $0.uidValidity != 0 }
+                    .filter { Self.searchedKinds.contains($0.kind) }
                     .prefix(Self.maxFolders)
                 var found: [MessageID] = []
                 for folder in folders where found.count < limit {
@@ -84,8 +84,25 @@ extension AccountSyncer {
     private func searchFolder(
         _ folder: Folder, _ searches: [IMAPSearch], limit: Int, _ client: IMAPClient
     ) async throws(SyncError) -> [MessageID] {
-        let status = try await imap { try await client.select(folder.path) }
-        if folder.uidValidity != 0, status.uidValidity != folder.uidValidity {
+        let status: FolderStatus
+        do {
+            status = try await client.select(folder.path)
+        } catch {
+            // A folder made here and not on the server yet: nothing to search, as in a sync of it.
+            switch error {
+            case .folderMissing, .no:
+                if folder.uidValidity == 0 {
+                    return []
+                }
+            default:
+                break
+            }
+            throw .imap(error)
+        }
+        if folder.uidValidity == 0 {
+            // Not opened on this phone yet (its first sync may still be to come): searched all the same.
+            try adoptUIDValidity(folder.id, status.uidValidity)
+        } else if status.uidValidity != folder.uidValidity {
             // Renumbered: the numbers held here mean nothing now, as in a sync of the folder.
             try stored { try store.resetFolder(folder.id, uidValidity: status.uidValidity) }
         }

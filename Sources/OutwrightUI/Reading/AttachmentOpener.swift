@@ -67,6 +67,7 @@ private struct AttachmentSheet: View {
     @State private var height: CGFloat = 400
     @State private var webUnavailable = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -91,9 +92,10 @@ private struct AttachmentSheet: View {
         #if os(iOS)
         if AttachmentFiles.presentation(shown.attachment) == .lockedWeb, !webUnavailable {
             LockedWebView(
-                html: shown.text, attachments: [], allowRemote: false, height: $height, onLink: { _ in },
-                onUnavailable: { webUnavailable = true }
+                html: shown.text, attachments: [], allowRemote: false, dark: colorScheme == .dark, adaptsColors: true,
+                height: $height, onLink: { _ in }, onUnavailable: { webUnavailable = true }
             )
+            .id(colorScheme)
             .frame(height: height)
         } else {
             plain

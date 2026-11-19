@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.2.1 (2026-11-19)
+
+- Bringing your setup to another device brings your accounts, keys and signatures but not the app's settings, asks about each difference on its own, and remembers your answers for the next time.
+- Search on the server also looks in folders you haven't opened yet, such as Sent right after adding an account.
+
 ## 0.2.0 (2026-11-18)
 
 Across the app:
@@ -15,6 +20,7 @@ Across the app:
 - First run, adding an account and Settings work as in Outlook.
 - Back up your accounts and OpenPGP keys, or move them to another device, as an encrypted file.
 - Move your setup to another device by scanning a code, no file or passphrase needed.
+- In dark mode, a message that sets its own colours is shown in dark colours too, and the sun button shows it as written.
 - Restoring a setup, from a file or from another device, asks before it replaces a password, your OpenPGP key or settings that differ on this device.
 - Push through your own program is "Push for a server without push", under an account's Notifications switch while push from the server is not on.
 

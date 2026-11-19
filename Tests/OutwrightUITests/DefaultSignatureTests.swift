@@ -51,4 +51,16 @@ struct DefaultSignatureTests {
         #expect(accounts.first { $0.id == swedish.id }?.signature == DefaultSignature.text)
         #expect(accounts.first { $0.id == own.id }?.signature == own.signature)
     }
+
+    /// A setup never carries the default from one device to another, in any form or language it had.
+    @Test func theSetupRuleKnowsEveryDefault() {
+        let rule = DefaultSignature.setupRule
+        #expect(rule.isDefault(DefaultSignature.text))
+        #expect(rule.isDefault("Sent from Outwright for iOS"))
+        #expect(rule.isDefault("Skickat från Outwright för iOS\n"))
+        #expect(rule.isDefault("Sent from Outwright for iOS\nhttps://github.com/outwright/outwright-ios"))
+        #expect(!rule.isDefault("Pat at work"))
+        #expect(!rule.isDefault(""))
+        #expect(rule.defaultHere() == DefaultSignature.text)
+    }
 }

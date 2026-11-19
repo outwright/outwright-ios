@@ -5,8 +5,8 @@ import OutwrightSetup
 import OutwrightSync
 import SwiftUI
 
-/// Bring my setup from another device: a code for the other device to scan, then the restore of what
-/// it sends (asking first when this device has something that differs) and its report. Leaving the screen
+/// Bring my setup from another device: a code for the other device to scan, then what it sends, with a
+/// switch per account, the button, a question for each thing that differs here, and the report. Leaving the screen
 /// ends the transfer; once the restore has begun, only Done leaves it.
 struct ReceiveSetupView: View {
     let app: AppModel
@@ -27,7 +27,7 @@ struct ReceiveSetupView: View {
                 SetupWorking(text: nil)
             }
         }
-        .navigationTitle(Text(ui: "Bring my setup"))
+        .navigationTitle(Text(ui: "Bring here"))
         .inlineNavigationTitle()
         .navigationBarBackButtonHidden(isRestoring)
         .interactiveDismissDisabled(isRestoring)
@@ -95,7 +95,7 @@ struct ReceiveSetupView: View {
         case .choosing(let preview):
             choosing(model, preview)
         case .restoring:
-            SetupWorking(text: Text(ui: "Restoring…"))
+            SetupWorking(text: Text(ui: "Bringing here…"))
         case .report(let report):
             SetupReportForm(report: report, source: .device(model.origin))
         case .failed(let failure):
@@ -170,28 +170,28 @@ struct ReceiveSetupView: View {
 
     // MARK: What differs
 
-    /// What this device has that differs from what came, with the owner's choice for each, and what comes, while
-    /// the other device waits for the answer.
+    /// What comes, with a switch per account, while the other device waits for the answer; after the button,
+    /// each thing that differs here is asked in turn.
     private func choosing(_ model: ReceiveSetupModel, _ preview: SetupPreview) -> some View {
         Form {
-            SetupDifferencesSection(
-                model: model.setup, differences: preview.differences, source: .device(model.origin))
-            SetupItemSections(items: preview.items.flatMap(\.items))
+            SetupItemSections(items: preview.items.flatMap(\.items), choosing: model.setup)
             Section {
                 Button {
                     Task { await model.restoreChosen() }
                 } label: {
-                    Text(ui: "Restore")
+                    Text(ui: "Bring here")
                 }
                 .accessibilityIdentifier("receive.restore")
             } footer: {
                 Text(
                     ui: """
-                        Your other device waits up to 5 minutes for your answer. If it stops waiting, nothing is \
-                        restored.
+                        What you already have on this device stays as it is; if something differs, you're asked \
+                        about it. Your other device waits up to 5 minutes. If it stops waiting, nothing is brought \
+                        here.
                         """)
             }
         }
+        .setupQuestion(model.setup, source: .device(model.origin))
     }
 
     // MARK: The end

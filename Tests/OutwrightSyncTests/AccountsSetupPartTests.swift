@@ -44,6 +44,8 @@ final class RefusingSecretStore: SecretStore {
         try inner.setSubscriptionAddress(secret, for: key)
     }
     func removeSubscriptionAddress(_ key: UUID) throws(SyncError) { try inner.removeSubscriptionAddress(key) }
+    func setupMemory() throws(SyncError) -> Secret? { try inner.setupMemory() }
+    func setSetupMemory(_ secret: Secret) throws(SyncError) { try inner.setSetupMemory(secret) }
 }
 
 func setupAccount(_ email: String, auth: AccountAuth = .password, provider: ProviderID = .ownServer) -> Account {
@@ -383,9 +385,9 @@ extension AccountsSetupPartTests {
 
         let differences = await part.differences(in: content)
 
-        #expect(differences == [
-            SetupDifference(kind: .accountSecret, part: "accounts", label: "pat@example.org", id: "pat@example.org")
-        ])
+        #expect(differences.map(\.kind) == [.accountSecret])
+        #expect(differences.map(\.label) == ["pat@example.org"])
+        #expect(differences.map(\.id) == ["password:pat@example.org"])
         #expect(!differences.contains { "\($0)".contains("hunter2") || "\($0)".contains("chosen here") })
     }
 
@@ -425,7 +427,7 @@ extension AccountsSetupPartTests {
         let part = receiver(store: store, secrets: secrets, withCloud: false)
 
         #expect(await part.differences(in: content).isEmpty)
-        _ = await part.importContent(content, version: 1, replacing: ["olle@example.org"])
+        _ = await part.importContent(content, version: 1, replacing: ["password:olle@example.org"])
         #expect(try secrets.refreshToken(for: sender.oauth.id)?.reveal() == "refresh-here")
     }
 
@@ -440,7 +442,7 @@ extension AccountsSetupPartTests {
         let part = receiver(store: store, secrets: secrets, clientID: "client-b")
 
         #expect(await part.differences(in: content).isEmpty)
-        _ = await part.importContent(content, version: 1, replacing: ["olle@example.org"])
+        _ = await part.importContent(content, version: 1, replacing: ["password:olle@example.org"])
         #expect(try secrets.refreshToken(for: sender.oauth.id)?.reveal() == "refresh-here")
     }
 
@@ -456,8 +458,9 @@ extension AccountsSetupPartTests {
         try secrets.setPassword(Secret("chosen here"), for: own.id)
         let part = receiver(store: store, secrets: secrets)
 
-        #expect(await part.differences(in: content).map(\.id) == ["pat@example.org"])
-        let report = await part.importContent(content, version: 1, replacing: ["pat@example.org"])
+        // Its user name was typed in another case here, which is the server details' own question.
+        #expect(await part.differences(in: content).map(\.id) == ["password:pat@example.org", "servers:pat@example.org"])
+        let report = await part.importContent(content, version: 1, replacing: ["password:pat@example.org"])
 
         #expect(report.replaced == [accountItem("pat@example.org")])
         #expect(try secrets.password(for: own.id)?.reveal() == "hunter2")
@@ -479,7 +482,7 @@ extension AccountsSetupPartTests {
         try secrets.inner.setRefreshToken(Secret("refresh-1"), for: sender.oauth.id)
 
         let report = await receiver(store: store, secrets: secrets)
-            .importContent(content, version: 1, replacing: ["pat@example.org"])
+            .importContent(content, version: 1, replacing: ["password:pat@example.org"])
 
         #expect(report.replaced.isEmpty)
         #expect(report.skipped.contains(SetupSkip(item: accountItem("pat@example.org"), reason: .failed)))
@@ -498,8 +501,11 @@ extension AccountsSetupPartTests {
         try secrets.setRefreshToken(Secret("refresh-here"), for: sender.oauth.id)
         let part = receiver(store: store, secrets: secrets, clientID: "client-a", lastError: refusal)
 
-        #expect(await part.differences(in: content).map(\.id) == ["olle@example.org"])
-        let report = await part.importContent(content, version: 1, replacing: ["olle@example.org"])
+        let differences = await part.differences(in: content)
+        #expect(differences.map(\.id) == ["password:olle@example.org"])
+        // A token rotates, so an answer about it is never remembered.
+        #expect(differences.allSatisfy { $0.state.isEmpty })
+        let report = await part.importContent(content, version: 1, replacing: ["password:olle@example.org"])
 
         #expect(report.replaced == [accountItem("olle@example.org")])
         #expect(try secrets.refreshToken(for: sender.oauth.id)?.reveal() == "refresh-1")
@@ -520,7 +526,7 @@ extension AccountsSetupPartTests {
         let part = receiver(store: store, secrets: secrets, lastError: lastError)
 
         #expect(await part.differences(in: content).isEmpty)
-        let report = await part.importContent(content, version: 1, replacing: ["olle@example.org"])
+        let report = await part.importContent(content, version: 1, replacing: ["password:olle@example.org"])
         #expect(report.replaced.isEmpty)
         #expect(try secrets.refreshToken(for: sender.oauth.id)?.reveal() == "refresh-rotated")
     }
@@ -535,6 +541,6 @@ extension AccountsSetupPartTests {
         try secrets.setPassword(Secret("chosen here"), for: sender.password.id)
 
         let differences = await receiver(store: store, secrets: secrets).differences(in: content)
-        #expect(differences.map(\.id) == ["pat@example.org"])
+        #expect(differences.map(\.id) == ["password:pat@example.org"])
     }
 }

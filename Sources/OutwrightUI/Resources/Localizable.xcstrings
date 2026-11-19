@@ -1,66 +1,130 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@: another key is your current one" : {
+    "Bring here" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@: another key is your current one"
+            "value" : "Bring here"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@: en annan nyckel är din nuvarande"
+            "value" : "Hämta hit"
           }
         }
       }
     },
-    "%@: the password or sign-in differs" : {
+    "Bringing here…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@: the password or sign-in differs"
+            "value" : "Bringing here…"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@: lösenordet eller inloggningen skiljer sig"
+            "value" : "Hämtar…"
           }
         }
       }
     },
-    "Already on this device" : {
+    "Different on this device" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Already on this device"
+            "value" : "Different on this device"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Redan på den här enheten"
+            "value" : "Annorlunda på den här enheten"
           }
         }
       }
     },
-    "Keep this device's" : {
+    "Import" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keep this device's"
+            "value" : "Import"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Läs in"
+          }
+        }
+      }
+    },
+    "Import from a file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import from a file"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Läs in från en fil"
+          }
+        }
+      }
+    },
+    "Importing…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing…"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Läser in…"
+          }
+        }
+      }
+    },
+    "Keep this one" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep this one"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Behåll den här enhetens"
+          }
+        }
+      }
+    },
+    "Not on this device" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not on this device"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inte på den här enheten"
           }
         }
       }
@@ -81,22 +145,6 @@
         }
       }
     },
-    "Your other device waits up to 5 minutes for your answer. If it stops waiting, nothing is restored." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your other device waits up to 5 minutes for your answer. If it stops waiting, nothing is restored."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Din andra enhet väntar upp till 5 minuter på ditt svar. Slutar den vänta återställs ingenting."
-          }
-        }
-      }
-    },
     "Replaced from your other device" : {
       "localizations" : {
         "en" : {
@@ -109,134 +157,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ersatt från din andra enhet"
-          }
-        }
-      }
-    },
-    "Settings you changed on this device" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Settings you changed on this device"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inställningar du har ändrat på den här enheten"
-          }
-        }
-      }
-    },
-    "These differ from the file. Unless you choose the file's, this device's stay as they are." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These differ from the file. Unless you choose the file's, this device's stay as they are."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "De här skiljer sig från filen. Om du inte väljer filens förblir den här enhetens som de är."
-          }
-        }
-      }
-    },
-    "These differ from the file. Unless you choose the file's, this device's stay as they are. A key from the file is added either way, so mail encrypted to it still opens." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These differ from the file. Unless you choose the file's, this device's stay as they are. A key from the file is added either way, so mail encrypted to it still opens."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "De här skiljer sig från filen. Om du inte väljer filens förblir den här enhetens som de är. En nyckel från filen läggs till oavsett, så att e-post som krypterats till den fortfarande går att öppna."
-          }
-        }
-      }
-    },
-    "These differ from your other device. Unless you choose the other device's, this device's stay as they are." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These differ from your other device. Unless you choose the other device's, this device's stay as they are."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "De här skiljer sig från din andra enhet. Om du inte väljer den andra enhetens förblir den här enhetens som de är."
-          }
-        }
-      }
-    },
-    "These differ from your other device. Unless you choose the other device's, this device's stay as they are. A key from your other device is added either way, so mail encrypted to it still opens." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These differ from your other device. Unless you choose the other device's, this device's stay as they are. A key from your other device is added either way, so mail encrypted to it still opens."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "De här skiljer sig från din andra enhet. Om du inte väljer den andra enhetens förblir den här enhetens som de är. En nyckel från din andra enhet läggs till oavsett, så att e-post som krypterats till den fortfarande går att öppna."
-          }
-        }
-      }
-    },
-    "Use the file's" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use the file's"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Använd filens"
-          }
-        }
-      }
-    },
-    "Use the other device's" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use the other device's"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Använd den andra enhetens"
-          }
-        }
-      }
-    },
-    "What you already have on this device is left as it is, unless you choose the file's below. A password, key or calendar address missing from it is filled in." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "What you already have on this device is left as it is, unless you choose the file's below. A password, key or calendar address missing from it is filled in."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Det du redan har på den här enheten lämnas som det är, om du inte väljer filens nedan. Ett lösenord, en nyckel eller en kalenderadress som saknas fylls i."
           }
         }
       }
@@ -393,6 +313,22 @@
         }
       }
     },
+    "The file has a different key for %@. Use it here? This device's key stays, so older mail still opens." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file has a different key for %@. Use it here? This device's key stays, so older mail still opens."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filen har en annan nyckel för %@. Vill du använda den på den här enheten? Den här enhetens nyckel finns kvar, så äldre mejl går fortfarande att öppna."
+          }
+        }
+      }
+    },
     "The information sent to Outwright contains no private information, no mail and no details of any account." : {
       "localizations" : {
         "en" : {
@@ -409,18 +345,114 @@
         }
       }
     },
-    "These parts of the file are damaged; they are left out and the rest is restored." : {
+    "The password for %@ is different in the file. Use it here?" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "These parts of the file are damaged; they are left out and the rest is restored."
+            "value" : "The password for %@ is different in the file. Use it here?"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "De här delarna av filen är skadade; de lämnas utanför och resten återställs."
+            "value" : "Lösenordet för %@ är ett annat i filen. Vill du använda det på den här enheten?"
+          }
+        }
+      }
+    },
+    "The password for %@ is different on your other device. Use it here?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The password for %@ is different on your other device. Use it here?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lösenordet för %@ är ett annat på din andra enhet. Vill du använda det på den här enheten?"
+          }
+        }
+      }
+    },
+    "The server details for %@ are different in the file. Use them here?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server details for %@ are different in the file. Use them here?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveruppgifterna för %@ skiljer sig i filen. Vill du använda dem på den här enheten?"
+          }
+        }
+      }
+    },
+    "The server details for %@ are different on your other device. Use them here?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server details for %@ are different on your other device. Use them here?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveruppgifterna för %@ skiljer sig på din andra enhet. Vill du använda dem på den här enheten?"
+          }
+        }
+      }
+    },
+    "The signature for %@ is different in the file. Use it here?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The signature for %@ is different in the file. Use it here?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signaturen för %@ skiljer sig i filen. Vill du använda den på den här enheten?"
+          }
+        }
+      }
+    },
+    "The signature for %@ is different on your other device. Use it here?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The signature for %@ is different on your other device. Use it here?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signaturen för %@ skiljer sig på din andra enhet. Vill du använda den på den här enheten?"
+          }
+        }
+      }
+    },
+    "These parts of the file are damaged; they are left out and the rest is imported." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These parts of the file are damaged; they are left out and the rest is imported."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De här delarna av filen är skadade. De utelämnas och resten läses in."
           }
         }
       }
@@ -457,18 +489,66 @@
         }
       }
     },
-    "What you already have on this device is left as it is. A password, key or calendar address missing from it is filled in." : {
+    "Use it" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What you already have on this device is left as it is. A password, key or calendar address missing from it is filled in."
+            "value" : "Use it"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Det du redan har på den här enheten lämnas som det är. Ett lösenord, en nyckel eller en kalenderadress som saknas fylls i."
+            "value" : "Använd"
+          }
+        }
+      }
+    },
+    "Use them" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use them"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Använd"
+          }
+        }
+      }
+    },
+    "What you already have on this device stays as it is. If something differs, you're asked about it after you tap Import." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What you already have on this device stays as it is. If something differs, you're asked about it after you tap Import."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det du redan har på den här enheten förblir som det är. Skiljer sig något får du frågan när du har tryckt på Läs in."
+          }
+        }
+      }
+    },
+    "What you already have on this device stays as it is; if something differs, you're asked about it. Your other device waits up to 5 minutes. If it stops waiting, nothing is brought here." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What you already have on this device stays as it is; if something differs, you're asked about it. Your other device waits up to 5 minutes. If it stops waiting, nothing is brought here."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det du redan har på den här enheten förblir som det är. Skiljer sig något får du frågan om det. Din andra enhet väntar i upp till 5 minuter. Slutar den vänta hämtas ingenting hit."
           }
         }
       }
@@ -6129,6 +6209,38 @@
         }
       }
     },
+    "Dark background" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark background"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mörk bakgrund"
+          }
+        }
+      }
+    },
+    "Light background" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Light background"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ljus bakgrund"
+          }
+        }
+      }
+    },
     "Show details" : {
       "localizations" : {
         "en" : {
@@ -7814,6 +7926,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ditt namn"
+          }
+        }
+      }
+    },
+    "Your other device uses a different key for %@. Use it here? This device's key stays, so older mail still opens." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your other device uses a different key for %@. Use it here? This device's key stays, so older mail still opens."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Din andra enhet använder en annan nyckel för %@. Vill du använda den på den här enheten? Den här enhetens nyckel finns kvar, så äldre mejl går fortfarande att öppna."
           }
         }
       }
@@ -10640,54 +10768,6 @@
         }
       }
     },
-    "Restore" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restore"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Återställ"
-          }
-        }
-      }
-    },
-    "Restore from a file" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restore from a file"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Återställ från en fil"
-          }
-        }
-      }
-    },
-    "Restoring…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restoring…"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Återställer…"
-          }
-        }
-      }
-    },
     "Save it in Files or iCloud Drive, or mail it to yourself." : {
       "localizations" : {
         "en" : {
@@ -10956,46 +11036,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dina OpenPGP-nycklar"
-          }
-        }
-      }
-    },
-    "%lld settings" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld setting"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld settings"
-                }
-              }
-            }
-          }
-        },
-        "sv" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld inställning"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld inställningar"
-                }
-              }
-            }
           }
         }
       }
@@ -11444,22 +11484,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enheten har ingen kamera att skanna koden med. Skicka dina inställningar som fil i stället."
-          }
-        }
-      }
-    },
-    "Bring my setup" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bring my setup"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hämta mina inställningar"
           }
         }
       }

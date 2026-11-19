@@ -62,8 +62,13 @@ public enum ReadingConfiguration {
     }
 
     /// The message's HTML with a policy in front: no script, no frames, no fonts, no fetches but
-    /// pictures (attached ones always, remote ones once allowed), and a readable width.
-    public static func page(html: String, allowRemote: Bool) -> String {
+    /// pictures (attached ones always, remote ones once allowed), and a readable width. In dark mode
+    /// its colours are turned for dark (`DarkColors`), unless the owner chose to see it as written,
+    /// which is on white.
+    public static func page(html: String, allowRemote: Bool, dark: Bool = false, adaptsColors: Bool = true) -> String {
+        let turned = dark && adaptsColors
+        let scheme = turned ? "dark" : "light"
+        let background = dark && !adaptsColors ? "html { background: #fff; }" : ""
         let images = allowRemote ? "cid: data: http: https:" : "cid: data:"
         let policy =
             "default-src 'none'; script-src 'none'; object-src 'none'; frame-src 'none'; "
@@ -74,13 +79,14 @@ public enum ReadingConfiguration {
             <meta http-equiv="Content-Security-Policy" content="\(policy)">
             <meta http-equiv="x-dns-prefetch-control" content="off">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <meta name="color-scheme" content="light dark">
+            <meta name="color-scheme" content="\(scheme)">
             <style>
             body { font: -apple-system-body; margin: 0; padding: 0 16px 16px; word-wrap: break-word; }
             img { max-width: 100%; height: auto; }
             table { max-width: 100% !important; }
+            \(background)
             </style></head><body>
-            \(withoutDirectives(html))
+            \(withoutDirectives(turned ? DarkColors.adapt(html) : html))
             </body></html>
             """
     }

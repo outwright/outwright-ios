@@ -18,6 +18,9 @@ public protocol SecretStore: Sendable {
     func subscriptionAddress(_ key: UUID) throws(SyncError) -> Secret?
     func setSubscriptionAddress(_ secret: Secret, for key: UUID) throws(SyncError)
     func removeSubscriptionAddress(_ key: UUID) throws(SyncError)
+    /// What bringing a setup here remembers (`SetupMemory`), as JSON.
+    func setupMemory() throws(SyncError) -> Secret?
+    func setSetupMemory(_ secret: Secret) throws(SyncError)
 }
 
 /// Secrets held for the life of the process only (tests and previews).
@@ -25,6 +28,7 @@ public final class InMemorySecretStore: SecretStore {
     private let values = Mutex<[AccountID: Secret]>([:])
     private let refreshTokens = Mutex<[AccountID: Secret]>([:])
     private let addresses = Mutex<[UUID: Secret]>([:])
+    private let memory = Mutex<Secret?>(nil)
 
     public init() {}
 
@@ -60,4 +64,8 @@ public final class InMemorySecretStore: SecretStore {
     public func removeSubscriptionAddress(_ key: UUID) throws(SyncError) {
         _ = addresses.withLock { $0.removeValue(forKey: key) }
     }
+
+    public func setupMemory() throws(SyncError) -> Secret? { memory.withLock { $0 } }
+
+    public func setSetupMemory(_ secret: Secret) throws(SyncError) { memory.withLock { $0 = secret } }
 }

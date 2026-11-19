@@ -75,7 +75,7 @@ struct FirstRunRestoreSection: View {
             Text(ui: "Shows a code to scan with Outwright on the device that has your accounts.")
         }
         Section {
-            Button { isPicking = true } label: { Text(ui: "Restore from a file") }
+            Button { isPicking = true } label: { Text(ui: "Import from a file") }
                 .accessibilityIdentifier("addAccount.restore")
         } footer: {
             Text(ui: "A file made with Back up or Send as a file instead.")
@@ -92,9 +92,8 @@ enum SetupRow: Equatable, Hashable {
     case item(SetupItem)
     case counted(SetupItem.Kind, Int)
 
-    /// The kinds shown as a count: the settings' own names are keys, not words for the owner, and
-    /// contacts' keys run into the thousands.
-    static let countedKinds: Set<SetupItem.Kind> = [.settings, .contactKey]
+    /// The kinds shown as a count: contacts' keys run into the thousands.
+    static let countedKinds: Set<SetupItem.Kind> = [.contactKey]
 
     /// The items in order, those of a counted kind as one row where the first of them was.
     static func rows(_ items: [SetupItem]) -> [SetupRow] {
@@ -142,7 +141,6 @@ enum SetupRow: Equatable, Hashable {
     /// A count of the items of a counted kind.
     static func counted(_ kind: SetupItem.Kind, _ count: Int) -> Text? {
         switch kind {
-        case .settings: Text(ui: "\(count) settings")
         case .contactKey: Text(ui: "\(count) contacts' keys")
         default: nil
         }
@@ -163,9 +161,12 @@ struct SetupSkipRow: Equatable, Hashable {
     var reason: SkipReason
 }
 
-/// The items of a setup file by kind, one section each.
+/// The items of a setup file by kind, one section each. Before a restore, each account has a
+/// switch to bring it here or leave it off this device.
 struct SetupItemSections: View {
     let items: [SetupItem]
+    /// The restore the accounts' switches belong to; nil shows the accounts as plain rows.
+    var choosing: SetupModel?
 
     var body: some View {
         ForEach(Self.kinds, id: \.self) { kind in
@@ -173,7 +174,11 @@ struct SetupItemSections: View {
             if !ofKind.isEmpty {
                 Section {
                     ForEach(Array(SetupRow.rows(ofKind).enumerated()), id: \.offset) { _, row in
-                        row.text
+                        if let choosing, case .item(let item) = row, item.kind == .account {
+                            AccountSwitch(model: choosing, address: item.label)
+                        } else {
+                            row.text
+                        }
                     }
                 } header: {
                     SetupItemSections.title(kind)
@@ -183,7 +188,7 @@ struct SetupItemSections: View {
     }
 
     static let kinds: [SetupItem.Kind] = [
-        .account, .calendar, .ownKey, .contactKey, .settings, .addressSettings, .part
+        .account, .calendar, .ownKey, .contactKey, .addressSettings, .part
     ]
 
     static func title(_ kind: SetupItem.Kind) -> Text {
@@ -192,9 +197,29 @@ struct SetupItemSections: View {
         case .calendar: Text(ui: "Subscribed calendars")
         case .ownKey: Text(ui: "Your OpenPGP keys")
         case .contactKey: Text(ui: "Contacts' OpenPGP keys")
-        case .settings: Text(ui: "Settings")
         case .addressSettings: Text(ui: "OpenPGP settings")
         case .part: Text(ui: "Other")
         }
+    }
+}
+
+/// An account in what comes: on, it is brought here; off, it is left off this device (and an
+/// account already here is left as it is), remembered for the next time.
+private struct AccountSwitch: View {
+    let model: SetupModel
+    let address: String
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { model.isIncluded(address) }, set: { model.setIncluded(address, $0) })) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: address)
+                if !model.isIncluded(address) {
+                    Text(ui: "Not on this device")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.secondaryText)
+                }
+            }
+        }
+        .accessibilityIdentifier("setup.include.\(address.lowercased())")
     }
 }

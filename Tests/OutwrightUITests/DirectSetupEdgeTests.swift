@@ -27,6 +27,7 @@ extension DirectSetupModelTests {
         let sender = sender(link)
         await sender.scanned(code.text)
 
+        confirming(receiver)
         await sender.send()
         #expect(sender.state == .sent(device: "Pat's iPad"))
         #expect(await eventually { gate.asked })
@@ -56,6 +57,7 @@ extension DirectSetupModelTests {
         let sender = sender(link)
         await sender.scanned(code.text)
 
+        confirming(receiver)
         await sender.send()
         #expect(sender.state == .sent(device: "Pat's iPad"))
         let expected = SetupImportReport(added: Self.items, phoneContactsOff: Self.items)
@@ -148,6 +150,7 @@ extension DirectSetupModelTests {
             parameters: SetupModelTests.quick)
         let bundle = try await exchange.exportBundle().bundle
         try await channel.sendBundle(bundle)
+        confirming(receiver)
         _ = try await channel.receiveDone()
 
         #expect(await eventually { if case .report = receiver.state { true } else { false } })
@@ -308,13 +311,18 @@ extension DirectSetupModelTests {
         { if case .choosing = $0.state { true } else { false } }
     }
 
-    @Test func noDifferenceRestoresAtOnce() async throws {
+    /// The list shows even with nothing that differs (its accounts have switches); the button restores without
+    /// a question.
+    @Test func noDifferenceShowsTheListThenRestoresWithoutAsking() async throws {
         let link = FakeLink()
         let device = try SetupDifferenceChoiceTests.Device(password: "hunter2")
         let receiver = receiver(link, device: device)
         let sender = try sender(link, password: "hunter2")
         let sending = try await connected(receiver, sender)
 
+        #expect(await eventually { choosing(receiver) })
+        await receiver.restoreChosen()
+        #expect(receiver.setup.question == nil)
         await sending.value
         #expect(sender.state == .sent(device: "Pat's iPad"))
         #expect(await eventually { if case .report = receiver.state { true } else { false } })
@@ -330,7 +338,9 @@ extension DirectSetupModelTests {
 
         #expect(await eventually { choosing(receiver) })
         guard case .choosing(let preview) = receiver.state else { return }
-        #expect(preview.differences == [SetupDifferenceChoiceTests.difference])
+        #expect(preview.differences.map(\.id) == ["password:pat@example.org"])
+        // Nothing is asked before the button.
+        #expect(receiver.setup.question == nil)
         #expect(device.password == "chosen here")
         // The setup went: the sender waits for the other device, no longer sending.
         #expect(await eventually { sender.state == .waitingForReceiver })
@@ -350,8 +360,10 @@ extension DirectSetupModelTests {
         let sending = try await connected(receiver, sender)
         #expect(await eventually { choosing(receiver) })
 
-        receiver.setup.choose(SetupDifferenceChoiceTests.difference, fromFile: true)
-        await receiver.restoreChosen()
+        let restoring = Task { await receiver.restoreChosen() }
+        #expect(await eventually { receiver.setup.question != nil })
+        receiver.setup.answer(useOther: true)
+        await restoring.value
         await sending.value
         #expect(sender.state == .sent(device: "Pat's iPad"))
         #expect(device.password == "hunter2")
@@ -389,7 +401,6 @@ extension DirectSetupModelTests {
         await sending.value
         #expect(await eventually { receiver.state == .failed(.stopped) })
         #expect(device.password == "chosen here")
-        receiver.setup.choose(SetupDifferenceChoiceTests.difference, fromFile: true)
         await receiver.restoreChosen()
         #expect(receiver.state == .failed(.stopped))
         #expect(device.password == "chosen here")
@@ -410,9 +421,29 @@ extension DirectSetupModelTests {
 
         channel.close()
         #expect(await eventually { receiver.state == .failed(.lost) })
-        receiver.setup.choose(SetupDifferenceChoiceTests.difference, fromFile: true)
         await receiver.restoreChosen()
         #expect(receiver.state == .failed(.lost))
+        #expect(device.password == "chosen here")
+    }
+
+    /// The other device stops while a question is up: the question goes, nothing is restored, and the screen
+    /// says the other device stopped.
+    @Test func otherDeviceLeavingDuringQuestions() async throws {
+        let link = FakeLink()
+        let device = try SetupDifferenceChoiceTests.Device(password: "chosen here")
+        let receiver = receiver(link, device: device)
+        let sender = try sender(link, password: "hunter2")
+        let sending = try await connected(receiver, sender)
+        #expect(await eventually { choosing(receiver) })
+        let restoring = Task { await receiver.restoreChosen() }
+        #expect(await eventually { receiver.setup.question != nil })
+
+        sender.cancel()
+        await sending.value
+        await restoring.value
+
+        #expect(await eventually { receiver.state == .failed(.stopped) })
+        #expect(receiver.setup.question == nil)
         #expect(device.password == "chosen here")
     }
 }
