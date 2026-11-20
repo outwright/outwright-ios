@@ -105,7 +105,7 @@ extension AccountSyncer {
         if !deleted.isEmpty {
             try stored { try store.removeMessages(folder: folder, uids: deleted) }
         }
-        let queued = keepsQueuedFlags ? Set(try stored { try store.pendingActions() }.map(\.action.target)) : []
+        let queued = keepsQueuedFlags ? Set(try stored { try store.pendingActions() }.compactMap(\.action.target)) : []
         for (uid, set) in flags where !set.contains("\\Deleted") {
             guard let id = held[uid], !queued.contains(id), let row = try stored({ try store.message(id) }) else {
                 continue

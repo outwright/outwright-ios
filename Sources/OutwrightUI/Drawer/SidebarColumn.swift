@@ -19,6 +19,9 @@ struct SidebarColumn: View {
     /// The column of accounts (the drawer); on an iPad the rail holds them instead.
     var showsAccounts = true
     @State private var isEditingFavorites = false
+    @State var folderSheet: FolderSheet?
+    @State var deleting: (folder: Folder, warning: DeleteWarning)?
+    @State var folderProblem: String?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// The round badges and the column they stand in grow with the text, up to a limit the drawer can hold.
     @ScaledMetric(relativeTo: .title2) private var badgeSize: CGFloat = 52
@@ -44,6 +47,40 @@ struct SidebarColumn: View {
             isPresented: $isEditingFavorites, onDismiss: { app.openPending() },
             content: { FavoritesEditor(model: model) })
         .closesForEvents(isOpen: isEditingFavorites, inDrawer: true) { isEditingFavorites = false }
+        .sheet(item: $folderSheet, content: folderSheetView)
+        .alert(
+            Text(ui: "The folder couldn't be changed."),
+            isPresented: Binding(get: { folderProblem != nil }, set: { if !$0 { folderProblem = nil } }),
+            presenting: folderProblem
+        ) { _ in
+            Button { folderProblem = nil } label: { Text(ui: "OK") }
+        } message: { problem in
+            Text(problem)
+        }
+        // A folder change the server took, or refused, frees the drawer for the next.
+        .task {
+            do {
+                for try await _ in app.store.observeFolderChangeWaiting() { model.reload() }
+            } catch {
+                // The database can't be watched any more: the drawer reads it when it opens.
+            }
+        }
+        .closesForEvents(isOpen: folderSheet != nil, inDrawer: true) { folderSheet = nil }
+        .confirmationDialog(
+            Text(ui: "Delete folder?"),
+            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+            titleVisibility: .visible, presenting: deleting
+        ) { chosen in
+            Button(role: .destructive) {
+                folderProblem = app.deleteFolder(chosen.folder)
+                model.reload()
+            } label: {
+                Text(ui: "Delete")
+            }
+            .accessibilityIdentifier("folderEdit.delete")
+        } message: { chosen in
+            Text(chosen.warning.message(FolderNames.name(chosen.folder)))
+        }
     }
 
     // MARK: Accounts
@@ -171,6 +208,7 @@ struct SidebarColumn: View {
             ForEach(section.folders) { folder in
                 treeRow(folder)
             }
+            newFolderRow(id)
         }
     }
 
@@ -210,6 +248,7 @@ struct SidebarColumn: View {
     private func treeRow(_ folder: Folder) -> some View {
         HStack(spacing: 4) {
             folderRow(folder)
+                .contextMenu { folderMenu(folder) }
             if model.hasSubfolders(folder) {
                 let folded = model.isCollapsed(folder)
                 Button {

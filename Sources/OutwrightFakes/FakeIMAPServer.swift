@@ -64,6 +64,10 @@ public actor FakeIMAPServer {
     var unlisted: Set<String> = []
     var delimiter = "/"
     var underInbox = false
+    var refusals: [String: (code: String, left: Int)] = [:]
+    var subscribed: Set<String> = []
+    var makesSuperiors = false
+    var refusesInUse = false
     var announcesNamespace = false
     var appendDrop: (path: String, afterStoring: Bool)?
     var appendRefusal: String?
@@ -249,7 +253,6 @@ public actor FakeIMAPServer {
         case "LIST": list(id, tag)
         case "SELECT", "EXAMINE": answerSelect(id, tag, arguments)
         case "UNSELECT": unselect(id, tag)
-        case "CREATE": create(id, tag, arguments)
         case "APPEND": append(id, tag, arguments)
         case "ENABLE": enable(id, tag, arguments)
         case "GETMETADATA" where offersMetadata: getMetadata(id, tag, arguments)
@@ -261,7 +264,9 @@ public actor FakeIMAPServer {
             idleWaiters = []
             waiters.forEach { $0.resume() }
         default:
-            handleMessages(id, command)
+            if !handleFolderEdit(id, command.verb, tag, arguments) {
+                handleMessages(id, command)
+            }
         }
     }
 

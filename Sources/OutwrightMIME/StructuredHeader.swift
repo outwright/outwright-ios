@@ -94,7 +94,11 @@ private struct ParamCollector {
     func resolve() -> [String: String] {
         var result = plain
         for (name, list) in pieces {
-            result[name] = Self.join(list.sorted { $0.index < $1.index })
+            // A section given twice counts once, the first.
+            var seen = Set<Int>()
+            let sections = list.enumerated().sorted { ($0.element.index, $0.offset) < ($1.element.index, $1.offset) }
+                .map(\.element).filter { seen.insert($0.index).inserted }
+            result[name] = Self.join(sections)
         }
         return result
     }
@@ -108,7 +112,7 @@ private struct ParamCollector {
                 continue
             }
             var text = piece.text
-            if position == 0 {
+            if position == 0, piece.index == 0 { // a charset is said by section 0 only
                 let parts = text.split(separator: "'", maxSplits: 2, omittingEmptySubsequences: false)
                 if parts.count == 3 {
                     label = String(parts[0])

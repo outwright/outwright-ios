@@ -20,9 +20,12 @@ public struct Address: Hashable, Sendable {
     }
 }
 
-/// Reads one address-list header (RFC 5322 section 3.4), leniently. Groups are flattened.
+/// Reads one address-list header (RFC 5322 section 3.4), leniently. Groups are flattened. The
+/// display text is kept without its quotes, for a name, and beside it the same text as written
+/// (`spec`) or the text in angle brackets, quotes and escapes kept, for an address.
 struct AddressScanner {
     private var display = ""
+    private var spec = ""
     private var angle = ""
     private var comment = ""
     private var sawAngle = false
@@ -48,7 +51,17 @@ struct AddressScanner {
             angle.append(char)
         } else {
             display.append(char)
+            spec.append(char)
             if char == "@" { displayHasAt = true }
+        }
+    }
+
+    /// A quote or an escape, for the address text only.
+    private mutating func keep(_ char: Character) {
+        if inAngle {
+            angle.append(char)
+        } else {
+            spec.append(char)
         }
     }
 
@@ -69,8 +82,10 @@ struct AddressScanner {
 
     private mutating func feedQuoted(_ char: Character) {
         if char == "\\" {
+            keep(char)
             escaped = true
         } else if char == "\"" {
+            keep(char)
             inQuote = false
         } else {
             append(char)
@@ -89,7 +104,9 @@ struct AddressScanner {
 
     private mutating func feedPlain(_ char: Character) -> Bool {
         switch char {
-        case "\"": inQuote = true
+        case "\"":
+            keep(char)
+            inQuote = true
         case "(": parenDepth = 1
         case "<":
             inAngle = true
@@ -101,6 +118,7 @@ struct AddressScanner {
         case ":":
             if !inAngle && !sawAngle && !displayHasAt {
                 display = ""
+                spec = ""
             } else { append(char) }
         default: append(char)
         }
@@ -110,6 +128,7 @@ struct AddressScanner {
     private mutating func finishItem() {
         defer {
             display = ""
+            spec = ""
             angle = ""
             comment = ""
             sawAngle = false
@@ -122,10 +141,10 @@ struct AddressScanner {
         let email: String
         var nameText: String
         if sawAngle {
-            email = angle.filter { !$0.isWhitespace }
+            email = MailAddress.addrSpec(angle)
             nameText = display
         } else {
-            email = display.filter { !$0.isWhitespace }
+            email = MailAddress.addrSpec(spec)
             nameText = comment
         }
         guard !email.isEmpty else { return }

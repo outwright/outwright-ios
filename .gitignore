@@ -9,3 +9,4 @@ plan/
 App/Info.generated.plist
 .superpowers/
 App/NotificationService/Info.generated.plist
+engine/bin/

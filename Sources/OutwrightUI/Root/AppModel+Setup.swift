@@ -94,7 +94,7 @@ extension AppModel {
         let request = SetupFileRequest(url: url)
         // The newer file takes the place of one still waiting, whose handed-over copy goes.
         if let waiting = pendingSetupFile { SetupModel.discardHandedOver(waiting.url) }
-        if isAddingAccount, addingFirstAccount {
+        if isAddingAccount, addingFirstAccount, !firstRunHeld {
             pendingSetupFile = request
             isAddingAccount = false
         } else if isPresenting || eventToShow != nil {

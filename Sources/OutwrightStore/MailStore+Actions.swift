@@ -100,7 +100,8 @@ extension MailStore {
     /// the message is in does nothing.
     public func apply(_ action: MailAction) throws(StoreError) {
         let queuedFor: String? = try write { database in
-            let from = try Self.source(database, action.target)
+            guard let target = action.target else { throw StoreError.noSuchMessage }
+            let from = try Self.source(database, target)
             guard try Self.perform(database, action, from: from) else { return nil }
             try Self.queue(database, action, from: from)
             return from.account
@@ -115,7 +116,8 @@ extension MailStore {
         let queuedFor: Set<String> = try write { database in
             var accounts = Set<String>()
             for action in actions {
-                let from = try Self.source(database, action.target)
+                guard let target = action.target else { throw StoreError.noSuchMessage }
+                let from = try Self.source(database, target)
                 guard try Self.perform(database, action, from: from) else { continue }
                 try Self.queue(database, action, from: from)
                 accounts.insert(from.account)
@@ -159,10 +161,15 @@ extension MailStore {
                 return try move(database, id, to: try folder(database, from, kind: .trash), from: from)
             }
         case .send(let id), .saveDraft(let id):
-            // The owner tries again: a refusal before no longer stands.
-            try database.execute(sql: "UPDATE message SET notSent = NULL WHERE id = ?", arguments: [id.raw])
+            // The owner tries again: a refusal before no longer stands. What the server had of the
+            // draft is not this version: until the server numbers this one, it is the phone's only.
+            try database.execute(
+                sql: "UPDATE message SET notSent = NULL, serverKnown = 0 WHERE id = ?", arguments: [id.raw])
         case .fileSent:
             break
+        case .createFolder, .renameFolder, .deleteFolder:
+            // Queued by the folder edits, never through `apply`.
+            return false
         }
         return true
     }
@@ -203,11 +210,13 @@ extension MailStore {
                 else { return }
                 try Self.number(database, message, Int64(newUID))
             } else {
+                // Only a copy of what the server had: a draft edited here (never numbered as it is)
+                // stays, its edits being on the phone alone.
+                let stray = "id = ? AND uid = 0 AND serverKnown = 1"
                 try database.execute(
-                    sql: "DELETE FROM message_fts WHERE rowid IN (SELECT id FROM message WHERE id = ? AND uid = 0)",
+                    sql: "DELETE FROM message_fts WHERE rowid IN (SELECT id FROM message WHERE \(stray))",
                     arguments: [message.raw])
-                try database.execute(
-                    sql: "DELETE FROM message WHERE id = ? AND uid = 0", arguments: [message.raw])
+                try database.execute(sql: "DELETE FROM message WHERE \(stray)", arguments: [message.raw])
             }
         }
     }

@@ -147,12 +147,6 @@ public actor IMAPClient {
     }
 
     /// UIDs in the selected folder whose internal date is on or after `since`'s day (UTC).
-    public func uids(since: Date) async throws(IMAPError) -> [UInt32] {
-        try await perform { () async throws(IMAPError) in
-            try await search([.word("SINCE"), .word(InternalDate.searchDate(since))])
-        }
-    }
-
     /// UIDs of the mail that arrived before `before` (and on or after `since`, when given).
     public func uids(since: Date?, before: Date) async throws(IMAPError) -> [UInt32] {
         try await perform { () async throws(IMAPError) in

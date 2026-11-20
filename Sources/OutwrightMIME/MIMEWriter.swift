@@ -57,11 +57,15 @@ public enum MIMEWriter {
         headers.append("MIME-Version: 1.0")
         for extra in message.extraHeaders {
             let name = String(extra.name.unicodeScalars.filter { (0x21..<0x7F).contains($0.value) && $0 != ":" })
-            guard !name.isEmpty else { continue }
+            // A name too long for a line with its value is no header anyone wrote on purpose.
+            guard !name.isEmpty, name.utf8.count <= maxHeaderName else { continue }
             headers.append(name + ": " + WriterSupport.unstructured(extra.value, used: name.utf8.count + 2))
         }
         return headers
     }
+
+    /// The longest extra header name written.
+    private static let maxHeaderName = 76
 
     private static let textHeaders = ["Content-Transfer-Encoding: quoted-printable"]
 

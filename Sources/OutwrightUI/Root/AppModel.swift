@@ -73,9 +73,9 @@ public final class AppModel {
     /// Asks the open screen-level sheets to close (each one counts), so a tapped reminder's event can
     /// show.
     public private(set) var localSheetCloses = 0
-    @ObservationIgnored private var openLocalSheets: Set<UUID> = []
+    @ObservationIgnored var openLocalSheets: Set<UUID> = []
     /// The local sheets that stand in the drawer, which go when it does.
-    @ObservationIgnored private var drawerLocalSheets: Set<UUID> = []
+    @ObservationIgnored var drawerLocalSheets: Set<UUID> = []
     /// Counts midnights and time-zone changes, which the calendar lays its days out again for.
     public internal(set) var clockChanges = 0
     /// The app's clock, which the calendar reads now and today from (a test may move it).
@@ -106,6 +106,17 @@ public final class AppModel {
     public var isShowingHelp = false
     /// A setup file opened from elsewhere: the one shown, and the one waiting for a sheet to close.
     var setupFileToOpen: SetupFileRequest?
+    /// Bring my setup from another device, opened from an empty screen. Shown from the root, so it stays
+    /// while the empty screen goes as the accounts arrive.
+    var isBringingSetup = false
+    /// The first run's Bring my setup is restoring or showing its report: a setup file opened meanwhile
+    /// waits instead of closing the first run over it, and opens once the owner leaves it.
+    var firstRunHeld = false {
+        didSet {
+            guard oldValue, !firstRunHeld, isAddingAccount, addingFirstAccount, pendingSetupFile != nil else { return }
+            isAddingAccount = false
+        }
+    }
     var pendingSetupFile: SetupFileRequest?
     /// The search button in the header opens search.
     public var isSearching = false { didSet { searchChanged() } }
@@ -155,6 +166,8 @@ public final class AppModel {
     @ObservationIgnored var onWiFi: @Sendable () async -> Bool = { false }
     /// Where Drafts was opened from with the Drafts button, to go back to when it is closed.
     @ObservationIgnored var scopeBeforeDrafts: InboxScope?
+    /// The folder refusal each account's banner shows, so dismissing it clears that one only.
+    @ObservationIgnored var shownFolderRefusals: [AccountID: String] = [:]
     /// The whole refresh a pull starts behind it; one at a time.
     @ObservationIgnored private var fullRefresh: Task<Void, Never>?
 
@@ -366,28 +379,11 @@ public final class AppModel {
     /// A sheet where the owner may have work under way is in front.
     var holdsWork: Bool {
         composeRequest != nil || contactEditor != nil || eventEditor != nil || (isSearching && !searchInColumns)
-            || isShowingSettings || isAddingAccount || setupFileToOpen != nil
+            || isShowingSettings || isAddingAccount || setupFileToOpen != nil || isBringingSetup
     }
 
     /// A sheet other than an event's details is in front.
     var isPresenting: Bool {
         holdsWork || personToShow != nil || isShowingHelp || !openLocalSheets.isEmpty
-    }
-
-    /// A sheet a screen shows over itself, with nothing unsaved in it (a filter, a picker, an
-    /// attachment), opened or closed: see `closesForEvents`.
-    func localSheet(_ id: UUID, isOpen: Bool, inDrawer: Bool = false) {
-        if isOpen { openLocalSheets.insert(id) } else { openLocalSheets.remove(id) }
-        if inDrawer {
-            if isOpen { drawerLocalSheets.insert(id) } else { drawerLocalSheets.remove(id) }
-        }
-    }
-
-    /// The drawer went. Its sheets went with it, and may never have said so: they are forgotten, and
-    /// what waited for them is shown.
-    func drawerClosed() {
-        openLocalSheets.subtract(drawerLocalSheets)
-        drawerLocalSheets = []
-        openPending()
     }
 }

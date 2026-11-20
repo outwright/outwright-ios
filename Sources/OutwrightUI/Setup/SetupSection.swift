@@ -57,11 +57,10 @@ struct SetupSection: View {
     }
 }
 
-/// The first run's ways to bring a setup instead of adding an account: straight from another device,
-/// or from a file, whose restore opens once the first-run screen has closed for it.
-struct FirstRunRestoreSection: View {
+/// The first run's question, before the address is typed: bring the setup straight from another device
+/// instead of adding an account.
+struct FirstRunBringSection: View {
     let app: AppModel
-    @State private var isPicking = false
 
     var body: some View {
         Section {
@@ -71,9 +70,22 @@ struct FirstRunRestoreSection: View {
                 Text(ui: "Bring my setup from another device")
             }
             .accessibilityIdentifier("addAccount.bringSetup")
+        } header: {
+            Text(ui: "Already use Outwright on another device?")
+                .textCase(nil)
         } footer: {
             Text(ui: "Shows a code to scan with Outwright on the device that has your accounts.")
         }
+    }
+}
+
+/// The first run's other way to bring a setup: from a file, whose restore opens once the first-run
+/// screen has closed for it.
+struct FirstRunRestoreSection: View {
+    let app: AppModel
+    @State private var isPicking = false
+
+    var body: some View {
         Section {
             Button { isPicking = true } label: { Text(ui: "Import from a file") }
                 .accessibilityIdentifier("addAccount.restore")

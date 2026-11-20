@@ -231,7 +231,8 @@ public enum SMTPClient {
         if reply.code == 535 || reply.code == 534 || reply.code == 538 || reply.code == 454 {
             throw .authenticationFailed
         }
-        throw rejection(reply)
+        // The server's words after a credential may repeat it; never pass them on.
+        throw .rejected(code: reply.code, text: "")
     }
 
     private static func expect(_ wire: Wire, _ codes: Int...) async throws(SMTPError) {
@@ -262,11 +263,10 @@ public enum SMTPClient {
         String(String.UnicodeScalarView(text.unicodeScalars.filter { $0 != "\r" && $0 != "\n" && $0 != "\0" }))
     }
 
-    /// An address fit for a path: no CR, LF, NUL, angle brackets or spaces.
+    /// An address fit for a path: no CR, LF or NUL, and outside a quoted local part (RFC 5321
+    /// section 4.1.2) no angle brackets or white space.
     static func address(_ text: String) -> String {
-        String(String.UnicodeScalarView(sanitized(text).unicodeScalars.filter {
-            $0 != "<" && $0 != ">" && $0 != " " && $0 != "\t"
-        }))
+        MailAddress.addrSpec(sanitized(text), alsoDrop: ["<", ">"])
     }
 
     /// The message with every line ending as CR LF, lines that start with a dot doubled, a

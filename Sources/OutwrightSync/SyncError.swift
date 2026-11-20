@@ -39,6 +39,9 @@ public enum SyncError: Error, Sendable, Equatable {
     case phoneContactsDenied
     /// A subscribed calendar could not be fetched or read.
     case subscription(SubscriptionFailure)
+    /// The server refused for good to make, rename, move or delete the owner's folder (its name):
+    /// the change is undone here.
+    case folderChangeRefused(String)
 }
 
 extension SyncError {
@@ -65,6 +68,12 @@ extension SyncError {
         case .imap(.net), .smtp(.net): true
         default: false
         }
+    }
+
+    /// A folder change refused for good (the store keeps it for the owner).
+    var isFolderRefusal: Bool {
+        if case .folderChangeRefused = self { return true }
+        return false
     }
 
     /// Whether the IMAP connection is gone and has to be opened again.

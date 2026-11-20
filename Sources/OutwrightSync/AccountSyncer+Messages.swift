@@ -29,6 +29,10 @@ extension AccountSyncer {
         // A kind the account lacks gets a folder here, made on the server when first used, where
         // the server keeps its others.
         let prefix = try await imap { try await client.personalNamespace() }?.prefix ?? Self.madePrefix(listed)
+        folderPrefix = prefix
+        if try stored({ try store.folderPrefix(account.id) }) != prefix {
+            try stored { try store.setFolderPrefix(prefix, for: account.id) }
+        }
         let listedPaths = Set(listed.map(\.path))
         for (kind, name) in Self.madeWhenMissing {
             let serversOwn = folders.first { $0.kind == kind }
@@ -49,8 +53,20 @@ extension AccountSyncer {
                     unread: 0, isFavorite: byPath[path]?.isFavorite ?? false))
             }
         }
+        // Read now, right before the queue: a change made while the server was asked is in both. A
+        // rename landing between the two reads is in the queue only, and keeps the server's name a sync.
+        let current = try stored { try store.folders(account.id) }
+        let queued = try stored { try store.pendingActions() }.filter { $0.accountID == account.id }.map(\.action)
+        folders = FolderQueue.project(folders, known: current, queued: queued)
         try stored { try store.replaceFolders(folders, for: account.id) }
         return listed
+    }
+
+    /// True while the folder's own creation, or a rename of it or above it, is still queued: the
+    /// server doesn't have it at its path yet.
+    func waitsForFolderChange(_ folder: Folder) throws(SyncError) -> Bool {
+        let queued = try stored { try store.pendingActions() }.filter { $0.accountID == account.id }.map(\.action)
+        return FolderQueue.waits(folder, queued: queued)
     }
 
     /// `INBOX.` (with the server's delimiter) when every folder but the Inbox is under it, as on
@@ -83,6 +99,7 @@ extension AccountSyncer {
         guard let folder = try stored({ try store.folders(account.id) }).first(where: { $0.id == id }) else {
             throw .store("noSuchFolder")
         }
+        if try waitsForFolderChange(folder) { return nil }
         let remembered = try stored { try store.highestModSeq(id) }
         let held = try stored { try store.folderIndex(id) }
         let point = resyncPoint(folder, remembered: remembered, held: held)
@@ -119,8 +136,7 @@ extension AccountSyncer {
             remembered: renumbered ? nil : remembered,
             asked: changes != nil, status: status, changes: changes ?? .none)
         try await reconcile(id, local, client, since)
-        let windowStart = now().addingTimeInterval(-Self.window)
-        let inWindow = try await imap { try await client.uids(since: windowStart) }
+        let inWindow = try await uidsToFetch(id, local, client)
         let fresh = Set(inWindow).subtracting(try notNew(id, local)).sorted()
         guard !fresh.isEmpty else {
             return nil
@@ -131,6 +147,21 @@ extension AccountSyncer {
             overrides: try stored { try store.overrides() })
         let mail = NewMail(folder: folder, uidValidity: status.uidValidity, uids: fresh, builder: builder)
         return try await fetchBatch(mail, client, selected: true)
+    }
+
+    /// The server's uids within the window; and where the owner has looked further back (older
+    /// mail fetched), a message that came into the folder since (moved here), which has a uid above
+    /// every one held. A folder held to its start asks for no date at all.
+    func uidsToFetch(_ id: FolderID, _ local: [UInt32: MessageID], _ client: IMAPClient) async throws(SyncError)
+        -> [UInt32] {
+        let windowStart = now().addingTimeInterval(-Self.window)
+        var found = try await imap { try await client.uids(since: windowStart) }
+        if let heldSince = try stored({ try store.heldSince(id) }), heldSince < windowStart {
+            let since = heldSince.timeIntervalSince1970 > 0 ? heldSince : nil
+            let highest = local.keys.max() ?? 0
+            found += try await imap { try await client.uids(since: since, above: highest) }
+        }
+        return found
     }
 
     /// First look at a folder known only here (the Archive made for a move): what was moved into

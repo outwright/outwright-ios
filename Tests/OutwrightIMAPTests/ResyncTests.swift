@@ -9,6 +9,18 @@ import Testing
 
 /// CONDSTORE and QRESYNC (RFC 7162) against the fake server.
 @Suite struct ResyncTests {
+    /// QRESYNC is turned on after any sign-in, an access token's as much as a password's.
+    @Test func anOAuthSignInEnablesQResyncToo() async throws {
+        let server = FakeIMAPServer()
+        await server.acceptToken("synthetic-access-token-1")
+        try await withServer(server) { port in
+            let client = try await IMAPClient.connect(endpoint(port))
+            try await client.authenticate(user: "jk@example.org", accessToken: Secret("synthetic-access-token-1"))
+            #expect(await client.resyncMode == .qresync)
+            await client.logout()
+        }
+    }
+
     @Test func enablesQResyncWhenOffered() async throws {
         try await withClient(FakeIMAPServer()) { client in
             #expect(await client.resyncMode == .qresync)
@@ -190,6 +202,7 @@ import Testing
                     ? alphabet[Int.random(in: 0..<alphabet.count, using: &generator)]
                     : UInt8.random(in: 0...255, using: &generator)
             }
+            // swiftlint:disable:next optional_data_string_conversion
             let text = String(decoding: noise, as: UTF8.self)
             if let ranges = IMAPClient.uidRanges(Substring(text)) {
                 #expect(ranges.allSatisfy { $0.lowerBound > 0 })

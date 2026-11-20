@@ -47,6 +47,8 @@ public final class DrawerModel {
     /// Favorites, then each account's folders as far as they are unfolded.
     public private(set) var sections: [DrawerSection] = []
     public private(set) var failed = false
+    /// The accounts with a folder change waiting for the server: no other folder change is offered.
+    public private(set) var waitingAccounts: Set<AccountID> = []
     /// Every folder of each account in view, unfolded or not, in tree order.
     private var trees: [DrawerSection] = []
     private var depths: [FolderID: Int] = [:]
@@ -143,6 +145,10 @@ public final class DrawerModel {
         }
     }
 
+    public func isWaiting(_ account: AccountID) -> Bool {
+        waitingAccounts.contains(account)
+    }
+
     public func reload() {
         do {
             accounts = try store.accounts()
@@ -166,6 +172,7 @@ public final class DrawerModel {
                 }
             }
             trees = perAccount
+            waitingAccounts = try store.accountsWithFolderChangeWaiting()
             self.depths = depths
             self.parents = parents
             self.parentOf = parentOf

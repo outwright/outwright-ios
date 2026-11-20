@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import Foundation
-import OutwrightModel
+public import OutwrightModel
 
 /// What each account last failed with, for the banner.
 extension SyncCoordinator {
@@ -16,6 +16,12 @@ extension SyncCoordinator {
             return
         }
         syncLog.error("Sync failed: \(errorCode(error), privacy: .public)")
+        // The store keeps it until the owner has seen it; it is no sync problem.
+        if case .folderChangeRefused = error {
+            lastErrors[id] = nil
+            unreachableInARow[id] = nil
+            return
+        }
         if error.isUnreachable {
             let count = (unreachableInARow[id] ?? 0) + 1
             unreachableInARow[id] = count

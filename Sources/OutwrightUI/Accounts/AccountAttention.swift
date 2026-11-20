@@ -14,6 +14,8 @@ public struct AttentionItem: Identifiable, Sendable, Hashable {
         case drafts
         /// The provider's sign-in, once more.
         case signInAgain
+        /// Nothing to put right: the owner has seen it, and it goes.
+        case dismiss
     }
 
     /// Stable per source and kind, such as "openpgp.noKey"; the same for every account.

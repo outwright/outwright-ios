@@ -326,6 +326,31 @@ import Testing
         #expect(app.setupFileToOpen != nil)
     }
 
+    @Test func aFileOpenedWhileBringingWaitsForTheBringToClose() throws {
+        let app = try Self.app()
+        app.isBringingSetup = true
+        app.openSetupFile(Self.file)
+        #expect(app.setupFileToOpen == nil)
+        app.isBringingSetup = false
+        app.openPending()
+        #expect(app.setupFileToOpen != nil)
+    }
+
+    @Test func aFileOpenedWhileTheFirstRunRestoresWaitsForIt() throws {
+        let app = try Self.app()
+        app.isAddingAccount = true
+        app.firstRunHeld = true
+        app.openSetupFile(Self.file)
+        #expect(app.isAddingAccount, "the first run stays while its restore runs or reports")
+        #expect(app.setupFileToOpen == nil)
+
+        // Left without an account (Done after nothing came, or Back): the first run closes for the file.
+        app.firstRunHeld = false
+        #expect(!app.isAddingAccount)
+        app.openPending()
+        #expect(app.setupFileToOpen != nil)
+    }
+
     /// A folder standing in for Documents/Inbox, with a setup file iOS handed over in it.
     static func inbox(with name: String) async throws -> (inbox: URL, file: URL, passphrase: Passphrase) {
         let (made, passphrase) = try await SetupModelTests.file()

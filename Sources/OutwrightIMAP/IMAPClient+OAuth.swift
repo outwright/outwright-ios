@@ -37,6 +37,7 @@ extension IMAPClient {
                 throw .authenticationFailed
             }
             try await refreshCapabilities(from: completion.code)
+            try await enableResync()
         }
     }
 }

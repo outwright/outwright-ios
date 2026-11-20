@@ -66,7 +66,7 @@ extension InboxModel {
     /// Changes made at once, without undo (only moves and deletes wait out the window). A staged batch
     /// that holds any of the same messages is committed first, so the changes reach the store in order.
     func now(_ actions: [MailAction]) {
-        commitIfStaged(actions.map(\.target))
+        commitIfStaged(actions.compactMap(\.target))
         var broke = false
         do {
             try Conversation.apply(actions, store: store)

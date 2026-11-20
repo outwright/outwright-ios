@@ -277,7 +277,7 @@ public final class SearchModel {
 
     /// The mail the servers brought in goes, unless a change to it still waits for the server.
     func removeBroughtIn() {
-        let waiting = Set(((try? store.pendingActions()) ?? []).map { Self.message(of: $0.action) })
+        let waiting = Set(((try? store.pendingActions()) ?? []).compactMap { Self.message(of: $0.action) })
         for id in broughtIn where !waiting.contains(id) {
             try? store.removeMessage(id)
         }
@@ -302,7 +302,7 @@ public final class SearchModel {
         schedule(after: .zero)
     }
 
-    static func message(of action: MailAction) -> MessageID {
+    static func message(of action: MailAction) -> MessageID? {
         action.target
     }
 

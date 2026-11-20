@@ -10,7 +10,8 @@ extension IMAPClient {
             return .bad(text)
         }
         let name = code?.split(separator: " ").first?.uppercased()
-        return name == "UNAVAILABLE" || name == "SERVERBUG" ? .unavailable(text) : .no(text)
+        // In use (RFC 5530): another session holds it; worth asking again later.
+        return name == "UNAVAILABLE" || name == "SERVERBUG" || name == "INUSE" ? .unavailable(text) : .no(text)
     }
 
     /// Throws for NO and BAD; a NO that says the folder is missing is `.folderMissing`.

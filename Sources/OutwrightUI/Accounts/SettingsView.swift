@@ -66,6 +66,14 @@ struct SettingsView: View {
                         ModuleLabel("Add account", systemImage: Icons.add)
                     }
                     .accessibilityIdentifier("settings.addAccount")
+                    if !app.accounts.isEmpty {
+                        NavigationLink {
+                            SendSetupView(app: app)
+                        } label: {
+                            ModuleLabel("Move to another device", systemImage: Icons.moveDevice)
+                        }
+                        .accessibilityIdentifier("settings.accounts.moveDevice")
+                    }
                     if app.accounts.count > 1 {
                         Picker(selection: defaultAccountSelection) {
                             ForEach(app.accounts) { account in

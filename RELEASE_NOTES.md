@@ -1,7 +1,13 @@
 # Release notes
 
+## 0.2.2 (2026-11-20)
+
+- A message moved between folders no longer shows twice when the server never confirmed the move, and mail you have looked back to keeps showing after a move.
+- A new iPhone or iPad asks first whether you already use Outwright on another device, and brings your setup from it; the device with your accounts sends it from the account list in Settings.
+
 ## 0.2.1 (2026-11-19)
 
+- Make, rename, move and delete your mail folders from the folder list, and make a new folder right from Move to.
 - Bringing your setup to another device brings your accounts, keys and signatures but not the app's settings, asks about each difference on its own, and remembers your answers for the next time.
 - Search on the server also looks in folders you haven't opened yet, such as Sent right after adding an account.
 
@@ -80,3 +86,17 @@ Improvements:
 - A folder learns of mail moved away elsewhere on servers that answer QRESYNC before [CLOSED].
 - Various bug fixes and improvements
 
+
+## Daemon
+
+The Outwright daemon and the `outwright` command for the Mac, released on their own.
+
+### Unreleased
+
+- The first release: Outwright Agent.app keeps your mail, calendar and contacts in sync on the Mac, starts at login, and gives the `outwright` command and its MCP server to the AI tools you use. Install it with Homebrew, from the download, or with `go install`.
+- Accounts on your own server (IMAP, SMTP, CalDAV and CardDAV) and Microsoft 365 and Outlook.com accounts, signed in through the browser.
+- Search, read, write, reply, forward, move, flag and delete mail; make and change events and meetings, answer invitations and subscribe to published calendars; search and edit contacts.
+- OpenPGP signed and encrypted mail, and S/MIME with Outwright Plus.
+- Bring your setup from your phone, by a setup file or by a pairing code, and make a setup file to take elsewhere.
+- An AI tool asks you, in a system alert, before it sends, deletes or changes an account.
+- A journal of what went wrong with each account, and an anonymised report to send for support.

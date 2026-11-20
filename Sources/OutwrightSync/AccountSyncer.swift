@@ -43,6 +43,9 @@ public actor AccountSyncer {
     /// A push's fetch runs without sending the queue: the server's flags then leave the messages
     /// with changes still queued alone (the server has not heard of them yet).
     var keepsQueuedFlags = false
+    /// Where a new top-level folder goes (the personal namespace's prefix), as the last folder
+    /// sync found it; nil before one.
+    public internal(set) var folderPrefix: String?
 
     public init(
         account: Account, store: MailStore, secrets: any SecretStore,
@@ -282,7 +285,8 @@ public actor AccountSyncer {
             return first
         }
         let second = try await runner.run(followUps)
-        return first ?? second
+        // A folder refusal is kept in the store for the owner: any other error is told first.
+        return [first, second].compactMap { $0 }.first { !$0.isFolderRefusal } ?? first ?? second
     }
 }
 

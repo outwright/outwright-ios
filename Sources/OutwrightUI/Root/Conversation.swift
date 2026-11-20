@@ -47,8 +47,8 @@ public enum SyncProblem: Equatable, Sendable {
     case notSent
 
     public init(_ error: SyncError) {
-        if error.sendRefusal != nil {
-            self = .notSent
+        if let refused = Self.refusal(error) {
+            self = refused
             return
         }
         switch error {
@@ -62,6 +62,14 @@ public enum SyncProblem: Equatable, Sendable {
         case .phoneContacts: self = .phoneContacts
         default: self = .server
         }
+    }
+
+    /// A message the server refused for good.
+    private static func refusal(_ error: SyncError) -> SyncProblem? {
+        if error.sendRefusal != nil {
+            return .notSent
+        }
+        return nil
     }
 
     /// A short reason, in the interface's language.

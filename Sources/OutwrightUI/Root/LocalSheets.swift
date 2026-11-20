@@ -30,3 +30,23 @@ extension View {
         modifier(ClosesForEvents(isOpen: isOpen, inDrawer: inDrawer, close: close))
     }
 }
+
+/// The sheets screens show over themselves, as the app keeps them.
+extension AppModel {
+    /// A sheet a screen shows over itself, with nothing unsaved in it (a filter, a picker, an
+    /// attachment), opened or closed: see `closesForEvents`.
+    func localSheet(_ id: UUID, isOpen: Bool, inDrawer: Bool = false) {
+        if isOpen { openLocalSheets.insert(id) } else { openLocalSheets.remove(id) }
+        if inDrawer {
+            if isOpen { drawerLocalSheets.insert(id) } else { drawerLocalSheets.remove(id) }
+        }
+    }
+
+    /// The drawer went. Its sheets went with it, and may never have said so: they are forgotten, and
+    /// what waited for them is shown.
+    func drawerClosed() {
+        openLocalSheets.subtract(drawerLocalSheets)
+        drawerLocalSheets = []
+        openPending()
+    }
+}

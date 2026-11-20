@@ -102,6 +102,7 @@ public enum Icons {
     public static let help = "questionmark.circle"
     public static let settings = "gearshape"
     public static let add = "plus"
+    public static let newFolder = "folder.badge.plus"
     public static let edit = "pencil"
     public static let details = "info.circle"
     public static let lightBackground = "sun.max"

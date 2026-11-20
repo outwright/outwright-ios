@@ -55,7 +55,9 @@ struct SplitMix64: RandomNumberGenerator {
 
     @Test func parserNeverThrowsUnboundedOrTraps() {
         var rng = SplitMix64(state: 42)
-        let seeds = [Fixtures.alternative, Fixtures.mixed]
+        let quoted = Data(("From: Bob <\"a b\"@example.org>\r\nTo: \"a\\\"b\"@example.org, \"ab\"@example.org,"
+            + " a @ example.org\r\nCc: \"x \\\\ y\"@ä.example\r\n\r\nHi\r\n").utf8)
+        let seeds = [Fixtures.alternative, Fixtures.mixed, quoted]
         let previewHeaders = [
             "Content-Type: multipart/alternative; boundary=\"b1\"\r\n\r\n",
             "Content-Type: multipart/mixed; boundary=\"outer\"\r\n\r\n",

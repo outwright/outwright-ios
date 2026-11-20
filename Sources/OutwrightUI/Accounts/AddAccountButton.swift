@@ -4,8 +4,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// What the empty Mail, Calendar and Contacts show with no account: the way in to Add account, and
-/// to restoring a setup file.
+/// What the empty Mail, Calendar and Contacts show with no account: the way in to Add account, to
+/// bringing the setup straight from another device, and to restoring a setup file.
 struct NoAccountView: View {
     let app: AppModel
     let icon: String
@@ -21,6 +21,12 @@ struct NoAccountView: View {
             Button { app.isAddingAccount = true } label: { Text(ui: "Add account") }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("noAccount.add")
+            Text(ui: "Already use Outwright on another device?")
+                .font(.footnote)
+                .foregroundStyle(Theme.secondaryText)
+                .padding(.top, 8)
+            Button { app.isBringingSetup = true } label: { Text(ui: "Bring my setup from another device") }
+                .accessibilityIdentifier("noAccount.bringSetup")
             Button { isPicking = true } label: { Text(ui: "Import from a file") }
                 .accessibilityIdentifier("noAccount.restore")
         }

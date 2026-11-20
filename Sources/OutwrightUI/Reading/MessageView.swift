@@ -86,7 +86,10 @@ struct MessageView: View {
             content: { LinkConfirmation(url: $0.url).presentationDetents([.medium]) })
         .sheet(
             isPresented: $isMoving, onDismiss: { app.openPending() },
-            content: { MovePicker(folders: model.folders()) { model.move(to: $0) } })
+            content: {
+                let folders = model.folders()
+                MovePicker(folders: folders, newFolder: app.newFolder(in: folders)) { model.move(to: $0) }
+            })
         .closesForEvents(
             isOpen: linkToConfirm != nil || isMoving || details != nil || askingDeleteForGood, close: closeSheets)
         .confirmationDialog(
@@ -231,18 +234,31 @@ struct LinkConfirmation: View {
 /// Move: the account's other folders.
 struct MovePicker: View {
     let folders: [FolderNode]
+    /// Makes a new folder in the mail's account, to move the mail into; nil: not offered.
+    var newFolder: ((String) async -> FolderEditOutcome)?
     let choose: (FolderID) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var isNaming = false
 
     var body: some View {
         NavigationStack {
-            List(folders) { node in
-                Button {
-                    choose(node.folder.id)
-                    dismiss()
-                } label: {
-                    Label(FolderNames.name(node.folder), systemImage: Icons.folder(node.folder.kind))
-                        .padding(.leading, CGFloat(node.indent) * 20)
+            List {
+                if newFolder != nil {
+                    Button {
+                        isNaming = true
+                    } label: {
+                        Label(L10n.string("New folder"), systemImage: Icons.newFolder)
+                    }
+                    .accessibilityIdentifier("move.newFolder")
+                }
+                ForEach(folders) { node in
+                    Button {
+                        choose(node.folder.id)
+                        dismiss()
+                    } label: {
+                        Label(FolderNames.name(node.folder), systemImage: Icons.folder(node.folder.kind))
+                            .padding(.leading, CGFloat(node.indent) * 20)
+                    }
                 }
             }
             .navigationTitle(Text(ui: "Move to"))
@@ -250,6 +266,19 @@ struct MovePicker: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Text(ui: "Cancel") }
+                }
+            }
+            .sheet(isPresented: $isNaming) {
+                FolderNameSheet(title: L10n.string("New folder"), initial: "") { name in
+                    guard let newFolder else { return nil }
+                    switch await newFolder(name) {
+                    case let .done(made):
+                        choose(made)
+                        dismiss()
+                        return nil
+                    case let .problem(problem):
+                        return problem
+                    }
                 }
             }
         }

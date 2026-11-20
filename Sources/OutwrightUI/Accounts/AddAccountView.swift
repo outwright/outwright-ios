@@ -91,6 +91,7 @@ struct AddAccountView: View {
 
     private var form: some View {
         Form {
+            if placement == .firstRun, !model.hasLookedUp { FirstRunBringSection(app: app) }
             Section {
                 TextField(text: $model.email) { Text(ui: "Email address") }
                     .emailEntry()

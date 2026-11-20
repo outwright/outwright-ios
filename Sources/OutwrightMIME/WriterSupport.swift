@@ -30,10 +30,22 @@ enum WriterSupport {
 
     static func isASCII(_ value: String) -> Bool { value.unicodeScalars.allSatisfy { $0.isASCII } }
 
-    /// ASCII that reads as written: no encoded-word opener, and no word too long to fold.
+    /// ASCII that reads as written: no encoded-word opener, and no word or run of spaces too long
+    /// to fold.
     static func isPlain(_ text: String) -> Bool {
-        isASCII(text) && !text.contains("=?")
+        isASCII(text) && !text.contains("=?") && longestSpaceRun(text) <= maxWord
             && !text.split(whereSeparator: { $0 == " " }).contains { $0.utf8.count > maxWord }
+    }
+
+    /// The longest run of spaces in `text`, which folding cannot break.
+    static func longestSpaceRun(_ text: String) -> Int {
+        var longest = 0
+        var run = 0
+        for byte in text.utf8 {
+            run = byte == 0x20 ? run + 1 : 0
+            longest = max(longest, run)
+        }
+        return longest
     }
 
     /// Header text that is either plain ASCII folded at its spaces, or encoded words a line each.
@@ -86,18 +98,18 @@ enum WriterSupport {
         }
         // As written, escapes and quotes counted, no run may leave too little room for the address.
         let longestRun = written.split(separator: " ").map(\.utf8.count).max() ?? 0
-        guard isASCII(text), !text.contains("=?"), longestRun <= maxWord - addressRoom else {
+        guard isASCII(text), !text.contains("=?"), max(longestRun, longestSpaceRun(written)) <= maxWord - addressRoom
+        else {
             return EncodedWord.encode(text).joined(separator: "\r\n ")
         }
         return foldAtSpaces(written, used: 6)
     }
 
-    /// An address as written in a header and a path: no white space, brackets, commas or quotes,
-    /// and its domain in A-labels (left as it is when it has no ASCII form; sending refuses it).
+    /// An address as written in a header and a path: an addr-spec without white space, brackets or
+    /// commas outside its quoted local part, and its domain in A-labels (left as it is when it has
+    /// no ASCII form; sending refuses it).
     static func address(_ email: String) -> String {
-        let kept = String(clean(email).unicodeScalars.filter {
-            !$0.properties.isWhitespace && $0 != "<" && $0 != ">" && $0 != "," && $0 != "\""
-        })
+        let kept = MailAddress.addrSpec(clean(email), alsoDrop: ["<", ">", ","])
         return MailAddress.ascii(kept) ?? kept
     }
 
@@ -158,7 +170,8 @@ enum WriterSupport {
         let text = String(clean(value).unicodeScalars.filter {
             $0.isASCII && !$0.properties.isWhitespace && $0 != ";" && $0 != "\"" && $0 != "(" && $0 != ")"
         })
-        return text.contains("/") ? text : fallback
+        // A media type is at most 127 characters, a slash and 127 more (RFC 6838 section 4.2).
+        return text.contains("/") && text.utf8.count <= 255 ? text : fallback
     }
 
     /// `filename="..."` for ASCII names; otherwise a plain fallback beside RFC 2231's `filename*`,

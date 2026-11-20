@@ -13,10 +13,11 @@ public enum MailAddress {
     /// The address with its domain in A-labels; nil when the domain has no ASCII form. Text
     /// without an `@` is given back as it is.
     public static func ascii(_ email: String) -> String? {
-        guard let sign = email.lastIndex(of: "@") else {
+        let scalars = email.unicodeScalars
+        guard let sign = domainAt(scalars) else {
             return email
         }
-        let local = email[..<sign], domain = email[email.index(after: sign)...]
+        let local = String(scalars[..<sign]), domain = String(scalars[scalars.index(after: sign)...])
         guard let ascii = asciiDomain(String(domain)) else {
             return nil
         }
@@ -43,6 +44,101 @@ public enum MailAddress {
             labels.append(written)
         }
         return labels.joined(separator: ".")
+    }
+
+    /// An addr-spec (RFC 5322 section 3.4.1) as kept and sent: CR, LF and NUL gone everywhere;
+    /// outside quoted strings also white space (the folding between tokens) and the characters of
+    /// `alsoDrop`; inside them every other character kept, escapes as escapes. An unclosed quoted
+    /// string is closed, and a local part quoted though it needs no quotes is unquoted, being the
+    /// same mailbox.
+    public static func addrSpec(_ text: String, alsoDrop: Set<Unicode.Scalar> = []) -> String {
+        var out = String.UnicodeScalarView()
+        var inQuote = false, escaped = false
+        for scalar in text.unicodeScalars {
+            if scalar == "\r" || scalar == "\n" || scalar == "\0" {
+                continue
+            } else if escaped {
+                escaped = false
+                out.append(scalar)
+            } else if inQuote {
+                out.append(scalar)
+                if scalar == "\\" {
+                    escaped = true
+                } else if scalar == "\"" {
+                    inQuote = false
+                }
+            } else if !scalar.properties.isWhitespace && !alsoDrop.contains(scalar) {
+                out.append(scalar)
+                inQuote = scalar == "\""
+            }
+        }
+        if escaped {
+            out.removeLast()
+        }
+        if inQuote {
+            out.append("\"")
+        }
+        return unquotedLocalPart(out)
+    }
+
+    /// The address with a local part of one quoted string written as a dot-atom when its text is one.
+    private static func unquotedLocalPart(_ spec: String.UnicodeScalarView) -> String {
+        guard let sign = domainAt(spec), spec.first == "\"", sign > spec.index(after: spec.startIndex),
+              spec[spec.index(before: sign)] == "\""
+        else {
+            return String(spec)
+        }
+        var text = String.UnicodeScalarView()
+        var escaped = false
+        for scalar in spec[spec.index(after: spec.startIndex)..<spec.index(before: sign)] {
+            if escaped {
+                escaped = false
+            } else if scalar == "\\" {
+                escaped = true
+                continue
+            } else if scalar == "\"" {
+                return String(spec) // more than one quoted string
+            }
+            text.append(scalar)
+        }
+        guard isDotAtom(text) else {
+            return String(spec)
+        }
+        return String(text) + String(spec[sign...])
+    }
+
+    /// Atext runs joined by single dots (RFC 5322 section 3.2.3, with RFC 6532's UTF-8).
+    private static func isDotAtom(_ text: String.UnicodeScalarView) -> Bool {
+        String(text).split(separator: ".", omittingEmptySubsequences: false).allSatisfy { part in
+            !part.isEmpty && part.unicodeScalars.allSatisfy(isAtext)
+        }
+    }
+
+    private static func isAtext(_ scalar: Unicode.Scalar) -> Bool {
+        guard scalar.isASCII else {
+            return !scalar.properties.isWhitespace && scalar.properties.generalCategory != .control
+        }
+        return scalar.properties.isAlphabetic || ("0"..."9").contains(scalar)
+            || "!#$%&'*+-/=?^_`{|}~".unicodeScalars.contains(scalar)
+    }
+
+    /// The `@` before the domain: the last one outside quoted strings.
+    private static func domainAt(_ scalars: String.UnicodeScalarView) -> String.UnicodeScalarView.Index? {
+        var sign: String.UnicodeScalarView.Index?
+        var inQuote = false, escaped = false
+        for index in scalars.indices {
+            let scalar = scalars[index]
+            if escaped {
+                escaped = false
+            } else if scalar == "\\" && inQuote {
+                escaped = true
+            } else if scalar == "\"" {
+                inQuote.toggle()
+            } else if scalar == "@" && !inQuote {
+                sign = index
+            }
+        }
+        return sign
     }
 
     // MARK: - Punycode (RFC 3492 section 6.3)

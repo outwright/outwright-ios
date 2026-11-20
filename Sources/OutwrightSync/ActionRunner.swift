@@ -61,6 +61,8 @@ struct ActionRunner {
     var waiting = false
     /// The actions of the run under way.
     var queue: [PendingAction] = []
+    /// What the folder changes of this run have settled so far.
+    var folderRun = FolderRun()
 
     /// Asked right before a message goes to SMTP: false once this runner's syncer was replaced.
     let mayContinue: @Sendable () async -> Bool
@@ -89,10 +91,20 @@ struct ActionRunner {
     /// failure is returned.
     mutating func run(_ queue: [PendingAction]) async throws(SyncError) -> SyncError? {
         var refusal: SyncError?
+        var folderRefusal: SyncError?
         self.queue = queue
-        for pending in queue {
-            let target = pending.action.target
+        rewind(for: queue)
+        for original in queue where !folderRun.settled.contains(original.id) {
+            let pending = folderRun.repointed[original.id] ?? original
+            guard let target = pending.action.target else {
+                try await runFolderAction(pending, refusal: &refusal, folderRefusal: &folderRefusal)
+                continue
+            }
             guard !blocked.contains(target) else {
+                continue
+            }
+            guard !waitsOnStuckFolder(pending) else {
+                blocked.insert(target)
                 continue
             }
             do {
@@ -119,52 +131,7 @@ struct ActionRunner {
                 try forgetModSeq(pending)
             }
         }
-        return refusal ?? refusedSend ?? abandoned
-    }
-
-    /// The action's message was not found on the server this time. It is done when the message is
-    /// gone here too, given up (and said) after `maxAttempts` runs, else left for the next run.
-    private mutating func missed(_ pending: PendingAction) throws(SyncError) {
-        let target = pending.action.target
-        if try stored({ try store.message(target) }) == nil {
-            try stored { try store.completeAction(pending.id) }
-            return
-        }
-        if try stored({ try store.noteMiss(pending.id) }) >= Self.maxAttempts {
-            try forgetModSeq(pending)
-            try stored { try store.completeAction(pending.id) }
-            abandoned = abandoned ?? .actionAbandoned
-            return
-        }
-        blocked.insert(target)
-    }
-
-    /// True when the action is done with.
-    private mutating func perform(_ pending: PendingAction) async throws(SyncError) -> Bool {
-        switch pending.action {
-        case let .setRead(id, value):
-            return try await setFlag("\\Seen", value, id, pending)
-        case let .setFlagged(id, value):
-            return try await setFlag("\\Flagged", value, id, pending)
-        case let .move(id, kind):
-            guard let destination = folder(kind) else {
-                return true
-            }
-            return try await move(id, to: destination, pending)
-        case let .moveTo(id, folderID):
-            guard let destination = folders.first(where: { $0.id == folderID }) else {
-                return true
-            }
-            return try await move(id, to: destination, pending)
-        case let .delete(id):
-            return try await delete(id, pending)
-        case let .send(draft):
-            return try await send(draft, pending)
-        case let .saveDraft(draft):
-            return try await saveDraft(draft, pending)
-        case let .fileSent(message):
-            return try await fileSent(message, pending)
-        }
+        return refusal ?? refusedSend ?? abandoned ?? folderRefusal
     }
 
     // MARK: - Flags, moves, deletes
@@ -188,6 +155,14 @@ struct ActionRunner {
         let header = try header(of: id)
         switch try await locate(id, pending) {
         case .gone:
+            // Not in that folder on the server. Already in the destination (the move's answer was
+            // lost): the row takes its number there. Else a row waiting in the destination never
+            // gets one: only a copy of something the server had goes (#69).
+            if let uid = try await alreadyIn(destination, header: header) {
+                try settle(id, movedTo: destination, newUID: uid, by: pending)
+            } else {
+                try stored { try store.dropStrayCopy(id, in: destination.id) }
+            }
             return true
         case .unknown:
             return false
@@ -207,10 +182,7 @@ struct ActionRunner {
             }
             // Gone from the source altogether (moved by another client, or by MOVE before a drop): done.
             moved[id] = Moved(folder: destination, uid: newUID, header: header)
-            // Settle only a row still waiting in that folder; a later move has it elsewhere.
-            if let row = try stored({ try store.message(id) }), row.folderID == destination.id, row.uid == 0 {
-                try stored { try store.settleMove(id, newUID: newUID) }
-            }
+            try settle(id, movedTo: destination, newUID: newUID, by: pending)
             return true
         }
     }
@@ -277,31 +249,36 @@ struct ActionRunner {
             guard let header, !header.isEmpty else {
                 return .unknown
             }
-            let found = try await search(header, in: folder)
-            if case .gone = found {
-                return .unknown
-            }
-            return found
+            return try await search(header, in: folder)
         }
         if pending.sourceUID > 0 {
             return .found(folder, pending.sourceUID)
         }
+        return try await locateByRow(id, in: folder)
+    }
+
+    /// Where the row says the message is; else, queued before the server ever numbered it (a draft
+    /// never saved there), what its Message-ID doesn't find in that folder the server never had.
+    /// Without a Message-ID it can't be told, and waits.
+    private mutating func locateByRow(_ id: MessageID, in folder: Folder) async throws(SyncError) -> Location {
         let row = try stored { try store.message(id) }
         if let row, row.folderID == folder.id, row.uid > 0 {
             return .found(folder, row.uid)
         }
-        // Queued before the server ever numbered it (a draft never saved there): what its
-        // Message-ID doesn't find in that folder, the server never had.
-        let found = try await search(row?.messageIDHeader, in: folder)
+        guard let header = row?.messageIDHeader, !header.isEmpty else {
+            return .unknown
+        }
+        let found = try await search(header, in: folder)
         if case .unknown = found {
             return .gone
         }
         return found
     }
 
+    /// Without a Message-ID the message can't be told apart: not found yet, never taken as gone.
     mutating func search(_ header: String?, in folder: Folder) async throws(SyncError) -> Location {
         guard let header, !header.isEmpty else {
-            return .gone
+            return .unknown
         }
         try await select(folder)
         guard let uid = try await imap({ try await client.uids(messageID: header) }).max() else {
@@ -331,46 +308,6 @@ extension ActionRunner {
             }
         }
     }
-
-    // MARK: - Folders
-
-    func folder(_ kind: FolderKind) -> Folder? {
-        folders.first { $0.kind == kind }
-    }
-
-    func folder(id: FolderID) -> Folder? {
-        folders.first { $0.id == id }
-    }
-
-    mutating func select(_ folder: Folder) async throws(SyncError) {
-        guard selected != folder.path else {
-            return
-        }
-        selected = nil
-        let status = try await imap { try await client.select(folder.path) }
-        selected = folder.path
-        if folder.uidValidity != 0, status.uidValidity != folder.uidValidity {
-            renumbered.insert(folder.id)
-        }
-    }
-
-    /// Makes a folder the server has not got yet (one made here for a kind the account lacked)
-    /// before anything goes to it.
-    mutating func ensureOnServer(_ folder: Folder) async throws(SyncError) {
-        guard folder.uidValidity == 0 else {
-            return
-        }
-        if serverPaths == nil {
-            serverPaths = Set(try await imap { try await client.listFolders() }.map(\.path))
-        }
-        guard serverPaths?.contains(folder.path) == false else {
-            return
-        }
-        // The path of a folder made here is ours and plain ASCII, so it is its own name. One made
-        // meanwhile by another client is no failure; any other refusal leaves the change queued.
-        try await imap { try await client.create(folder.path) }
-        serverPaths?.insert(folder.path)
-    }
 }
 
 extension ActionRunner {
@@ -383,6 +320,79 @@ extension ActionRunner {
             try stored { try store.forgetHighestModSeq(holding: id) }
         default:
             break
+        }
+    }
+}
+
+/// Missing messages, and what each queued change does.
+extension ActionRunner {
+    /// The action's message was not found on the server this time. It is done when the message is
+    /// gone here too, given up (and said) after `maxAttempts` runs, else left for the next run.
+    mutating func missed(_ pending: PendingAction) throws(SyncError) {
+        guard let target = pending.action.target else {
+            return
+        }
+        if try stored({ try store.message(target) }) == nil {
+            try stored { try store.completeAction(pending.id) }
+            return
+        }
+        if try stored({ try store.noteMiss(pending.id) }) >= Self.maxAttempts {
+            // A folder it was moving out of is not deleted after it: the message may still be
+            // there. The delete is given up first, so a run cut short in between still keeps it.
+            if let source = pending.sourceFolderID {
+                folderRun.givenUpIn.insert(source)
+                try giveUpDeletes(of: source)
+            }
+            try forgetModSeq(pending)
+            // A stray copy of a message the server had goes with it (#69): the folder that holds
+            // the message brings it back at its next sync.
+            try stored { try store.completeAction(pending.id, droppingStrayCopyOf: target) }
+            abandoned = abandoned ?? .actionAbandoned
+            return
+        }
+        blocked.insert(target)
+    }
+
+    /// True when the action is done with.
+    mutating func perform(_ pending: PendingAction) async throws(SyncError) -> Bool {
+        switch pending.action {
+        case let .setRead(id, value):
+            return try await setFlag("\\Seen", value, id, pending)
+        case let .setFlagged(id, value):
+            return try await setFlag("\\Flagged", value, id, pending)
+        case let .move(id, kind):
+            guard let destination = folder(kind) else {
+                return true
+            }
+            return try await move(id, to: destination, pending)
+        case let .moveTo(id, folderID):
+            guard let destination = folders.first(where: { $0.id == folderID }) else {
+                return true
+            }
+            return try await move(id, to: destination, pending)
+        case let .delete(id):
+            return try await delete(id, pending)
+        case .send, .saveDraft, .fileSent:
+            return try await performDraft(pending)
+        default:
+            // Folder changes run through `runFolder`.
+            return false
+        }
+    }
+}
+
+extension ActionRunner {
+    /// Sending a draft, saving one, or filing a sent copy.
+    mutating func performDraft(_ pending: PendingAction) async throws(SyncError) -> Bool {
+        switch pending.action {
+        case let .send(draft):
+            return try await send(draft, pending)
+        case let .saveDraft(draft):
+            return try await saveDraft(draft, pending)
+        case let .fileSent(message):
+            return try await fileSent(message, pending)
+        default:
+            return false
         }
     }
 }

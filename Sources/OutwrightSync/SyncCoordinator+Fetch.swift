@@ -48,3 +48,35 @@ extension SyncCoordinator {
         return found
     }
 }
+
+/// What editing folders needs to know from the server.
+extension SyncCoordinator {
+    /// How many messages the server holds in the folder and its subfolders; nil when it can't be
+    /// asked now (offline, or the server failed).
+    public func serverMessageCount(inTreeOf folder: FolderID) async -> Int? {
+        for account in (try? store.accounts()) ?? [] {
+            guard let found = try? store.folders(account.id).first(where: { $0.id == folder }) else {
+                continue
+            }
+            guard let syncer = await currentSyncers().first(where: { $0.0 == account.id })?.1 else {
+                return nil
+            }
+            return try? await syncer.messageCount(inTreeOf: found)
+        }
+        return nil
+    }
+
+    /// Where the account's new top-level folders go (`INBOX.` on a server that keeps every folder
+    /// under the Inbox), as its last folder sync found it (in this launch or an earlier one), else
+    /// as the stored folders show it.
+    public func folderPrefix(for account: AccountID) async -> String {
+        if let syncer = await currentSyncers().first(where: { $0.0 == account })?.1,
+           let found = await syncer.folderPrefix {
+            return found
+        }
+        if let kept = (try? store.folderPrefix(account)) ?? nil {
+            return kept
+        }
+        return AccountSyncer.storedPrefix((try? store.folders(account)) ?? [])
+    }
+}

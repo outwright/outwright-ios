@@ -186,6 +186,7 @@ import Testing
             var m = outgoing(subject: noise())
             m.from = Address(name: noise(), email: "j@example.org")
             m.to = [Address(name: noise(), email: "bo@example.org")]
+            m.cc = [Address(name: nil, email: "\"" + noise().prefix(40) + "\"@example.org")]
             m.attachments = [Attachment(filename: noise(), mimeType: "text/plain", contentID: nil, isInline: false,
                                         data: Data([1]))]
             let data = try MIMEWriter.write(m, includeBcc: false)

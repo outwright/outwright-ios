@@ -126,6 +126,7 @@ struct AttentionBanners: View {
         case .drafts: Text(ui: "Opens the account's Drafts")
         case .signInAgain: Text(ui: "Signs in again")
         case .accountSettings: Text(ui: "Opens the account's settings")
+        case .dismiss: Text(ui: "Dismisses this")
         }
     }
 }

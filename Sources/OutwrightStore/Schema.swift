@@ -1,11 +1,71 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import Foundation
 import GRDB
+import OutwrightModel
 
 enum Schema {
     static func migrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
+        registerFirst(&migrator)
+        registerLater(&migrator)
+        registerProviders(&migrator)
+        registerSubscriptions(&migrator)
+        registerAccountlessSubscriptions(&migrator)
+        registerNewMailNotices(&migrator)
+        registerProtection(&migrator)
+        registerJunkInvitations(&migrator)
+        registerUniqueFolderUID(&migrator)
+        registerPushMailMarks(&migrator)
+        registerContactPhotos(&migrator)
+        registerFolderPrefix(&migrator)
+        registerFolderRefusal(&migrator)
+        registerServerKnown(&migrator)
+        registerServerKnownQueued(&migrator)
+        return migrator
+    }
+
+    /// serverKnownQueued: an unnumbered row whose queued change was made while the server had it
+    /// numbered (a source uid) was the server's, so a stray copy of it left from before can go.
+    private static func registerServerKnownQueued(_ migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("serverKnownQueued") { database in
+            var known: Set<Int64> = []
+            var drafts: Set<Int64> = []
+            for row in try Row.fetchAll(database, sql: "SELECT action, sourceUid FROM pending_action") {
+                guard let data = row["action"] as Data?,
+                      let action = try? JSONDecoder().decode(MailAction.self, from: data), let target = action.target
+                else { continue }
+                switch action {
+                // A draft edited here and waiting to be saved or sent is the phone's own version.
+                case .saveDraft, .send: drafts.insert(target.raw)
+                default: if ((row["sourceUid"] as Int64?) ?? 0) > 0 { known.insert(target.raw) }
+                }
+            }
+            for id in known.subtracting(drafts) {
+                try database.execute(
+                    sql: "UPDATE message SET serverKnown = 1 WHERE id = ? AND uid = 0", arguments: [id])
+            }
+        }
+    }
+
+    /// serverKnown: whether the server ever numbered the message, kept when a move sets its uid
+    /// back to 0, so a stray unnumbered copy of it can go while one only the phone has never does.
+    private static func registerServerKnown(_ migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("serverKnown") { database in
+            try database.execute(sql: """
+                ALTER TABLE message ADD COLUMN serverKnown INTEGER NOT NULL DEFAULT 0;
+                UPDATE message SET serverKnown = 1 WHERE uid > 0;
+                CREATE TRIGGER message_server_known_insert AFTER INSERT ON message WHEN NEW.uid > 0
+                BEGIN UPDATE message SET serverKnown = 1 WHERE id = NEW.id; END;
+                CREATE TRIGGER message_server_known_update AFTER UPDATE OF uid ON message WHEN NEW.uid > 0
+                BEGIN UPDATE message SET serverKnown = 1 WHERE id = NEW.id; END;
+                """)
+        }
+    }
+
+    /// v1: accounts, folders, messages, sender overrides, the queue and the search index.
+    private static func registerFirst(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1") { database in
             try database.execute(sql: """
                 CREATE TABLE account (
@@ -44,17 +104,26 @@ enum Schema {
                     tokenize = 'unicode61 remove_diacritics 2');
                 """)
         }
-        registerLater(&migrator)
-        registerProviders(&migrator)
-        registerSubscriptions(&migrator)
-        registerAccountlessSubscriptions(&migrator)
-        registerNewMailNotices(&migrator)
-        registerProtection(&migrator)
-        registerJunkInvitations(&migrator)
-        registerUniqueFolderUID(&migrator)
-        registerPushMailMarks(&migrator)
-        registerContactPhotos(&migrator)
-        return migrator
+    }
+
+    /// folderRefusal: an account's folder change the server refused, until the owner has seen it;
+    /// and when a queued folder change was last tried, so close runs count as one try.
+    private static func registerFolderRefusal(_ migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("folderRefusal") { database in
+            try database.execute(sql: """
+                ALTER TABLE account ADD COLUMN folderRefusal TEXT;
+                ALTER TABLE account ADD COLUMN folderRefusalGaveUp INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE pending_action ADD COLUMN triedAt REAL;
+                """)
+        }
+    }
+
+    /// folderPrefix: where an account's new top-level folders go (its personal namespace's prefix),
+    /// as the last folder sync found it; NULL before one.
+    private static func registerFolderPrefix(_ migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("folderPrefix") { database in
+            try database.execute(sql: "ALTER TABLE account ADD COLUMN folderPrefix TEXT")
+        }
     }
 
     /// uniqueFolderUID: the app and its notification extension may sync one Inbox at once, so the

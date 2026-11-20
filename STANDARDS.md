@@ -32,6 +32,9 @@ Not read: RFC 6764's TXT `path=` records, Mozilla's autoconfig XML, Microsoft's 
 |---|---|
 | RFC 3501 | IMAP4rev1; sign-in with LOGIN (refused when the server says LOGINDISABLED). |
 | RFC 3501 › 5.1.3 | Folder names in modified UTF-7. |
+| RFC 3501 › 6.3.3–6.3.7 | The owner's folders made, renamed, moved and deleted (CREATE, RENAME, DELETE), deepest first, and kept subscribed (SUBSCRIBE, UNSUBSCRIBE). |
+| RFC 3501 › 6.3.9 | LSUB: which folders are subscribed, so a rename carries their subscriptions along. |
+| RFC 3501 › 6.3.10 | STATUS: how many messages a folder holds, told before it is deleted. |
 | RFC 2342 | NAMESPACE: where the owner's folders live and their separator. |
 | RFC 6154 | SPECIAL-USE: which folder is Drafts, Sent, Trash, Junk; by name when the flags are missing. |
 | RFC 5161 | ENABLE, to turn on QRESYNC or CONDSTORE. |
@@ -39,7 +42,7 @@ Not read: RFC 6764's TXT `path=` records, Mozilla's autoconfig XML, Microsoft's 
 | RFC 6851 | MOVE; without it, COPY, `\Deleted` and (with UIDPLUS) UID EXPUNGE. |
 | RFC 4315 | UIDPLUS: APPENDUID, COPYUID and UID EXPUNGE. |
 | RFC 2177 | IDLE on the Inbox, on a connection of its own. |
-| RFC 5530 | `[ALREADYEXISTS]`: creating a folder that exists is no failure. |
+| RFC 5530 | `[ALREADYEXISTS]`: creating a folder that exists is no failure; `[NONEXISTENT]`: deleting one already gone is none either. |
 
 ## Mail: sending
 

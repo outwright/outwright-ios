@@ -56,7 +56,8 @@ struct InboxView: View {
             .animation(.snappy, value: model.isSelecting)
         }
         .sheet(item: $moving, onDismiss: { app.openPending() }, content: { chosen in
-            MovePicker(folders: model.moveTargets(chosen.ids)) { folder in
+            let targets = model.moveTargets(chosen.ids)
+            MovePicker(folders: targets, newFolder: app.newFolder(in: targets)) { folder in
                 withAnimation { model.move(chosen.ids, to: folder) }
             }
         })

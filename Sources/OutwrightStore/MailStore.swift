@@ -27,6 +27,16 @@ public enum StoreError: Error, Sendable {
     /// The account has no CalDAV address: it keeps no calendars.
     case noCalDAV
     case database
+    /// Another folder in the same place already has that name.
+    case folderNameTaken
+    /// The name is empty, holds the server's delimiter or a control character, or the folder
+    /// would go under itself.
+    case folderNameInvalid
+    /// The folder is one the app relies on (Inbox, Sent, Drafts, Trash, Junk, Archive): it takes
+    /// subfolders, but is not renamed, moved or deleted.
+    case folderProtected
+    /// Another folder change of the account is still waiting for the server: one at a time.
+    case folderChangeWaiting
 
     static func wrap(_ error: any Error) -> StoreError {
         (error as? StoreError) ?? .database
@@ -90,7 +100,11 @@ public final class MailStore: Sendable {
                         savesContactsToPhone, cardDAVOff, calDAV, calDAVUnconfirmed, calDAVOff, auth, provider,
                         calendarVia, contactsVia)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET displayName = excluded.displayName,
+                    ON CONFLICT(id) DO UPDATE SET
+                        folderPrefix = CASE WHEN account.imapHost = excluded.imapHost
+                            AND account.imapPort = excluded.imapPort AND account.user = excluded.user
+                            THEN account.folderPrefix END,
+                        displayName = excluded.displayName,
                         email = excluded.email, colorIndex = excluded.colorIndex,
                         imapHost = excluded.imapHost, imapPort = excluded.imapPort,
                         imapSecurity = excluded.imapSecurity, smtpHost = excluded.smtpHost,

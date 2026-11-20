@@ -251,6 +251,9 @@ public struct RootView: View {
         .sheet(
             item: $app.setupFileToOpen, onDismiss: { app.setupFileClosed() },
             content: { RestoreSetupView(app: app, url: $0.url) })
+        .sheet(
+            isPresented: $app.isBringingSetup, onDismiss: { app.openPending() },
+            content: { NavigationStack { ReceiveSetupView(app: app, cancellable: true) } })
         // A setup file opened from AirDrop, Files or a mail.
         .onOpenURL { url in
             if url.isFileURL { app.openSetupFile(url) }

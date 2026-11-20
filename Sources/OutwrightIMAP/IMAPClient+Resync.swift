@@ -79,6 +79,15 @@ extension IMAPClient {
         }
     }
 
+    /// Leaves the selected folder without expunging; false when the server can't (no UNSELECT),
+    /// true too when nothing is selected.
+    public func leaveSelected() async throws(IMAPError) -> Bool {
+        try await perform { () async throws(IMAPError) -> Bool in
+            guard hasSelected else { return true }
+            return try await unselect()
+        }
+    }
+
     /// Leaves the selected folder without expunging (UNSELECT, RFC 3691; part of IMAP4rev2), so
     /// the next SELECT's answer has no `[CLOSED]` to be split by: some servers (Stalwart v0.16) say
     /// what changed in the folder selected before `[CLOSED]`, where it reads as said of the one

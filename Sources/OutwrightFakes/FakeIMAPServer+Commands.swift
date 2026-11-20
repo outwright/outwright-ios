@@ -37,6 +37,11 @@ extension FakeIMAPServer {
             reply(id, "\(tag) NO [NONEXISTENT] No such mailbox")
             return
         }
+        if let code = refusing("SELECT", path) {
+            sessions[id]?.selected = nil
+            reply(id, "\(tag) NO \(code)Refused")
+            return
+        }
         sessions[id]?.selected = path
         reply(id, "* \(folder.messages.count) EXISTS")
         reply(id, "* 0 RECENT")
@@ -52,6 +57,10 @@ extension FakeIMAPServer {
             reply(id, "\(tag) BAD Missing mailbox")
             return
         }
+        if let code = refusing("CREATE", path) {
+            reply(id, "\(tag) NO \(code)Refused")
+            return
+        }
         guard folders[path] == nil else {
             reply(id, "\(tag) NO [ALREADYEXISTS] Mailbox exists")
             return
@@ -59,6 +68,13 @@ extension FakeIMAPServer {
         guard !underInbox || path.uppercased().hasPrefix("INBOX.") else {
             reply(id, "\(tag) NO Mailboxes live under INBOX")
             return
+        }
+        if makesSuperiors {
+            var above = path.components(separatedBy: delimiter).dropLast()
+            while !above.isEmpty {
+                addFolder(above.joined(separator: delimiter), specialUse: nil)
+                above = above.dropLast()
+            }
         }
         addFolder(path, specialUse: nil)
         reply(id, "\(tag) OK CREATE completed")
@@ -113,8 +129,13 @@ extension FakeIMAPServer {
         var before: Date?
         var texts: [String] = []
         var headers: [(String, String)] = []
+        var undeleted = false
+        /// `UID n:*`: the lowest uid asked for.
+        var uidFrom: UInt32?
 
         func matches(_ message: Stored, head: [String], content: String) -> Bool {
+            if undeleted, message.flags.contains("\\Deleted") { return false }
+            if let uidFrom, message.uid < uidFrom { return false }
             if let since, message.internalDate < since { return false }
             if let before, message.internalDate >= before { return false }
             let headerHit = headers.allSatisfy { name, wanted in
@@ -132,6 +153,12 @@ extension FakeIMAPServer {
             let value = index + 1 < arguments.count ? arguments[index + 1].text : nil
             switch key {
             case "CHARSET":
+                index += 2
+            case "UNDELETED":
+                criteria.undeleted = true
+                index += 1
+            case "UID":
+                criteria.uidFrom = value.flatMap { UInt32($0.split(separator: ":").first ?? "") }
                 index += 2
             case "SINCE":
                 criteria.since = value.flatMap(Self.day)
@@ -254,6 +281,10 @@ extension FakeIMAPServer {
         }
         guard folders[destination] != nil else {
             reply(id, "\(tag) NO [TRYCREATE] No such mailbox")
+            return
+        }
+        if let code = refusing(move ? "MOVE" : "COPY", destination) {
+            reply(id, "\(tag) NO \(code)Refused")
             return
         }
         let chosen = Self.matching(set, in: folder, byUID: byUID)

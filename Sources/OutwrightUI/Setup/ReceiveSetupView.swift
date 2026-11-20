@@ -12,6 +12,8 @@ struct ReceiveSetupView: View {
     let app: AppModel
     /// On the first run, Done closes the first run when accounts came.
     var closesFirstRun = false
+    /// Opened as a sheet of its own (from an empty screen): Cancel closes it until the restore begins.
+    var cancellable = false
     @State private var model: ReceiveSetupModel?
     /// The code is hidden whenever the app is not in front, so the app switcher's snapshot never holds it.
     @Environment(\.scenePhase) private var scenePhase
@@ -52,7 +54,10 @@ struct ReceiveSetupView: View {
         }
         // The session ends with the screen; coming back makes a new model and a new code. A restore under way
         // keeps its model (it can't be left, and only Done closes it).
+        // On the first run, a restore under way or its report holds the first run open for a setup file.
+        .onChange(of: isRestoring) { _, now in if closesFirstRun { app.firstRunHeld = now } }
         .onDisappear {
+            if closesFirstRun { app.firstRunHeld = false }
             guard model?.state != .restoring else { return }
             model?.cancel()
             model = nil
@@ -68,6 +73,12 @@ struct ReceiveSetupView: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        if cancellable, !isRestoring {
+            ToolbarItem(placement: .cancellationAction) {
+                Button { dismiss() } label: { Text(ui: "Cancel") }
+                    .accessibilityIdentifier("receive.cancel")
+            }
+        }
         if case .report(let report)? = model?.state {
             ToolbarItem(placement: .confirmationAction) {
                 Button { done(report) } label: { Text(ui: "Done") }

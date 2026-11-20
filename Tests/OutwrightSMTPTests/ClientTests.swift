@@ -92,6 +92,26 @@ import Testing
         #expect(received.first?.to == ["b@example.org"])
     }
 
+    @Test func aQuotedLocalPartGoesInThePathWithItsSpaces() async throws {
+        let server = FakeSMTPServer()
+        let port = try await server.start()
+        try await send(
+            message, from: "\"j k\"@example.org", to: ["\"a b\"@example.org", " \"c\\\"d\" @ example.org"], port: port)
+        let received = await server.received
+        await server.stop()
+        #expect(received.first?.from == "\"j k\"@example.org")
+        #expect(received.first?.to == ["\"a b\"@example.org", "\"c\\\"d\"@example.org"])
+    }
+
+    @Test func aQuotedLocalPartLosesItsLineBreaks() async throws {
+        let server = FakeSMTPServer()
+        let port = try await server.start()
+        try await send(message, to: ["\"a\r\nRCPT TO:<evil@example.org> b\"@example.org"], port: port)
+        let received = await server.received
+        await server.stop()
+        #expect(received.first?.to == ["\"aRCPT TO:<evil@example.org> b\"@example.org"])
+    }
+
     @Test func wrongPasswordIsAuthenticationFailedWithoutThePassword() async throws {
         let server = FakeSMTPServer()
         let port = try await server.start()
@@ -258,5 +278,28 @@ import Testing
         let received = await server.received
         await server.stop()
         #expect(received.first?.data == Data("Subject: x\r\n\r\none\r\n.two\r\nend\r\n".utf8))
+    }
+
+    // A server that echoes the AUTH line it refuses never puts the credential in the error.
+    @Test func anEchoedAUTHLineStaysOutOfTheError() async throws {
+        let listener = FakeListener { connection in
+            connection.send(Data("220 ready\r\n".utf8))
+            while let raw = await connection.readLine() {
+                let line = String(decoding: raw, as: UTF8.self) // swiftlint:disable:this optional_data_string_conversion
+                let answer = line.hasPrefix("EHLO") ? "250-fake.example\r\n250 AUTH PLAIN" : "500 5.5.1 Unknown command '\(line)'"
+                connection.send(Data((answer + "\r\n").utf8))
+            }
+        }
+        let port = try await listener.start()
+        defer { listener.stop() }
+        var failure: SMTPError?
+        do {
+            try await send(message, to: ["a@example.org"], port: port, password: "hunter2")
+        } catch {
+            failure = error
+        }
+        let text = String(reflecting: failure)
+        #expect(failure != nil)
+        #expect(!text.contains("hunter2") && !text.contains("AGprQGV4YW1wbGUub3JnAGh1bnRlcjI"))
     }
 }

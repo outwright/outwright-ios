@@ -58,6 +58,7 @@ what its target lists.
 | L4 | `OutwrightUI` | SwiftUI; reads Model, Store and Sync, never speaks a protocol |
 | test support | `OutwrightFakes` | in-process fake servers (on Net, MIME); never a dependency of a product target |
 | app | `App/` | the iOS shell, generated with XcodeGen (`App/open.yml`, on the shared `App/app.yml`) |
+| engine | `engine/` | the engine in Go for the desktop: the daemon `outwrightd`, which syncs and keeps every account, and the `outwright` command and MCP server that talk to it; a Go module of its own, published as [outwright-engine](https://github.com/outwright/outwright-engine) |
 
 Storage in SQLite; passwords and refresh tokens in the keychain.
 
@@ -81,10 +82,16 @@ none of them set.
 ## Building and testing
 - **Builds and tests always run through `make`**, never a hand-made command line, with two
   targets: `make build` (every module, and the iOS app and its extension for the simulator) and
-  `make test` (`make build`, then every unit test and SwiftLint), before a pull request.
+  `make test` (`make build`, then every unit test and SwiftLint, and the engine's tests), before
+  a pull request.
+- **The engine** (`engine/`, where it is here) is layered as the package is, its import rules held
+  by `engine/arch_test.go`; the same rules hold in Go terms (no panic on any input, a fuzz test
+  for every reader, secrets only in the system's secret store). `make test` runs its tests and
+  gofmt (`make engine-test`) and vets its portable packages for Linux and Windows
+  (`make engine-cross`); `make daemon` builds the daemon and the command into `.build/engine/`.
 - The Xcode project is generated, not checked in: `make build` writes `App/Outwright.xcodeproj`;
   run it after every pull, then open the project.
-- Every Swift file starts with its two SPDX lines:
+- Every Swift and Go file starts with its two SPDX lines:
   `// SPDX-FileCopyrightText: Outwright contributors` and
   `// SPDX-License-Identifier: MIT OR Apache-2.0`.
 - [TESTING.md](TESTING.md) says what the tests cover and what the maintainer runs beyond them.

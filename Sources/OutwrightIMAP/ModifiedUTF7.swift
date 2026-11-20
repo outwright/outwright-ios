@@ -3,7 +3,7 @@
 
 /// Mailbox names in modified UTF-7 (RFC 3501 §5.1.3): printable ASCII stands for itself, `&-`
 /// is `&`, and anything else is UTF-16BE in base64 with `,` for `/`, between `&` and `-`.
-enum ModifiedUTF7 {
+public enum ModifiedUTF7 {
     private static let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,".utf8)
 
     private static func sextet(_ byte: UInt8) -> UInt32? {
@@ -18,7 +18,7 @@ enum ModifiedUTF7 {
     }
 
     /// The name, or nil when `encoded` is not modified UTF-7.
-    static func decode(_ encoded: String) -> String? {
+    public static func decode(_ encoded: String) -> String? {
         let bytes = Array(encoded.utf8)
         var out = ""
         var index = 0
@@ -70,7 +70,7 @@ enum ModifiedUTF7 {
         return String(validating: units, as: UTF16.self)
     }
 
-    static func encode(_ name: String) -> String {
+    public static func encode(_ name: String) -> String {
         var out = ""
         var pending: [UInt16] = []
         for scalar in name.unicodeScalars {
