@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-public import OutwrightModel
+import OutwrightModel
 
 /// Which signatures are the app's default rather than the owner's: the default stays each device's
 /// own (it names the device's app), one the owner wrote comes along. An empty signature is the

@@ -2,7 +2,8 @@
 
 ## What is here
 
-- **Unit tests** in `Tests/`, one target per module, run with `make test`.
+- **Unit tests** in `Tests/`, one target per module, run with `make test`, in Debug and again
+  built optimized as the App Store build is, since some compiler faults show only there.
 - **Fake servers** in `Sources/OutwrightFakes`: IMAP, SMTP, CalDAV, CardDAV, JMAP and the push
   relay, in process on loopback. The tests talk to them over real connections, with
   synthetic mail on `example.org` addresses. No test ever touches a real mailbox.

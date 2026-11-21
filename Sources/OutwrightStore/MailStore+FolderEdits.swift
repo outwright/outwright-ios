@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Outwright contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-public import Foundation
+import Foundation
 import GRDB
 public import OutwrightModel
 

@@ -33,6 +33,9 @@ build:
 test: build $(if $(ENGINE),engine-test engine-cross)
 	swift test --skip-build
 	$(if $(CLOSED),swift test --skip-build --package-path Closed)
+	# Again built optimized, as the App Store build is: some compiler faults show only there.
+	swift test -c release -Xswiftc -enable-testing
+	$(if $(CLOSED),swift test -c release -Xswiftc -enable-testing --package-path Closed)
 	swiftlint lint --strict --quiet
 	$(if $(CLOSED),cd Closed && swiftlint lint --strict --quiet)
 

@@ -54,7 +54,7 @@ public struct CredentialProvider: Sendable {
     /// the keychain) as the network, tried again next time. A 401 drops the token it refused, so
     /// the retry renews it.
     public func graphClient(
-        for account: Account, base: URL, session: URLSession = .shared
+        for account: Account, base: URL, session: URLSession = HTTPSession.shared
     ) throws(SyncError) -> GraphClient {
         let source = try tokenSource(for: account.id, provider: account.provider)
         return GraphClient(

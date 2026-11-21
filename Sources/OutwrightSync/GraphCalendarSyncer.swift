@@ -5,6 +5,7 @@ public import Foundation
 import OutwrightGraph
 public import OutwrightModel
 public import OutwrightStore
+public import OutwrightNet
 
 /// Keeps a Graph account's calendars in step with Graph, as `CalendarSyncer` does for
 /// CalDAV: the owner's queued changes first, then the calendar list, then every calendar. Each sync
@@ -27,7 +28,7 @@ public actor GraphCalendarSyncer {
 
     public init(
         account: Account, store: MailStore, credentials: CredentialProvider, base: URL,
-        session: URLSession = .shared, now: @escaping @Sendable () -> Date = Date.init,
+        session: URLSession = HTTPSession.shared, now: @escaping @Sendable () -> Date = Date.init,
         phoneZone: @escaping @Sendable () -> TimeZone = { .current }
     ) {
         self.init(
@@ -198,18 +199,29 @@ public actor GraphCalendarSyncer {
     /// Graph's limit of requests at once per mailbox.
     static let requestsAtOnce = 4
 
-    /// The change key of each series Graph still has, asked for `requestsAtOnce` at a time.
+    /// One series' change key as Graph answered it.
+    private struct KeyAnswer: Sendable {
+        let id: String
+        let key: Result<String?, GraphError>
+    }
+
+    /// The change key of each series Graph still has, asked for `requestsAtOnce` at a time. A child
+    /// answers a named struct built once, never a tuple returned from both a `do` and its `catch`:
+    /// optimized builds of Swift 6.3 and 6.4 lose that tuple and free the group under a running child
+    /// (swiftlang/swift#92698).
     private func changeKeys(of ids: [String], _ client: GraphClient) async throws(SyncError) -> [String: String] {
-        let answers = await withTaskGroup(of: (String, Result<String?, GraphError>).self) { group in
-            var answers: [(String, Result<String?, GraphError>)] = []
+        let answers = await withTaskGroup(of: KeyAnswer.self) { group in
+            var answers: [KeyAnswer] = []
             var next = ids.makeIterator()
             func ask(_ id: String) {
                 group.addTask {
+                    let key: Result<String?, GraphError>
                     do throws(GraphError) {
-                        return (id, .success(try await client.changeKey(of: id)))
+                        key = .success(try await client.changeKey(of: id))
                     } catch {
-                        return (id, .failure(error))
+                        key = .failure(error)
                     }
+                    return KeyAnswer(id: id, key: key)
                 }
             }
             for _ in 0..<Self.requestsAtOnce {
@@ -223,8 +235,8 @@ public actor GraphCalendarSyncer {
             return answers
         }
         var keys: [String: String] = [:]
-        for (id, answer) in answers {
-            keys[id] = try await graph { () throws(GraphError) in try answer.get() }
+        for answer in answers {
+            keys[answer.id] = try await graph { () throws(GraphError) in try answer.key.get() }
         }
         return keys
     }

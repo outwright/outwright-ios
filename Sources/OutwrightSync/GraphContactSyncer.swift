@@ -5,6 +5,7 @@ public import Foundation
 import OutwrightGraph
 public import OutwrightModel
 public import OutwrightStore
+public import OutwrightNet
 
 /// Keeps a Graph account's contact folders in step with Graph, as `ContactSyncer`
 /// does for CardDAV: the owner's queued changes first, then every folder. A folder is listed
@@ -24,7 +25,7 @@ public actor GraphContactSyncer {
 
     public init(
         account: Account, store: MailStore, credentials: CredentialProvider, base: URL,
-        session: URLSession = .shared
+        session: URLSession = HTTPSession.shared
     ) {
         self.init(
             account: account, store: store, credentials: credentials, lock: AccountLock(), base: base,
@@ -33,7 +34,7 @@ public actor GraphContactSyncer {
 
     init(
         account: Account, store: MailStore, credentials: CredentialProvider, lock: AccountLock,
-        base: URL, session: URLSession = .shared
+        base: URL, session: URLSession = HTTPSession.shared
     ) {
         self.account = account
         self.store = store

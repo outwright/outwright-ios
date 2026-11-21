@@ -19,8 +19,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     /// The account shown over the list; settings opened from a sync problem starts at it.
     @State private var path: [AccountID]
-    /// Send diagnostics was tapped and the report is being built.
-    @State private var isPreparingDiagnostics = false
+    @State private var isShowingSupport = false
+    @State private var supportIncludesDiagnostics = false
     /// Add subscribed calendar is open; how many times it has closed.
     @State private var isAddingSubscription = false
     @State private var subscriptionAddsClosed = 0
@@ -133,6 +133,11 @@ struct SettingsView: View {
                     } label: {
                         Text(ui: "Version")
                     }
+                    Button {
+                        supportIncludesDiagnostics = false
+                        isShowingSupport = true
+                    } label: { Text(ui: "Help and support") }
+                    .accessibilityIdentifier("settings.support")
                     Text(
                         ui: """
                             Open source under the MIT or Apache 2.0 licence. \
@@ -143,46 +148,20 @@ struct SettingsView: View {
                 } header: {
                     Text(ui: "About")
                 }
-                // Compose needs an account to send from.
-                if !app.accounts.isEmpty {
-                    Section {
-                        Button {
-                            isPreparingDiagnostics = true
-                            Task {
-                                let report = await app.diagnosticsReport()
-                                isPreparingDiagnostics = false
-                                if app.isShowingSettings {
-                                    // Opens once settings has gone: a second sheet can't show during a dismissal.
-                                    app.diagnosticsAfterSettings = report
-                                    dismiss()
-                                } else {
-                                    // Settings was closed while the report was made.
-                                    app.compose(.diagnostics(report))
-                                }
-                            }
-                        } label: {
-                            if isPreparingDiagnostics {
-                                HStack(spacing: 8) {
-                                    ProgressView()
-                                    Text(ui: "Preparing the report…")
-                                }
-                            } else {
-                                Text(ui: "Send diagnostics")
-                            }
-                        }
-                        .disabled(isPreparingDiagnostics)
-                        .accessibilityIdentifier("settings.sendDiagnostics")
-                    } footer: {
-                        Text(
-                            ui: """
-                                Opens a message with a report you can read before sending. \
-                                It holds no mail, addresses or server names.
-                                """)
-                    }
+                Section {
+                    Button {
+                        supportIncludesDiagnostics = true
+                        isShowingSupport = true
+                    } label: { Text(ui: "Send diagnostics") }
+                    .accessibilityIdentifier("settings.sendDiagnostics")
                 }
+
             }
             .navigationTitle(Text(ui: "Settings"))
             .inlineNavigationTitle()
+            .sheet(isPresented: $isShowingSupport) {
+                SupportFormView(app: app, includeDiagnostics: supportIncludesDiagnostics)
+            }
             .sheet(
                 isPresented: $isAddingSubscription, onDismiss: { subscriptionAddsClosed &+= 1 },
                 content: { SubscriptionAddView(model: SubscriptionAddModel(app: app)) })

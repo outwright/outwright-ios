@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.2.3 (2026-11-21)
+
+- Outwright no longer crashes at launch when an Outlook.com or Microsoft 365 calendar has recurring events.
+- Bug fixes, and unnecessary caching removed.
+
 ## 0.2.2 (2026-11-20)
 
 - A message moved between folders no longer shows twice when the server never confirmed the move, and mail you have looked back to keeps showing after a move.

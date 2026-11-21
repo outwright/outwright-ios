@@ -22,7 +22,7 @@ public actor JMAPClient {
 
     /// Reads the session object from `https://<host>/.well-known/jmap` (one same-host redirect).
     public static func discover(
-        host: String, user: String, password: Secret, session: URLSession = .shared
+        host: String, user: String, password: Secret, session: URLSession = HTTPSession.shared
     ) async throws(JMAPError) -> JMAPClient {
         struct Answer: Decodable {
             let apiUrl: String

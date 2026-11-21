@@ -5,6 +5,7 @@ public import Foundation
 import OutwrightDAV
 public import OutwrightModel
 public import OutwrightStore
+public import OutwrightNet
 
 /// The span of time the store holds events for.
 public enum CalendarWindow {
@@ -47,7 +48,7 @@ public actor CalendarSyncer {
     static let ctagPrefix = "ctag:"
 
     public init(
-        account: Account, store: MailStore, secrets: any SecretStore, session: URLSession = .shared,
+        account: Account, store: MailStore, secrets: any SecretStore, session: URLSession = HTTPSession.shared,
         now: @escaping @Sendable () -> Date = Date.init, phoneZone: @escaping @Sendable () -> TimeZone = { .current },
         meetingWording: MeetingWording = .english
     ) {

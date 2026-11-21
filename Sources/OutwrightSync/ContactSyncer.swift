@@ -5,6 +5,7 @@ public import Foundation
 import OutwrightDAV
 public import OutwrightModel
 public import OutwrightStore
+public import OutwrightNet
 
 /// Keeps one account's address books in step with its CardDAV server: the owner's queued
 /// changes first, then every book by sync-collection (or ETags where the server has none).
@@ -22,7 +23,9 @@ public actor ContactSyncer {
     /// A sync token slot holding a ctag (for a book without sync-collection) starts so.
     static let ctagPrefix = "ctag:"
 
-    public init(account: Account, store: MailStore, secrets: any SecretStore, session: URLSession = .shared) {
+    public init(
+        account: Account, store: MailStore, secrets: any SecretStore, session: URLSession = HTTPSession.shared
+    ) {
         self.init(account: account, store: store, secrets: secrets, lock: AccountLock(), session: session)
     }
 

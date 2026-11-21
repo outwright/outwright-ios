@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 public import Foundation
+public import OutwrightNet
 
 /// A calendar collection on the server.
 public struct RemoteCalendar: Sendable, Equatable {
@@ -25,7 +26,9 @@ public actor CalDAVClient {
     private let context: URL
     private let resources: DAVResources
 
-    public init(context: URL, credentials: DAVCredentials, trustedHosts: Set<String>, session: URLSession = .shared) {
+    public init(
+        context: URL, credentials: DAVCredentials, trustedHosts: Set<String>, session: URLSession = HTTPSession.shared
+    ) {
         self.context = context
         resources = DAVResources(
             http: HTTPClient(credentials: credentials, trustedHosts: trustedHosts, session: session))

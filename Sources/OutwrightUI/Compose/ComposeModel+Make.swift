@@ -63,7 +63,7 @@ extension ComposeRequest {
     var startsFrom: MessageID? {
         switch kind {
         case .reply(let message), .replyAll(let message), .forward(let message), .draft(let message): message
-        case .new, .to, .people, .diagnostics: nil
+        case .new, .to, .people: nil
         }
     }
 
@@ -71,7 +71,7 @@ extension ComposeRequest {
     var isReply: Bool {
         switch kind {
         case .reply, .replyAll: true
-        case .new, .to, .people, .diagnostics, .forward, .draft: false
+        case .new, .to, .people, .forward, .draft: false
         }
     }
 }

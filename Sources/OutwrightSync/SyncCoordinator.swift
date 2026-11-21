@@ -7,6 +7,7 @@ import OutwrightGraph
 public import OutwrightModel
 public import OutwrightStore
 import Synchronization
+public import OutwrightNet
 
 /// Keeps every account of the store in step: a refresh of all folders on request, the Inbox
 /// watched (IDLE) while the app is in front, bodies fetched on request or ahead of time.
@@ -90,7 +91,7 @@ public actor SyncCoordinator {
         phoneZone: @escaping @Sendable () -> TimeZone = { .current },
         backoff: ClosedRange<Duration> = .seconds(2) ... .seconds(60), actionDelay: Duration = .seconds(1),
         idleTimeout: Duration = AccountSyncer.idleTimeout, resolver: any DoHResolving = CloudflareDoH(),
-        davSession: URLSession = .shared, probe: (@Sendable (URL) async -> URL?)? = nil,
+        davSession: URLSession = HTTPSession.shared, probe: (@Sendable (URL) async -> URL?)? = nil,
         phoneContacts: (any PhoneContacts)? = nil, reminders: any Reminders = SystemReminders(),
         graphBases: [ProviderID: URL] = [:], meetingWording: MeetingWording = .english,
         newMail: any NewMailNotices = SystemNewMailNotices(), protections: [any MailProtection] = [],

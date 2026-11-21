@@ -15,7 +15,7 @@ public enum DAVCollections {
     /// `DAVTrust` allows.
     public static func exist(
         _ service: DAVService, at url: String, for account: Account, password: Secret,
-        session: URLSession = .shared
+        session: URLSession = HTTPSession.shared
     ) async -> Bool? {
         guard let context = URL(string: url), context.host() != nil else { return nil }
         let credentials = DAVCredentials(user: account.user, password: password.reveal())

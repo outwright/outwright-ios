@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import Foundation
-public import OutwrightModel
+import OutwrightModel
 
 /// An account's servers and user name changed on one device: the owner chooses whether this one
 /// takes them. Only these three fields; the account's id, mail and switches stay.

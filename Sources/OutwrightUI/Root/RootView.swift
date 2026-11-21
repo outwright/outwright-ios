@@ -233,12 +233,7 @@ public struct RootView: View {
             onDismiss: { app.openPending() },
             content: { AddAccountSheet(app: app, placement: .firstRun) })
         .sheet(isPresented: $app.isShowingSettings) {
-            if let report = app.diagnosticsAfterSettings {
-                app.diagnosticsAfterSettings = nil
-                app.compose(.diagnostics(report))
-            } else {
-                app.openPending()
-            }
+            app.openPending()
         } content: {
             SettingsView(app: app)
         }

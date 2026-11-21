@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 public import Foundation
+public import OutwrightNet
 
 /// An address book collection on the server.
 public struct RemoteAddressBook: Sendable, Equatable {
@@ -35,7 +36,9 @@ public actor CardDAVClient {
     private let context: URL
     private let resources: DAVResources
 
-    public init(context: URL, credentials: DAVCredentials, trustedHosts: Set<String>, session: URLSession = .shared) {
+    public init(
+        context: URL, credentials: DAVCredentials, trustedHosts: Set<String>, session: URLSession = HTTPSession.shared
+    ) {
         self.context = context
         resources = DAVResources(
             http: HTTPClient(credentials: credentials, trustedHosts: trustedHosts, session: session))
@@ -117,7 +120,7 @@ public enum WellKnown {
     /// GETs `url` without credentials, following up to five redirects, and returns the URL
     /// that answered 401 or 207 (a DAV server asking who it is talking to), or nil. A plain
     /// 2xx does not count: a website answers every path so.
-    public static func probe(_ url: URL, session: URLSession = .shared) async -> URL? {
+    public static func probe(_ url: URL, session: URLSession = HTTPSession.shared) async -> URL? {
         var http = HTTPClient(credentials: nil, trustedHosts: nil, session: session)
         http.bodyLimit = 0
         guard let reply = try? await http.send("GET", url) else {

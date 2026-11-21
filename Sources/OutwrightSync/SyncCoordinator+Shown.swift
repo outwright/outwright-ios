@@ -30,24 +30,33 @@ extension SyncCoordinator {
         return targets
     }
 
+    /// One account's pull: its error, nil when it worked.
+    private struct ShownAnswer: Sendable {
+        let account: AccountID
+        let error: SyncError?
+    }
+
     /// A pull on the list: what it shows is brought in step, the accounts at once, and nothing
-    /// else, so the pull ends quickly. Each account's error, or its success, is recorded.
+    /// else, so the pull ends quickly. Each account's error, or its success, is recorded. A child
+    /// answers a named struct built once, never a tuple returned from both a `do` and its `catch`
+    /// (swiftlang/swift#92698: optimized builds lose it and free the group under a running child).
     public func refreshShown(_ scope: InboxScope) async {
         let targets = await targets(scope)
-        await withTaskGroup(of: (AccountID, SyncError?).self) { group in
+        await withTaskGroup(of: ShownAnswer.self) { group in
             for target in targets {
                 group.addTask {
+                    var failure: SyncError?
                     do throws(SyncError) {
                         try await target.syncer.sync(target.folder)
-                        return (target.account, nil)
                     } catch {
-                        return (target.account, error)
+                        failure = error
                     }
+                    return ShownAnswer(account: target.account, error: failure)
                 }
             }
-            for await (id, error) in group where !Task.isCancelled {
-                record(id, error)
-                if scope == .allAccounts { inboxWasFetched(id) }
+            for await answer in group where !Task.isCancelled {
+                record(answer.account, answer.error)
+                if scope == .allAccounts { inboxWasFetched(answer.account) }
             }
         }
     }

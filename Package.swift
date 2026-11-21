@@ -49,9 +49,9 @@ let package = Package(
         // L1: the protocols, and the model with its edits (no I/O).
         .target(name: "OutwrightIMAP", dependencies: ["OutwrightNet", "OutwrightMIME"], swiftSettings: strict),
         .target(name: "OutwrightSMTP", dependencies: ["OutwrightNet", "OutwrightMIME"], swiftSettings: strict),
-        .target(name: "OutwrightDAV", swiftSettings: strict),
+        .target(name: "OutwrightDAV", dependencies: ["OutwrightNet"], swiftSettings: strict),
         .target(name: "OutwrightGraph", dependencies: ["OutwrightNet"], swiftSettings: strict),
-        .target(name: "OutwrightPush", swiftSettings: strict),
+        .target(name: "OutwrightPush", dependencies: ["OutwrightNet"], swiftSettings: strict),
         .target(name: "OutwrightSetup", resources: [.process("Resources")], swiftSettings: strict),
         .target(name: "OutwrightJMAP", dependencies: ["OutwrightNet"], swiftSettings: strict),
         .target(name: "OutwrightModel", dependencies: ["OutwrightMIME"], swiftSettings: strict),

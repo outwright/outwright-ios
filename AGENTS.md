@@ -52,7 +52,7 @@ what its target lists.
 | Layer | Module | Job |
 |---|---|---|
 | L0 | `OutwrightNet`, `OutwrightMIME` | TLS/STARTTLS connections; Internet messages. No model |
-| L1 | `OutwrightIMAP`, `OutwrightSMTP` (on Net, MIME), `OutwrightModel` (on MIME), `OutwrightDAV`, `OutwrightGraph`, `OutwrightJMAP` (on Net), `OutwrightPush` (the push relay client) | protocols; data and its edits, no I/O |
+| L1 | `OutwrightIMAP`, `OutwrightSMTP` (on Net, MIME), `OutwrightModel` (on MIME), `OutwrightDAV`, `OutwrightGraph`, `OutwrightJMAP`, `OutwrightPush` (the push relay client), these four on Net | protocols; data and its edits, no I/O |
 | L2 | `OutwrightStore` | SQLite (GRDB) storage of the model |
 | L3 | `OutwrightSync` | runs a synchronisation between protocols, store and model |
 | L4 | `OutwrightUI` | SwiftUI; reads Model, Store and Sync, never speaks a protocol |
@@ -82,8 +82,8 @@ none of them set.
 ## Building and testing
 - **Builds and tests always run through `make`**, never a hand-made command line, with two
   targets: `make build` (every module, and the iOS app and its extension for the simulator) and
-  `make test` (`make build`, then every unit test and SwiftLint, and the engine's tests), before
-  a pull request.
+  `make test` (`make build`, then every unit test, in Debug and built optimized, and SwiftLint,
+  and the engine's tests), before a pull request.
 - **The engine** (`engine/`, where it is here) is layered as the package is, its import rules held
   by `engine/arch_test.go`; the same rules hold in Go terms (no panic on any input, a fuzz test
   for every reader, secrets only in the system's secret store). `make test` runs its tests and

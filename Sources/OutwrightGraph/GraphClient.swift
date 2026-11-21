@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 public import Foundation
-import OutwrightNet
+public import OutwrightNet
 
 /// Microsoft Graph v1.0 over HTTPS with a bearer token. Every request stays on the base URL's
 /// scheme, host and port (`@odata.nextLink` included); redirects are not followed; answers are
@@ -23,7 +23,7 @@ public struct GraphClient: Sendable {
     /// `token` hands out the current access token; `renew` drops the refused one it is given and
     /// says whether to ask `token` for another.
     public init(
-        base: URL, session: URLSession = .shared,
+        base: URL, session: URLSession = HTTPSession.shared,
         token: @escaping @Sendable () async throws(GraphError) -> String,
         renew: @escaping @Sendable (String) async -> Bool
     ) {

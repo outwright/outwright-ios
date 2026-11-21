@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 public import Foundation
+public import OutwrightNet
 
 /// A device the relay has registered. Kept only in the keychain.
 public struct RelayDevice: Codable, Sendable {
@@ -39,7 +40,7 @@ public actor RelayClient {
     public nonisolated var baseURL: URL { base }
     private let session: URLSession
 
-    public init(base: URL, session: URLSession = .shared) {
+    public init(base: URL, session: URLSession = HTTPSession.shared) {
         self.base = base
         self.session = session
     }

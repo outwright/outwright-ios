@@ -118,13 +118,7 @@ public final class ComposeModel {
             body = signatureBlock()
         case let .people(addresses, title):
             (to, subject, body) = (addresses, title, signatureBlock())
-        case .diagnostics(let report):
-            to = [Address(name: nil, email: Self.diagnosticsAddress)]
-            subject = "Outwright diagnostics"
-            body = AttributedString(Self.diagnosticsPromise + "\n")
-            attachments = [Attachment(
-                filename: "outwright-diagnostics.txt", mimeType: "text/plain", contentID: nil, isInline: false,
-                data: report)]
+
         }
         snapshot = current
         if case .draft = request.kind {} else { startingBody = body }

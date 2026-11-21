@@ -69,7 +69,7 @@ public struct OAuthClient: Sendable {
     public let configuration: OAuthConfiguration
     private let session: URLSession
 
-    public init(clientID: String, configuration: OAuthConfiguration, session: URLSession = .shared) {
+    public init(clientID: String, configuration: OAuthConfiguration, session: URLSession = HTTPSession.shared) {
         self.clientID = clientID
         self.configuration = configuration
         self.session = session

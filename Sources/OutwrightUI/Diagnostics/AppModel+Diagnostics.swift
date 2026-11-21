@@ -7,7 +7,7 @@ import UIKit
 #endif
 
 extension AppModel {
-    /// The diagnostics report, for a new message the owner reads and sends. The log, the payloads
+    /// The diagnostics report, for the support form the owner reviews and sends. The log, the payloads
     /// and the report are read off the main actor: reading the log can take a while.
     func diagnosticsReport() async -> Data {
         let source = diagnostics

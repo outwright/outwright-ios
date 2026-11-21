@@ -1,6 +1,198 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Reply email address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reply email address"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "E-postadress för svar"
+          }
+        }
+      }
+    },
+    "How can we help?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How can we help?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vad behöver du hjälp med?"
+          }
+        }
+      }
+    },
+    "Sent directly to support. Your mail account does not need to work." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sent directly to support. Your mail account does not need to work."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skickas direkt till supporten. Ditt mejlkonto behöver inte fungera."
+          }
+        }
+      }
+    },
+    "Include diagnostics" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include diagnostics"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bifoga diagnostik"
+          }
+        }
+      }
+    },
+    "Read the report" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read the report"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Läs rapporten"
+          }
+        }
+      }
+    },
+    "Diagnostics" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnostics"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnostik"
+          }
+        }
+      }
+    },
+    "The report holds no mail, addresses or server names. You can read it before sending." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The report holds no mail, addresses or server names. You can read it before sending."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rapporten innehåller inga mejl, adresser eller servernamn. Du kan läsa den innan du skickar."
+          }
+        }
+      }
+    },
+    "Your support request has been sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your support request has been sent."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ditt supportärende har skickats."
+          }
+        }
+      }
+    },
+    "Check the reply address and keep your message under 8,000 characters." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the reply address and keep your message under 8,000 characters."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kontrollera svarsadressen och att ditt meddelande är kortare än 8 000 tecken."
+          }
+        }
+      }
+    },
+    "The report is too large. Turn off diagnostics to send your message." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The report is too large. Turn off diagnostics to send your message."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rapporten är för stor. Stäng av diagnostiken för att skicka ditt meddelande."
+          }
+        }
+      }
+    },
+    "Too many requests. Please try again in an hour." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many requests. Please try again in an hour."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "För många förfrågningar. Försök igen om en timme."
+          }
+        }
+      }
+    },
+    "Delivery could not be confirmed. Your message is still here so you can try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivery could not be confirmed. Your message is still here so you can try again."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det gick inte att bekräfta leveransen. Ditt meddelande finns kvar så att du kan försöka igen."
+          }
+        }
+      }
+    },
     "Bring here" : {
       "localizations" : {
         "en" : {
@@ -45,6 +237,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annorlunda på den här enheten"
+          }
+        }
+      }
+    },
+    "Help and support" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Help and support"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hjälp och support"
           }
         }
       }

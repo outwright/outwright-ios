@@ -24,8 +24,6 @@ public struct ComposeRequest: Identifiable, Sendable, Equatable {
         case to(Address)
         /// A new message to an event's people, about it (Email attendees).
         case people([Address], subject: String)
-        /// A new message with a diagnostics report attached (Settings' Send diagnostics).
-        case diagnostics(Data)
     }
 
     public let id: UUID
@@ -100,9 +98,6 @@ public final class AppModel {
     public var isShowingSettings = false
     /// The account whose settings open over the list when settings opens; nil opens the list.
     public internal(set) var settingsAccount: AccountID?
-    /// Settings' Send diagnostics: the report built while settings showed it being prepared; it
-    /// opens in compose once settings has gone.
-    public var diagnosticsAfterSettings: Data?
     public var isShowingHelp = false
     /// A setup file opened from elsewhere: the one shown, and the one waiting for a sheet to close.
     var setupFileToOpen: SetupFileRequest?
